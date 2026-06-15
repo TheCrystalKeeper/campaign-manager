@@ -1,0 +1,6 @@
+{
+  "name": "campaign-manager",
+  "main": "partykit/server.ts",
+  "port": 1999,
+  "compatibilityDate": "2024-09-23"
+}

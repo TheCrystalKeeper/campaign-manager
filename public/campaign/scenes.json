@@ -1,0 +1,158 @@
+{
+  "version": 1,
+  "activeSceneId": "scene-67e544db",
+  "scenes": [
+    {
+      "id": "scene-1",
+      "name": "Dungeon",
+      "layers": [
+        {
+          "id": "scene-1-layer-1",
+          "url": "/maps/sample-dungeon.svg",
+          "x": 0,
+          "y": 0,
+          "width": 800,
+          "height": 600,
+          "label": "Dungeon"
+        }
+      ],
+      "width": 880,
+      "height": 680,
+      "gridSize": 50,
+      "showGrid": true,
+      "fogDataUrl": null,
+      "fogEnabled": false,
+      "defaultViewport": {
+        "x": 0,
+        "y": 0,
+        "scale": 1
+      },
+      "backgroundColor": "#0d0f14"
+    },
+    {
+      "id": "scene-2",
+      "name": "Tavern",
+      "layers": [
+        {
+          "id": "scene-2-layer-1",
+          "url": "/maps/sample-tavern.svg",
+          "x": 0,
+          "y": 0,
+          "width": 800,
+          "height": 600,
+          "label": "Tavern"
+        }
+      ],
+      "width": 880,
+      "height": 680,
+      "gridSize": 50,
+      "showGrid": true,
+      "fogDataUrl": null,
+      "fogEnabled": false,
+      "defaultViewport": {
+        "x": 0,
+        "y": 0,
+        "scale": 1
+      },
+      "backgroundColor": "#0d0f14"
+    },
+    {
+      "id": "scene-9f478e9e",
+      "name": "Scene 3",
+      "layers": [],
+      "width": 800,
+      "height": 600,
+      "gridSize": 50,
+      "showGrid": true,
+      "fogEnabled": false,
+      "fogDataUrl": null,
+      "defaultViewport": {
+        "x": 400,
+        "y": 94.04424917621219,
+        "scale": 1
+      },
+      "backgroundColor": "#0d0f14"
+    },
+    {
+      "id": "scene-318b6918",
+      "name": "Scene 4",
+      "layers": [
+        {
+          "id": "layer-53bb0a24",
+          "url": "/maps/scene-318b6918-layer-53bb0a24.jpg",
+          "x": 0,
+          "y": 0,
+          "width": 1930,
+          "height": 1508,
+          "label": "jpgmapzoomedin"
+        }
+      ],
+      "width": 2010,
+      "height": 1588,
+      "gridSize": 50,
+      "showGrid": false,
+      "fogEnabled": false,
+      "fogDataUrl": null,
+      "defaultViewport": {
+        "scale": 0.7938322410201682,
+        "x": 1013.0878988908398,
+        "y": 150.70591265227256
+      },
+      "backgroundColor": "#1e3231"
+    },
+    {
+      "id": "scene-3027518b",
+      "name": "Scene 5",
+      "layers": [
+        {
+          "id": "layer-86da4ba2",
+          "url": "/maps/scene-3027518b-layer-86da4ba2.jpg",
+          "x": 0,
+          "y": 0,
+          "width": 3430,
+          "height": 1750,
+          "label": "map_49x25"
+        }
+      ],
+      "width": 3510,
+      "height": 1830,
+      "gridSize": 50,
+      "showGrid": false,
+      "fogEnabled": false,
+      "fogDataUrl": null,
+      "defaultViewport": {
+        "x": 0,
+        "y": 0,
+        "scale": 1
+      },
+      "backgroundColor": "#efeae2"
+    },
+    {
+      "id": "scene-67e544db",
+      "name": "Scene 6",
+      "layers": [
+        {
+          "id": "layer-a2dfa4c9",
+          "url": "/maps/scene-67e544db-layer-a2dfa4c9.jpg",
+          "x": 68.19291522197955,
+          "y": 45.623135432432264,
+          "width": 1738,
+          "height": 1458,
+          "label": "anothercave"
+        }
+      ],
+      "width": 1886.1929152219795,
+      "height": 1583.6231354324323,
+      "gridSize": 50,
+      "showGrid": false,
+      "fogEnabled": false,
+      "fogDataUrl": null,
+      "defaultViewport": {
+        "scale": 0.9259259259259239,
+        "x": -317.442847435417,
+        "y": -745.6072273384391
+      },
+      "backgroundColor": "#1e3231"
+    }
+  ]
+}

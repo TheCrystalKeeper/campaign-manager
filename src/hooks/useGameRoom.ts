@@ -1,0 +1,290 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import PartySocket from "partysocket";
+import type {
+  CharacterSheet,
+  ClientMessage,
+  GameState,
+  JoinMessage,
+  PlayerSlot,
+  Role,
+  Scene,
+  ServerMessage,
+  Token,
+  Viewport,
+} from "../lib/types";
+import type { CampaignManifest } from "../lib/campaignManifest";
+
+/// <summary>
+/// Resolves the PartyKit host for dev (Vite proxy) or production (env var).
+/// </summary>
+function getPartyKitHost(): string {
+  if (import.meta.env.VITE_PARTYKIT_HOST) {
+    return import.meta.env.VITE_PARTYKIT_HOST;
+  }
+  if (import.meta.env.DEV) {
+    return window.location.host;
+  }
+  throw new Error("VITE_PARTYKIT_HOST is required in production builds.");
+}
+
+const PARTYKIT_PARTY = "main";
+
+export type ConnectionStatus = "disconnected" | "connecting" | "connected" | "joined";
+
+export type JoinParams =
+  | { role: "dm"; displayName: string; roomKey: string }
+  | { role: "player"; slotId: string; roomKey: string };
+
+export type GameRoom = {
+  status: ConnectionStatus;
+  error: string | null;
+  state: GameState | null;
+  yourClientId: string | null;
+  yourRole: Role | null;
+  yourPlayerId: string | null;
+  send: (message: ClientMessage) => void;
+  join: (params: JoinParams) => void;
+};
+
+export type RoomLobby = {
+  status: "idle" | "connecting" | "ready" | "error";
+  error: string | null;
+  state: GameState | null;
+  availableSlots: PlayerSlot[];
+};
+
+/// <summary>
+/// Connects to a room without joining so players can pick an open character slot.
+/// </summary>
+export function useRoomLobby(roomId: string, enabled: boolean): RoomLobby {
+  const [status, setStatus] = useState<RoomLobby["status"]>("idle");
+  const [error, setError] = useState<string | null>(null);
+  const [state, setState] = useState<GameState | null>(null);
+
+  useEffect(() => {
+    if (!enabled || !roomId.trim()) {
+      setStatus("idle");
+      setError(null);
+      setState(null);
+      return;
+    }
+
+    setStatus("connecting");
+    setError(null);
+
+    const socket = new PartySocket({
+      host: getPartyKitHost(),
+      room: roomId.trim(),
+      party: PARTYKIT_PARTY,
+    });
+
+    socket.addEventListener("open", () => {
+      setStatus("ready");
+    });
+
+    socket.addEventListener("message", (event) => {
+      const message = JSON.parse(event.data as string) as ServerMessage;
+      if (message.type === "STATE") {
+        setState(message.state);
+        setStatus("ready");
+      } else if (message.type === "ERROR") {
+        setError(message.message);
+        setStatus("error");
+      }
+    });
+
+    socket.addEventListener("close", () => {
+      setError("Could not reach the room. Is PartyKit running?");
+      setStatus("error");
+    });
+
+    socket.addEventListener("error", () => {
+      setError("Could not connect to the game server.");
+      setStatus("error");
+    });
+
+    return () => {
+      socket.close();
+    };
+  }, [enabled, roomId]);
+
+  const takenSlotIds = new Set(
+    state?.connectedPlayers.map((player) => player.playerId) ?? [],
+  );
+  const availableSlots =
+    state?.playerSlots.filter((slot) => !takenSlotIds.has(slot.id)) ?? [];
+
+  return { status, error, state, availableSlots };
+}
+
+/// <summary>
+/// Manages the PartyKit WebSocket connection and authoritative game state for a room.
+/// </summary>
+export function useGameRoom(roomId: string | null): GameRoom {
+  const [status, setStatus] = useState<ConnectionStatus>("disconnected");
+  const [error, setError] = useState<string | null>(null);
+  const [state, setState] = useState<GameState | null>(null);
+  const [yourClientId, setYourClientId] = useState<string | null>(null);
+  const [yourRole, setYourRole] = useState<Role | null>(null);
+  const [yourPlayerId, setYourPlayerId] = useState<string | null>(null);
+  const socketRef = useRef<PartySocket | null>(null);
+  const pendingJoinRef = useRef<JoinMessage | null>(null);
+
+  const send = useCallback((message: ClientMessage) => {
+    const socket = socketRef.current;
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify(message));
+    }
+  }, []);
+
+  const join = useCallback(
+    (params: JoinParams) => {
+      const message: JoinMessage =
+        params.role === "dm"
+          ? {
+              type: "JOIN",
+              role: "dm",
+              displayName: params.displayName,
+              roomKey: params.roomKey,
+            }
+          : {
+              type: "JOIN",
+              role: "player",
+              slotId: params.slotId,
+              roomKey: params.roomKey,
+            };
+      pendingJoinRef.current = message;
+      if (params.role === "player") {
+        setYourPlayerId(params.slotId);
+      } else {
+        setYourPlayerId("dm");
+      }
+      if (socketRef.current?.readyState === WebSocket.OPEN) {
+        send(message);
+      }
+    },
+    [send],
+  );
+
+  useEffect(() => {
+    if (!roomId) {
+      return;
+    }
+
+    setStatus("connecting");
+    setError(null);
+
+    const socket = new PartySocket({
+      host: getPartyKitHost(),
+      room: roomId,
+      party: PARTYKIT_PARTY,
+    });
+
+    socketRef.current = socket;
+
+    socket.addEventListener("open", () => {
+      setStatus("connected");
+      const pending = pendingJoinRef.current;
+      if (pending) {
+        socket.send(JSON.stringify(pending));
+      }
+    });
+
+    socket.addEventListener("message", (event) => {
+      const message = JSON.parse(event.data as string) as ServerMessage;
+      if (message.type === "STATE") {
+        setState(message.state);
+        setYourClientId(message.yourClientId);
+        setYourRole(message.yourRole);
+        if (message.yourRole) {
+          setStatus("joined");
+        }
+      } else if (message.type === "JOINED") {
+        setYourRole(message.role);
+        setYourPlayerId(message.playerId);
+        setStatus("joined");
+        setError(null);
+      } else if (message.type === "ERROR") {
+        setError(message.message);
+        setStatus("connected");
+      }
+    });
+
+    socket.addEventListener("close", () => {
+      setStatus("disconnected");
+      setError((prev) =>
+        prev ?? "Lost connection to the game server. Is PartyKit running on port 1999?",
+      );
+    });
+
+    socket.addEventListener("error", () => {
+      setError(
+        "Could not connect to the game server. Start PartyKit with: npm run partykit:dev",
+      );
+    });
+
+    return () => {
+      socket.close();
+      socketRef.current = null;
+    };
+  }, [roomId]);
+
+  return {
+    status,
+    error,
+    state,
+    yourClientId,
+    yourRole,
+    yourPlayerId,
+    send,
+    join,
+  };
+}
+
+export function useDmActions(room: GameRoom) {
+  const { send, yourRole } = room;
+
+  return useMemo(
+    () => ({
+      isDm: yourRole === "dm",
+      updateViewport: (viewport: Viewport) => send({ type: "UPDATE_VIEWPORT", viewport }),
+      setScene: (sceneId: string) => send({ type: "SET_SCENE", sceneId }),
+      addScene: (scene: Scene) => send({ type: "ADD_SCENE", scene }),
+      updateScene: (scene: Scene) => send({ type: "UPDATE_SCENE", scene }),
+      removeScene: (sceneId: string) => send({ type: "REMOVE_SCENE", sceneId }),
+      addToken: (token: Token) => send({ type: "ADD_TOKEN", token }),
+      moveToken: (tokenId: string, x: number, y: number) =>
+        send({ type: "MOVE_TOKEN", tokenId, x, y }),
+      updateToken: (token: Token) => send({ type: "UPDATE_TOKEN", token }),
+      removeToken: (tokenId: string) => send({ type: "REMOVE_TOKEN", tokenId }),
+      setPing: (x: number, y: number) => send({ type: "SET_PING", x, y }),
+      clearPing: () => send({ type: "CLEAR_PING" }),
+      updateFog: (sceneId: string, fogDataUrl: string) =>
+        send({ type: "UPDATE_FOG", sceneId, fogDataUrl }),
+      importCampaign: (manifest: CampaignManifest) =>
+        send({ type: "IMPORT_CAMPAIGN", manifest }),
+      addPlayerSlot: (name: string) => send({ type: "ADD_PLAYER_SLOT", name }),
+      updatePlayerSlot: (slot: PlayerSlot) => send({ type: "UPDATE_PLAYER_SLOT", slot }),
+      removePlayerSlot: (slotId: string) => send({ type: "REMOVE_PLAYER_SLOT", slotId }),
+    }),
+    [send, yourRole],
+  );
+}
+
+export function usePlayerSheet(room: GameRoom) {
+  const { send, yourRole, yourPlayerId, state } = room;
+
+  const sheet =
+    yourPlayerId && state ? (state.characterSheets[yourPlayerId] ?? null) : null;
+
+  const updateSheet = useCallback(
+    (next: CharacterSheet) => {
+      if (yourRole === "player") {
+        send({ type: "UPDATE_MY_SHEET", sheet: next });
+      }
+    },
+    [send, yourRole],
+  );
+
+  return { sheet, updateSheet, canEdit: yourRole === "player" };
+}

@@ -1,0 +1,102 @@
+# Campaign Manager
+
+A $0/month web app for D&D sessions: the DM controls the shared map, scenes, tokens, fog, and viewport. Players watch read-only and edit their own character sheet.
+
+## Stack
+
+- **Frontend:** Vite + React + Konva on Cloudflare Pages
+- **Realtime:** PartyKit (DM-authoritative state sync)
+
+## Local development
+
+```bash
+npm install
+```
+
+Run both servers in **separate terminals** (PartyKit first):
+
+```bash
+# Terminal 1 — PartyKit realtime server (must be on port 1999)
+npm run partykit:dev
+
+# Terminal 2 — Vite frontend
+npm run dev
+```
+
+Open `http://localhost:5173`.
+
+**Important:** Only run one PartyKit dev server. If port 1999 is already in use, PartyKit may pick another port and the app will not connect. Stop any old `partykit dev` processes, then restart.
+
+If PartyKit must use a different port, create `.env` with:
+
+```
+PARTYKIT_DEV_PORT=60142
+```
+
+Then restart the Vite dev server so the proxy picks up the new port.
+
+In local dev, the frontend connects through Vite's proxy (`/parties/main/...`) — you do **not** need `VITE_PARTYKIT_HOST` locally.
+
+## Room URLs
+
+Share these links with your group:
+
+| Role | URL |
+|------|-----|
+| DM | `https://your-app.pages.dev/?room=campaign1&key=secret&role=dm` |
+| Player | `https://your-app.pages.dev/?room=campaign1&key=secret` |
+
+- `room` — session ID (friends in the same room see each other)
+- `key` — optional password (set `ROOM_KEY` in PartyKit env vars)
+- `role=dm` — join as Dungeon Master (only one DM per room)
+
+## Deploy
+
+### 1. PartyKit
+
+```bash
+npx partykit login
+npm run partykit:deploy
+```
+
+Note the deployed host (e.g. `campaign-manager.yourname.partykit.dev`).
+
+Optional room password:
+
+```bash
+npx partykit env set ROOM_KEY your-secret-here
+```
+
+### 2. Cloudflare Pages
+
+1. Push this repo to GitHub.
+2. In Cloudflare Dashboard → Pages → Create project → connect the repo.
+3. Build settings:
+   - **Build command:** `npm run build`
+   - **Output directory:** `dist`
+4. Environment variable:
+   - `VITE_PARTYKIT_HOST` = your PartyKit host (no `https://`)
+
+Or deploy from CLI:
+
+```bash
+npm run build
+npx wrangler pages deploy dist
+```
+
+## DM controls
+
+- Pan/zoom the map (players mirror your view)
+- Switch scenes, upload map images, add/move tokens
+- Toggle grid overlay
+- Fog brush — paint to reveal areas for players
+- Right-click to ping a location (visible 3 seconds)
+
+## Player experience
+
+- Read-only map synced to the DM
+- Character sheet sidebar (HP, AC, notes)
+
+## Cost
+
+Free at friend-group scale: Cloudflare Pages + PartyKit free tiers.

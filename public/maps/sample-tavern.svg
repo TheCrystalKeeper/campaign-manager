@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600" viewBox="0 0 800 600">
+  <rect width="800" height="600" fill="#3a2a1e"/>
+  <rect x="60" y="80" width="680" height="440" fill="#4a3628" stroke="#241810" stroke-width="4"/>
+  <rect x="120" y="140" width="120" height="80" fill="#5c4332"/>
+  <rect x="560" y="160" width="100" height="240" fill="#5c4332"/>
+  <circle cx="400" cy="300" r="60" fill="#6b4f3a"/>
+  <text x="400" y="40" fill="#e8d4b8" font-family="serif" font-size="20" text-anchor="middle">Sample Tavern</text>
+</svg>
