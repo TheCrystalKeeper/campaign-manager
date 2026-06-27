@@ -15,7 +15,6 @@ import {
   addImageLayerToScene,
   createEmptyScene,
   normalizeScene,
-  prepareImageFromFile,
   removeMapLayer,
   scenesEqual,
 } from "../lib/sceneUtils";
@@ -128,22 +127,17 @@ export function SceneSettingsPanel({
 
     try {
       const label = file.name.replace(/\.[^.]+$/, "");
-      if (import.meta.env.DEV) {
-        const uploaded = await uploadMapImage(scene.id, file);
-        updateSceneNow(
-          addImageLayerToScene(
-            scene,
-            uploaded.url,
-            uploaded.width,
-            uploaded.height,
-            label,
-            uploaded.layerId,
-          ),
-        );
-      } else {
-        const { dataUrl, width, height } = await prepareImageFromFile(file);
-        updateSceneNow(addImageLayerToScene(scene, dataUrl, width, height, label));
-      }
+      const uploaded = await uploadMapImage(scene.id, file);
+      updateSceneNow(
+        addImageLayerToScene(
+          scene,
+          uploaded.url,
+          uploaded.width,
+          uploaded.height,
+          label,
+          uploaded.layerId,
+        ),
+      );
     } catch (error) {
       setUploadError(
         error instanceof Error ? error.message : "Could not add image. Try a smaller PNG or JPG.",

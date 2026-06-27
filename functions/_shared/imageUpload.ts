@@ -66,21 +66,26 @@ export async function handleImageUpload(
   }
 }
 
+type ServeImageContext = {
+  env: { UPLOADS: R2Bucket };
+  next: () => Promise<Response>;
+};
+
 /// <summary>
-/// Streams a stored image from R2 for portrait, token, and map URLs.
+/// Streams a stored image from R2, or falls back to static assets when not uploaded yet.
 /// </summary>
-export async function serveStoredImage(
-  env: { UPLOADS: R2Bucket },
+export async function serveStoredImageOrNext(
+  context: ServeImageContext,
   folder: "portraits" | "tokens" | "maps",
   filename: string,
 ): Promise<Response> {
-  if (!env.UPLOADS) {
-    return new Response("Image storage is not configured.", { status: 503 });
+  if (!context.env.UPLOADS) {
+    return context.next();
   }
 
-  const object = await env.UPLOADS.get(`${folder}/${filename}`);
+  const object = await context.env.UPLOADS.get(`${folder}/${filename}`);
   if (!object) {
-    return new Response("Not found", { status: 404 });
+    return context.next();
   }
 
   const headers = new Headers();

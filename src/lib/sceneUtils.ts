@@ -116,6 +116,25 @@ function loadImageElement(url: string): Promise<HTMLImageElement> {
 }
 
 /// <summary>
+/// Loads an image for Konva without breaking data URLs or same-origin static assets.
+/// </summary>
+export function loadImageForCanvas(url: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const isDataOrBlob = url.startsWith("data:") || url.startsWith("blob:");
+    if (!isDataOrBlob && url.startsWith("http")) {
+      const resolved = new URL(url, window.location.origin);
+      if (resolved.origin !== window.location.origin) {
+        img.crossOrigin = "anonymous";
+      }
+    }
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error(`Failed to load image: ${url}`));
+    img.src = url;
+  });
+}
+
+/// <summary>
 /// Loads an image file and returns its pixel dimensions.
 /// </summary>
 export function loadImageDimensions(url: string): Promise<{ width: number; height: number }> {

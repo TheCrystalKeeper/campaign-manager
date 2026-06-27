@@ -12,7 +12,7 @@ import {
   paintFogBrush,
   type FogBrushMode,
 } from "../lib/fogCanvas";
-import { moveMapLayer, normalizeScene, fitViewportToScene } from "../lib/sceneUtils";
+import { fitViewportToScene, loadImageForCanvas, moveMapLayer, normalizeScene } from "../lib/sceneUtils";
 
 type MapCanvasProps = {
   state: GameState;
@@ -42,10 +42,21 @@ function MapLayerImage({ layer, selected, draggable, onDragEnd }: MapLayerImageP
   const [image, setImage] = useState<HTMLImageElement | null>(null);
 
   useEffect(() => {
-    const img = new window.Image();
-    img.crossOrigin = "anonymous";
-    img.onload = () => setImage(img);
-    img.src = layer.url;
+    let cancelled = false;
+    void loadImageForCanvas(layer.url)
+      .then((img) => {
+        if (!cancelled) {
+          setImage(img);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setImage(null);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [layer.url]);
 
   if (!image) {
@@ -153,10 +164,21 @@ function MapToken({ token }: MapTokenProps) {
       setImage(null);
       return;
     }
-    const img = new window.Image();
-    img.crossOrigin = "anonymous";
-    img.onload = () => setImage(img);
-    img.src = token.imageUrl;
+    let cancelled = false;
+    void loadImageForCanvas(token.imageUrl)
+      .then((img) => {
+        if (!cancelled) {
+          setImage(img);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setImage(null);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [token.imageUrl]);
 
   const borderColor = token.kind === "enemy" ? TOKEN_ENEMY_COLOR : TOKEN_PLAYER_COLOR;

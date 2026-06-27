@@ -51,6 +51,17 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
+      - name: Sync bundled map assets to R2
+        run: |
+          shopt -s nullglob
+          for file in public/maps/*; do
+            name=$(basename "$file")
+            npx wrangler r2 object put "campaign-manager-uploads/maps/${name}" --file="$file"
+          done
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
       - name: Build frontend
         run: npm run build
         env:

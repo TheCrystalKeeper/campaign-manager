@@ -1,4 +1,4 @@
-import { serveStoredImage } from "../_shared/imageUpload";
+import { serveStoredImageOrNext } from "../_shared/imageUpload";
 
 /// <summary>
 /// Serves uploaded character portraits from R2.
@@ -6,7 +6,7 @@ import { serveStoredImage } from "../_shared/imageUpload";
 export const onRequestGet: PagesFunction = async (context) => {
   const filename = context.params.filename;
   if (!filename || Array.isArray(filename)) {
-    return new Response("Not found", { status: 404 });
+    return context.next();
   }
-  return serveStoredImage(context.env, "portraits", filename);
+  return serveStoredImageOrNext(context, "portraits", filename);
 };
