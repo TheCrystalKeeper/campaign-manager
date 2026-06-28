@@ -24,6 +24,11 @@ export type Scene = {
   layers: MapLayer[];
   width: number;
   height: number;
+  /** World-space reference center; independent of map image placement. */
+  centerX: number;
+  centerY: number;
+  /** Grid units players may pan from center per axis; 0 = unlimited. */
+  playerPanLimit: number;
   gridSize: number;
   showGrid: boolean;
   fogEnabled: boolean;
@@ -403,6 +408,9 @@ export function createDefaultScenes(): Scene[] {
       ],
       width: 800,
       height: 600,
+      centerX: 400,
+      centerY: 300,
+      playerPanLimit: 0,
       gridSize: 50,
       showGrid: true,
       fogEnabled: true,
@@ -426,6 +434,9 @@ export function createDefaultScenes(): Scene[] {
       ],
       width: 800,
       height: 600,
+      centerX: 400,
+      centerY: 300,
+      playerPanLimit: 0,
       gridSize: 50,
       showGrid: true,
       fogEnabled: true,

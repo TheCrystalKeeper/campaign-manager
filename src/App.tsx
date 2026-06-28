@@ -11,6 +11,7 @@ import { ResizableSplit } from "./components/ResizableSplit";
 import { useDmActions, useGameRoom, usePlayerSheet, type JoinParams } from "./hooks/useGameRoom";
 import type { FogBrushMode } from "./lib/fogCanvas";
 import { DEFAULT_VIEWPORT, resolvePlayerViewingSceneId, type Viewport } from "./lib/types";
+import { clearSessionViewportsForRoom } from "./lib/sessionViewportMemory";
 
 type SessionParams = JoinParams & {
   roomId: string;
@@ -41,6 +42,7 @@ export default function App() {
     if (!session) {
       return;
     }
+    clearSessionViewportsForRoom(session.roomId);
     room.join(
       session.role === "dm"
         ? {

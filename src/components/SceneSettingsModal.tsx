@@ -347,6 +347,29 @@ export function SceneSettingsPanel({
               </section>
 
               <section className="settings-section">
+                <h3>Player view</h3>
+                <p className="settings-hint">
+                  Limits how far players can pan from the scene center (gold crosshair). Measured in
+                  grid units per direction.
+                </p>
+                <label className="settings-field">
+                  Pan limit (grid units, 0 = unlimited)
+                  <input
+                    type="number"
+                    min={0}
+                    max={500}
+                    value={scene.playerPanLimit}
+                    onChange={(event) =>
+                      updateScene({
+                        ...scene,
+                        playerPanLimit: Math.max(0, Number(event.target.value) || 0),
+                      })
+                    }
+                  />
+                </label>
+              </section>
+
+              <section className="settings-section">
                 <h3>Grid</h3>
                 <label className="settings-check">
                   <input

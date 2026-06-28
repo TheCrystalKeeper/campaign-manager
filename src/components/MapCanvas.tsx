@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Circle, Group, Image, Layer, Line, Rect, Stage, Text } from "react-konva";
 import type { KonvaEventObject } from "konva/lib/Node";
 import type Konva from "konva";
@@ -12,7 +12,22 @@ import {
   paintFogBrush,
   type FogBrushMode,
 } from "../lib/fogCanvas";
-import { fitViewportToScene, loadImageForCanvas, moveMapLayer, normalizeScene } from "../lib/sceneUtils";
+import {
+  clampPlayerViewport,
+  fitViewportToScene,
+  isDefaultViewport,
+  loadImageForCanvas,
+  moveMapLayer,
+  moveSceneCenter,
+  normalizeScene,
+  tokenRadiusForGridSize,
+  viewportForNormalizedScene,
+} from "../lib/sceneUtils";
+import {
+  getSessionViewport,
+  saveSessionViewport,
+  type SessionViewportMode,
+} from "../lib/sessionViewportMemory";
 
 type MapCanvasProps = {
   state: GameState;
@@ -68,6 +83,7 @@ function MapLayerImage({ layer, selected, draggable, onDragEnd }: MapLayerImageP
       x={layer.x}
       y={layer.y}
       draggable={draggable}
+      dragDistance={6}
       onDragEnd={(event) => {
         onDragEnd(layer.id, event.target.x(), event.target.y());
       }}
@@ -85,6 +101,112 @@ function MapLayerImage({ layer, selected, draggable, onDragEnd }: MapLayerImageP
           listening={false}
         />
       ) : null}
+    </Group>
+  );
+}
+
+type SceneOriginMarkerProps = {
+  armLength: number;
+};
+
+/// <summary>
+/// Draws a crosshair at scene (0, 0) so the DM can see the world origin while editing.
+/// </summary>
+function SceneOriginMarker({ armLength }: SceneOriginMarkerProps) {
+  const arm = Math.max(24, armLength);
+  const labelOffset = arm + 14;
+
+  return (
+    <Group listening={false}>
+      <Line
+        points={[-arm, 0, arm, 0]}
+        stroke="#4ade80"
+        strokeWidth={2}
+        listening={false}
+      />
+      <Line
+        points={[0, -arm, 0, arm]}
+        stroke="#4ade80"
+        strokeWidth={2}
+        listening={false}
+      />
+      <Circle
+        x={0}
+        y={0}
+        radius={6}
+        fill="rgba(74,222,128,0.35)"
+        stroke="#4ade80"
+        strokeWidth={2}
+        listening={false}
+      />
+      <Text
+        text="Origin (0, 0)"
+        x={-48}
+        y={labelOffset}
+        width={96}
+        align="center"
+        fontSize={12}
+        fill="#4ade80"
+        listening={false}
+      />
+    </Group>
+  );
+}
+
+type SceneCenterHandleProps = {
+  centerX: number;
+  centerY: number;
+  armLength: number;
+  onDragEnd: (centerX: number, centerY: number) => void;
+};
+
+/// <summary>
+/// Draggable scene center marker; position is stored on the scene and does not move map images.
+/// </summary>
+function SceneCenterHandle({ centerX, centerY, armLength, onDragEnd }: SceneCenterHandleProps) {
+  const arm = Math.max(18, armLength * 0.6);
+  const labelOffset = arm + 12;
+
+  return (
+    <Group
+      x={centerX}
+      y={centerY}
+      draggable
+      dragDistance={6}
+      onDragEnd={(event) => {
+        onDragEnd(event.target.x(), event.target.y());
+      }}
+    >
+      <Line
+        points={[-arm, 0, arm, 0]}
+        stroke="#c9a227"
+        strokeWidth={2}
+        listening={false}
+      />
+      <Line
+        points={[0, -arm, 0, arm]}
+        stroke="#c9a227"
+        strokeWidth={2}
+        listening={false}
+      />
+      <Circle
+        x={0}
+        y={0}
+        radius={10}
+        fill="rgba(201, 162, 39, 0.45)"
+        stroke="#c9a227"
+        strokeWidth={2}
+      />
+      <Text
+        text="Scene center — drag to position"
+        x={-84}
+        y={labelOffset}
+        width={168}
+        align="center"
+        fontSize={11}
+        fill="#e8d5a3"
+        listening={false}
+      />
     </Group>
   );
 }
@@ -147,17 +269,20 @@ function FogOverlay({
   );
 }
 
-const TOKEN_RADIUS = 24;
-
 type MapTokenProps = {
   token: Token;
+  gridSize: number;
 };
 
 /// <summary>
 /// Renders a map token as a colored disc or circular portrait with a name label.
 /// </summary>
-function MapToken({ token }: MapTokenProps) {
+function MapToken({ token, gridSize }: MapTokenProps) {
   const [image, setImage] = useState<HTMLImageElement | null>(null);
+  const tokenRadius = tokenRadiusForGridSize(gridSize);
+  const tokenStroke = Math.max(2, Math.round(gridSize / 18));
+  const labelFontSize = Math.max(10, Math.round(gridSize / 4.5));
+  const labelWidth = Math.max(72, gridSize * 1.5);
 
   useEffect(() => {
     if (!token.imageUrl) {
@@ -188,30 +313,40 @@ function MapToken({ token }: MapTokenProps) {
       {image ? (
         <Group
           clipFunc={(ctx) => {
-            ctx.arc(0, 0, TOKEN_RADIUS, 0, Math.PI * 2);
+            ctx.arc(0, 0, tokenRadius, 0, Math.PI * 2);
           }}
         >
           <Image
             image={image}
-            x={-TOKEN_RADIUS}
-            y={-TOKEN_RADIUS}
-            width={TOKEN_RADIUS * 2}
-            height={TOKEN_RADIUS * 2}
+            x={-tokenRadius}
+            y={-tokenRadius}
+            width={tokenRadius * 2}
+            height={tokenRadius * 2}
           />
         </Group>
       ) : (
-        <Circle radius={TOKEN_RADIUS - 2} fill={token.color} stroke={borderColor} strokeWidth={3} />
+        <Circle
+          radius={tokenRadius - 2}
+          fill={token.color}
+          stroke={borderColor}
+          strokeWidth={tokenStroke}
+        />
       )}
       {image ? (
-        <Circle radius={TOKEN_RADIUS} stroke={borderColor} strokeWidth={3} listening={false} />
+        <Circle
+          radius={tokenRadius}
+          stroke={borderColor}
+          strokeWidth={tokenStroke}
+          listening={false}
+        />
       ) : null}
       <Text
         text={token.label}
-        fontSize={12}
+        fontSize={labelFontSize}
         fill="#f0e6d2"
-        width={72}
-        offsetX={36}
-        offsetY={TOKEN_RADIUS + 14}
+        width={labelWidth}
+        offsetX={labelWidth / 2}
+        offsetY={tokenRadius + labelFontSize + 2}
         align="center"
       />
     </>
@@ -226,6 +361,27 @@ type SceneGridProps = {
   height: number;
   gridSize: number;
 };
+
+/// <summary>
+/// Expands grid bounds to cover the visible viewport, snapped to grid cell boundaries.
+/// </summary>
+function computeVisibleGridBounds(
+  viewport: Viewport,
+  stageWidth: number,
+  stageHeight: number,
+  gridSize: number,
+) {
+  const visibleLeft = -viewport.x / viewport.scale;
+  const visibleTop = -viewport.y / viewport.scale;
+  const visibleRight = (stageWidth - viewport.x) / viewport.scale;
+  const visibleBottom = (stageHeight - viewport.y) / viewport.scale;
+  const pad = gridSize * 2;
+  const x = Math.floor((visibleLeft - pad) / gridSize) * gridSize;
+  const y = Math.floor((visibleTop - pad) / gridSize) * gridSize;
+  const right = Math.ceil((visibleRight + pad) / gridSize) * gridSize;
+  const bottom = Math.ceil((visibleBottom + pad) / gridSize) * gridSize;
+  return { x, y, width: right - x, height: bottom - y };
+}
 
 /// <summary>
 /// Renders orthogonal grid lines; each line is its own Konva Line so segments are not connected.
@@ -298,9 +454,7 @@ export function MapCanvas({
 }: MapCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 800, height: 600 });
-  const [localViewport, setLocalViewport] = useState<Viewport>(
-    isDm ? state.viewport : DEFAULT_VIEWPORT,
-  );
+  const [localViewport, setLocalViewport] = useState<Viewport>(DEFAULT_VIEWPORT);
   const [localFogDataUrl, setLocalFogDataUrl] = useState<string | null>(null);
   const [fogReady, setFogReady] = useState(false);
   const [selectedLayerId, setSelectedLayerId] = useState<string | null>(null);
@@ -312,9 +466,19 @@ export function MapCanvas({
   const fogSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const settingsViewportTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingFogSceneIdRef = useRef<string | null>(null);
-  const playerInitializedRef = useRef(false);
-  const dmSceneIdRef = useRef<string | null>(null);
-  const dmSettingsModeRef = useRef(false);
+  const sceneNavRef = useRef<string | null>(null);
+  const viewportRef = useRef<Viewport>(localViewport);
+  viewportRef.current = localViewport;
+  const roomId = state.roomId;
+  const viewerId = isDm ? "dm" : (playerSlotId ?? "player");
+  const viewportMode: SessionViewportMode = sceneEditMode ? "edit" : "play";
+
+  const persistSessionViewport = useCallback(
+    (next: Viewport, scene = sceneId, mode: SessionViewportMode = viewportMode) => {
+      saveSessionViewport(roomId, viewerId, scene, mode, next);
+    },
+    [roomId, sceneId, viewerId, viewportMode],
+  );
 
   const rawScene = state.scenes.find((scene) => scene.id === sceneId);
   const activeScene = rawScene ? normalizeScene(rawScene) : undefined;
@@ -341,48 +505,90 @@ export function MapCanvas({
   const sceneHidden =
     !isDm && playerSlot && !canPlayerSeeScene(playerSlot, sceneId);
 
-  useEffect(() => {
-    if (!isDm) {
-      return;
+  const gridBounds = useMemo(() => {
+    const gridSize = activeScene?.gridSize ?? 50;
+    if (gridSize <= 0) {
+      return { x: 0, y: 0, width: 0, height: 0 };
     }
+    return computeVisibleGridBounds(viewport, size.width, size.height, gridSize);
+  }, [activeScene?.gridSize, viewport, size.width, size.height]);
 
-    const sceneId = state.activeSceneId;
-    const sceneChanged = dmSceneIdRef.current !== sceneId;
-    const settingsOpened = !dmSettingsModeRef.current && sceneEditMode;
-    dmSceneIdRef.current = sceneId;
-    dmSettingsModeRef.current = sceneEditMode;
+  const markerArmLength = activeScene?.gridSize ?? 50;
+  const sceneCenterX = activeScene?.centerX ?? mapWidth / 2;
+  const sceneCenterY = activeScene?.centerY ?? mapHeight / 2;
 
-    if (!sceneChanged && !settingsOpened) {
-      return;
-    }
-
-    const raw = state.scenes.find((item) => item.id === sceneId);
-    if (!raw) {
-      return;
-    }
-
-    const next = normalizeScene(raw).defaultViewport;
-    setLocalViewport(next);
-    if (sceneEditMode) {
-      onSettingsViewportChange?.(next);
-    }
-  }, [isDm, state.activeSceneId, sceneEditMode, onSettingsViewportChange]);
 
   useEffect(() => {
-    if (!isDm && activeScene && !playerInitializedRef.current) {
-      playerInitializedRef.current = true;
-      setLocalViewport({
-        x: size.width / 2 - (mapWidth * 0.4),
-        y: size.height / 2 - (mapHeight * 0.4),
-        scale: 0.8,
-      });
-    }
-  }, [isDm, activeScene, mapWidth, mapHeight, size.width, size.height]);
-
-  useEffect(() => {
-    playerInitializedRef.current = false;
     setSelectedLayerId(null);
   }, [sceneId]);
+
+  useEffect(() => {
+    return () => {
+      persistSessionViewport(viewportRef.current);
+    };
+  }, [persistSessionViewport, sceneId, viewportMode]);
+
+  useEffect(() => {
+    if (!activeScene || size.width <= 0 || size.height <= 0) {
+      return;
+    }
+
+    const navKey = `${viewportMode}:${sceneId}:${size.width}x${size.height}`;
+    const sceneChanged = !sceneNavRef.current?.startsWith(`${viewportMode}:${sceneId}:`);
+    const sizeReady = sceneNavRef.current === null;
+    const modeChanged =
+      sceneNavRef.current !== null && !sceneNavRef.current.startsWith(`${viewportMode}:`);
+
+    if (!sceneChanged && !sizeReady && !modeChanged) {
+      return;
+    }
+
+    sceneNavRef.current = navKey;
+
+    const normalizedViewport = viewportForNormalizedScene(
+      activeScene,
+      size.width,
+      size.height,
+    );
+    const savedSessionViewport = getSessionViewport(
+      roomId,
+      viewerId,
+      sceneId,
+      viewportMode,
+    );
+    const savedEditViewport =
+      viewportMode === "edit" && !isDefaultViewport(activeScene.defaultViewport)
+        ? activeScene.defaultViewport
+        : null;
+
+    let next =
+      savedSessionViewport ??
+      (viewportMode === "edit" ? savedEditViewport : null) ??
+      normalizedViewport;
+    if (!isDm && !sceneEditMode) {
+      next = clampPlayerViewport(next, activeScene, size.width, size.height);
+    }
+    viewportRef.current = next;
+    setLocalViewport(next);
+
+    if (sceneEditMode) {
+      onSettingsViewportChange?.(next);
+    } else if (isDm && !savedSessionViewport) {
+      dm.updateViewport(next);
+    }
+  }, [
+    activeScene,
+    dm,
+    isDm,
+    onSettingsViewportChange,
+    roomId,
+    sceneEditMode,
+    sceneId,
+    size.height,
+    size.width,
+    viewerId,
+    viewportMode,
+  ]);
 
   useEffect(() => {
     const element = containerRef.current;
@@ -468,7 +674,9 @@ export function MapCanvas({
       viewCommand.type === "reset"
         ? { ...DEFAULT_VIEWPORT }
         : fitViewportToScene(activeScene, size.width, size.height);
+    viewportRef.current = next;
     setLocalViewport(next);
+    persistSessionViewport(next);
     saveSettingsViewport(next);
   }, [viewCommand?.id]);
 
@@ -484,16 +692,31 @@ export function MapCanvas({
 
   const setViewport = useCallback(
     (next: Viewport) => {
-      setLocalViewport(next);
+      const resolved =
+        !isDm && !sceneEditMode && activeScene
+          ? clampPlayerViewport(next, activeScene, size.width, size.height)
+          : next;
+      viewportRef.current = resolved;
+      setLocalViewport(resolved);
+      persistSessionViewport(resolved);
       if (isDm && sceneEditMode) {
-        saveSettingsViewport(next);
+        saveSettingsViewport(resolved);
         return;
       }
       if (isDm) {
-        dm.updateViewport(next);
+        dm.updateViewport(resolved);
       }
     },
-    [dm, isDm, saveSettingsViewport, sceneEditMode],
+    [
+      activeScene,
+      dm,
+      isDm,
+      persistSessionViewport,
+      saveSettingsViewport,
+      sceneEditMode,
+      size.height,
+      size.width,
+    ],
   );
 
   const scheduleFogSync = useCallback(
@@ -536,6 +759,16 @@ export function MapCanvas({
         return;
       }
       dm.updateScene(moveMapLayer(activeScene, layerId, x, y));
+    },
+    [activeScene, dm],
+  );
+
+  const handleSceneCenterDragEnd = useCallback(
+    (centerX: number, centerY: number) => {
+      if (!activeScene) {
+        return;
+      }
+      dm.updateScene(moveSceneCenter(activeScene, Math.round(centerX), Math.round(centerY)));
     },
     [activeScene, dm],
   );
@@ -618,10 +851,11 @@ export function MapCanvas({
       const dx = pointer.x - lastPointer.current.x;
       const dy = pointer.y - lastPointer.current.y;
       lastPointer.current = pointer;
+      const current = viewportRef.current;
       setViewport({
-        ...viewport,
-        x: viewport.x + dx,
-        y: viewport.y + dy,
+        ...current,
+        x: current.x + dx,
+        y: current.y + dy,
       });
       return;
     }
@@ -679,14 +913,16 @@ export function MapCanvas({
       >
         <Layer>
           <Group x={viewport.x} y={viewport.y} scaleX={viewport.scale} scaleY={viewport.scale}>
-            <Rect
-              x={0}
-              y={0}
-              width={mapWidth}
-              height={mapHeight}
-              fill={sceneBackground}
-              listening={false}
-            />
+            {isDm && sceneEditMode ? (
+              <Rect
+                x={0}
+                y={0}
+                width={mapWidth}
+                height={mapHeight}
+                fill={sceneBackground}
+                listening={false}
+              />
+            ) : null}
             {activeScene?.layers.map((layer) => (
               <Group
                 key={layer.id}
@@ -700,13 +936,28 @@ export function MapCanvas({
                 <MapLayerImage
                   layer={layer}
                   selected={sceneEditMode && selectedLayerId === layer.id}
-                  draggable={isDm && sceneEditMode}
+                  draggable={isDm && sceneEditMode && selectedLayerId === layer.id}
                   onDragEnd={handleLayerDragEnd}
                 />
               </Group>
             ))}
+            {isDm && sceneEditMode ? <SceneOriginMarker armLength={markerArmLength} /> : null}
+            {isDm && sceneEditMode ? (
+              <SceneCenterHandle
+                centerX={sceneCenterX}
+                centerY={sceneCenterY}
+                armLength={markerArmLength}
+                onDragEnd={handleSceneCenterDragEnd}
+              />
+            ) : null}
             {activeScene?.showGrid && activeScene.gridSize > 0 ? (
-              <SceneGrid width={mapWidth} height={mapHeight} gridSize={activeScene.gridSize} />
+              <Group x={gridBounds.x} y={gridBounds.y}>
+                <SceneGrid
+                  width={gridBounds.width}
+                  height={gridBounds.height}
+                  gridSize={activeScene.gridSize}
+                />
+              </Group>
             ) : null}
             {(isDm ? showFog : playerShowFog) && activeScene ? (
               <FogOverlay
@@ -727,7 +978,7 @@ export function MapCanvas({
                   dm.moveToken(token.id, event.target.x(), event.target.y());
                 }}
               >
-                <MapToken token={token} />
+                <MapToken token={token} gridSize={activeScene?.gridSize ?? 50} />
               </Group>
             ))}
             {ping ? (
@@ -775,7 +1026,7 @@ export function MapCanvas({
       ) : null}
       {isDm && sceneEditMode ? (
         <div className="fog-badge scene-edit-badge">
-          Settings — drag to pan, scroll to zoom, drag images to position (players cannot see this)
+          Settings — click an image to select it, then drag to move; drag elsewhere to pan
         </div>
       ) : null}
       {isDm && fogMode && !sceneEditMode && activeScene?.fogEnabled ? (

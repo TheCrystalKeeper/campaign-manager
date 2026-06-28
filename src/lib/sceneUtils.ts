@@ -6,18 +6,35 @@ const DEFAULT_SCENE_HEIGHT = 600;
 const CANVAS_PADDING = 80;
 const MAX_WS_IMAGE_BYTES = 280_000;
 
+export const STANDARD_GRID_ROWS = 20;
+export const VIEWPORT_GRID_ROWS = 15;
+
+/// <summary>
+/// Fills in scene center coordinates when missing from persisted data.
+/// </summary>
+export function withSceneCenter(scene: Scene): Scene {
+  const width = scene.width || DEFAULT_SCENE_WIDTH;
+  const height = scene.height || DEFAULT_SCENE_HEIGHT;
+  return {
+    ...scene,
+    centerX: scene.centerX ?? Math.round(width / 2),
+    centerY: scene.centerY ?? Math.round(height / 2),
+    playerPanLimit: scene.playerPanLimit ?? 0,
+  };
+}
+
 /// <summary>
 /// Ensures a scene uses the multi-layer format, migrating legacy single-mapUrl scenes.
 /// </summary>
 export function normalizeScene(
   scene: Scene & { fogEnabled?: boolean; defaultViewport?: Viewport; backgroundColor?: string },
 ): Scene {
-  const withDefaults = {
+  const withDefaults = withSceneCenter({
     ...scene,
     fogEnabled: scene.fogEnabled ?? Boolean(scene.fogDataUrl),
     defaultViewport: scene.defaultViewport ?? { ...DEFAULT_VIEWPORT },
     backgroundColor: scene.backgroundColor ?? DEFAULT_SCENE_BACKGROUND,
-  };
+  });
 
   if (withDefaults.layers.length > 0) {
     return recalcSceneBounds(withDefaults);
@@ -255,9 +272,12 @@ export function addImageLayerToScene(
   layerId?: string,
 ): Scene {
   const layer = createMapLayer(url, width, height, scene, label, layerId);
+  const nextLayers = [...scene.layers, layer];
+  const tallestLayer = Math.max(...nextLayers.map((item) => item.height));
   return recalcSceneBounds({
     ...scene,
-    layers: [...scene.layers, layer],
+    layers: nextLayers,
+    gridSize: gridSizeForMapHeight(tallestLayer),
   });
 }
 
@@ -284,6 +304,17 @@ export function removeMapLayer(scene: Scene, layerId: string): Scene {
 }
 
 /// <summary>
+/// Updates the scene reference center without moving map layers or tokens.
+/// </summary>
+export function moveSceneCenter(scene: Scene, centerX: number, centerY: number): Scene {
+  return {
+    ...scene,
+    centerX,
+    centerY,
+  };
+}
+
+/// <summary>
 /// Returns whether two scenes have identical persisted fields.
 /// </summary>
 export function scenesEqual(a: Scene, b: Scene): boolean {
@@ -300,12 +331,58 @@ export function createEmptyScene(name: string): Scene {
     layers: [],
     width: DEFAULT_SCENE_WIDTH,
     height: DEFAULT_SCENE_HEIGHT,
+    centerX: Math.round(DEFAULT_SCENE_WIDTH / 2),
+    centerY: Math.round(DEFAULT_SCENE_HEIGHT / 2),
+    playerPanLimit: 0,
     gridSize: 50,
     showGrid: true,
     fogEnabled: false,
     fogDataUrl: null,
     defaultViewport: { ...DEFAULT_VIEWPORT },
     backgroundColor: DEFAULT_SCENE_BACKGROUND,
+  };
+}
+
+/// <summary>
+/// Derives grid cell size so a map image is exactly STANDARD_GRID_ROWS cells tall.
+/// </summary>
+export function gridSizeForMapHeight(mapHeightPx: number): number {
+  return Math.max(10, Math.round(mapHeightPx / STANDARD_GRID_ROWS));
+}
+
+/// <summary>
+/// Token radius for a creature occupying half of one grid cell (1.5 ft when one cell is one yard).
+/// </summary>
+export function tokenRadiusForGridSize(gridSize: number): number {
+  return gridSize / 4;
+}
+
+/// <summary>
+/// Returns true when a viewport has never been customized for a scene.
+/// </summary>
+export function isDefaultViewport(viewport: Viewport): boolean {
+  return viewport.x === 0 && viewport.y === 0 && viewport.scale === 1;
+}
+
+/// <summary>
+/// Computes a viewport with VIEWPORT_GRID_ROWS on screen, centered on the scene reference point.
+/// </summary>
+export function viewportForNormalizedScene(
+  scene: Scene,
+  canvasWidth: number,
+  canvasHeight: number,
+): Viewport {
+  const resolved = withSceneCenter(scene);
+  const padding = 48;
+  const gridSize = resolved.gridSize > 0 ? resolved.gridSize : 50;
+  const normalizedScale =
+    (canvasHeight - padding * 2) / (VIEWPORT_GRID_ROWS * gridSize);
+  const scale = Math.min(normalizedScale, 2);
+  const clampedScale = Math.max(0.05, scale);
+  return {
+    scale: clampedScale,
+    x: canvasWidth / 2 - resolved.centerX * clampedScale,
+    y: canvasHeight / 2 - resolved.centerY * clampedScale,
   };
 }
 
@@ -317,16 +394,40 @@ export function fitViewportToScene(
   canvasWidth: number,
   canvasHeight: number,
 ): Viewport {
-  const padding = 48;
-  const scale = Math.min(
-    (canvasWidth - padding * 2) / scene.width,
-    (canvasHeight - padding * 2) / scene.height,
-    2,
+  return viewportForNormalizedScene(scene, canvasWidth, canvasHeight);
+}
+
+/// <summary>
+/// Clamps a player viewport so the screen center stays within playerPanLimit grid units of scene center.
+/// </summary>
+export function clampPlayerViewport(
+  viewport: Viewport,
+  scene: Scene,
+  canvasWidth: number,
+  canvasHeight: number,
+): Viewport {
+  const resolved = withSceneCenter(scene);
+  const limitCells = resolved.playerPanLimit;
+  if (limitCells <= 0) {
+    return viewport;
+  }
+
+  const gridSize = resolved.gridSize > 0 ? resolved.gridSize : 50;
+  const maxOffset = limitCells * gridSize;
+  const worldCenterX = (canvasWidth / 2 - viewport.x) / viewport.scale;
+  const worldCenterY = (canvasHeight / 2 - viewport.y) / viewport.scale;
+  const clampedWorldX = Math.max(
+    resolved.centerX - maxOffset,
+    Math.min(resolved.centerX + maxOffset, worldCenterX),
   );
-  const clampedScale = Math.max(0.1, scale);
+  const clampedWorldY = Math.max(
+    resolved.centerY - maxOffset,
+    Math.min(resolved.centerY + maxOffset, worldCenterY),
+  );
+
   return {
-    scale: clampedScale,
-    x: (canvasWidth - scene.width * clampedScale) / 2,
-    y: (canvasHeight - scene.height * clampedScale) / 2,
+    scale: viewport.scale,
+    x: canvasWidth / 2 - clampedWorldX * viewport.scale,
+    y: canvasHeight / 2 - clampedWorldY * viewport.scale,
   };
 }
