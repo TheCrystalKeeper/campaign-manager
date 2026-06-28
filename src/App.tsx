@@ -160,6 +160,7 @@ export default function App() {
                 sheet={null}
                 canEdit={false}
                 onChange={() => {}}
+                template={state.sheetTemplate}
                 playerSlots={state.playerSlots}
                 connectedPlayers={state.connectedPlayers}
                 allSheets={state.characterSheets}
@@ -173,6 +174,7 @@ export default function App() {
               sheet={sheet}
               canEdit={canEdit}
               onChange={updateSheet}
+              template={state.sheetTemplate}
               playerSlots={state.playerSlots}
               connectedPlayers={state.connectedPlayers}
               allSheets={state.characterSheets}
@@ -193,6 +195,7 @@ export default function App() {
             sheet={sheet}
             canEdit={canEdit}
             onChange={updateSheet}
+            template={state.sheetTemplate}
             slotId={room.yourPlayerId}
             playerSlots={state.playerSlots}
             connectedPlayers={state.connectedPlayers}

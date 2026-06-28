@@ -1,14 +1,28 @@
 import { useEffect, useRef, useState } from "react";
-import type { CharacterSheet, ConnectedPlayer, PlayerSlot } from "../lib/types";
-import { characterSheetsEqual } from "../lib/types";
+import type {
+  CharacterSheet,
+  ConnectedPlayer,
+  DerivedStatDef,
+  PlayerSlot,
+  SheetTemplate,
+} from "../lib/types";
+import {
+  abilityModifier,
+  characterSheetsEqual,
+  DEFAULT_ABILITY_SCORE,
+  derivedStatTotal,
+  formatModifier,
+} from "../lib/types";
 import { uploadPortrait } from "../lib/uploadAsset";
 import { useDebouncedCallback } from "../hooks/useDebouncedCallback";
+import { NumberInput } from "./NumberInput";
 import type { useDmActions } from "../hooks/useGameRoom";
 
 type CharacterSheetProps = {
   sheet: CharacterSheet | null;
   canEdit: boolean;
   onChange: (sheet: CharacterSheet) => void;
+  template: SheetTemplate;
   slotId?: string | null;
   playerSlots?: PlayerSlot[];
   connectedPlayers?: ConnectedPlayer[];
@@ -21,6 +35,7 @@ type CharacterSheetProps = {
 type CharacterSheetFormProps = {
   sheet: CharacterSheet;
   canEdit: boolean;
+  template: SheetTemplate;
   onChange?: (sheet: CharacterSheet) => void;
   slotId?: string | null;
   compact?: boolean;
@@ -60,12 +75,77 @@ function SheetSection({ title, children }: SheetSectionProps) {
   );
 }
 
+type AbilityCardProps = {
+  abbr: string;
+  name: string;
+  score: number;
+  canEdit: boolean;
+  onScoreChange: (value: number) => void;
+};
+
+/// <summary>
+/// One ability: editable score with its derived 5e modifier shown beneath.
+/// </summary>
+function AbilityCard({ abbr, name, score, canEdit, onScoreChange }: AbilityCardProps) {
+  return (
+    <div className="ability-card" title={name}>
+      <span className="ability-abbr">{abbr}</span>
+      <NumberInput
+        className="ability-score"
+        value={score}
+        min={0}
+        allowNegative={false}
+        disabled={!canEdit}
+        onCommit={onScoreChange}
+      />
+      <span className="ability-mod">{formatModifier(abilityModifier(score))}</span>
+    </div>
+  );
+}
+
+type DerivedStatRowProps = {
+  def: DerivedStatDef;
+  abilityAbbr: string | null;
+  manual: number;
+  total: number;
+  canEdit: boolean;
+  onManualChange: (value: number) => void;
+};
+
+/// <summary>
+/// One skill or saving throw: computed total, linked-ability tag, and the player's manual modifier.
+/// </summary>
+function DerivedStatRow({
+  def,
+  abilityAbbr,
+  manual,
+  total,
+  canEdit,
+  onManualChange,
+}: DerivedStatRowProps) {
+  return (
+    <div className="stat-row">
+      <span className="stat-total">{formatModifier(total)}</span>
+      <span className="stat-name">{def.name}</span>
+      <span className="stat-ability-tag">{abilityAbbr ?? "—"}</span>
+      <NumberInput
+        className="stat-mod-input"
+        value={manual}
+        disabled={!canEdit}
+        aria-label={`${def.name} modifier`}
+        onCommit={onManualChange}
+      />
+    </div>
+  );
+}
+
 /// <summary>
 /// Shared character sheet fields for player edit and DM read-only views.
 /// </summary>
 function CharacterSheetForm({
   sheet: serverSheet,
   canEdit,
+  template,
   onChange,
   slotId,
   compact = false,
@@ -105,6 +185,15 @@ function CharacterSheetForm({
     onChange?.(next);
   };
 
+  const updateAbilityScore = (abilityId: string, value: number) =>
+    update({ abilityScores: { ...draft.abilityScores, [abilityId]: value } });
+
+  const updateSkillMod = (skillId: string, value: number) =>
+    update({ skillMods: { ...draft.skillMods, [skillId]: value } });
+
+  const updateSaveMod = (saveId: string, value: number) =>
+    update({ saveMods: { ...draft.saveMods, [saveId]: value } });
+
   const handleIconFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     event.target.value = "";
@@ -125,6 +214,9 @@ function CharacterSheetForm({
   };
 
   const sheet = draft;
+  const abilityById = new Map(template.abilities.map((ability) => [ability.id, ability]));
+  const abbrFor = (def: DerivedStatDef): string | null =>
+    def.mode === "ability" ? (abilityById.get(def.abilityId)?.abbr ?? null) : null;
 
   return (
     <div className={`character-form${compact ? " character-form-compact" : ""}`}>
@@ -198,25 +290,121 @@ function CharacterSheetForm({
             />
           </SheetField>
           <SheetField label="Level">
-            <input
-              type="number"
-              min={1}
+            <NumberInput
               value={sheet.level}
+              min={1}
+              allowNegative={false}
               disabled={!canEdit}
-              onChange={(event) => update({ level: Number(event.target.value) || 1 })}
+              onCommit={(level) => update({ level })}
             />
           </SheetField>
           <SheetField label="XP">
-            <input
-              type="number"
-              min={0}
+            <NumberInput
               value={sheet.xp}
+              min={0}
+              allowNegative={false}
               disabled={!canEdit}
-              onChange={(event) => update({ xp: Number(event.target.value) || 0 })}
+              onCommit={(xp) => update({ xp })}
             />
           </SheetField>
         </div>
       </SheetSection>
+
+      <SheetSection title="Combat">
+        <div className="sheet-field-grid">
+          <SheetField label="HP (current)">
+            <NumberInput
+              value={sheet.hp.current}
+              disabled={!canEdit}
+              onCommit={(current) => update({ hp: { ...draft.hp, current } })}
+            />
+          </SheetField>
+          <SheetField label="HP (max)">
+            <NumberInput
+              value={sheet.hp.max}
+              min={0}
+              allowNegative={false}
+              disabled={!canEdit}
+              onCommit={(max) => update({ hp: { ...draft.hp, max } })}
+            />
+          </SheetField>
+          <SheetField label="Armor Class">
+            <NumberInput
+              value={sheet.ac}
+              min={0}
+              allowNegative={false}
+              disabled={!canEdit}
+              onCommit={(ac) => update({ ac })}
+            />
+          </SheetField>
+          <SheetField label="Initiative">
+            <NumberInput
+              value={sheet.initiative}
+              disabled={!canEdit}
+              onCommit={(initiative) => update({ initiative })}
+            />
+          </SheetField>
+        </div>
+      </SheetSection>
+
+      {template.abilities.length > 0 ? (
+        <SheetSection title="Abilities">
+          <div className="ability-grid">
+            {template.abilities.map((ability) => (
+              <AbilityCard
+                key={ability.id}
+                abbr={ability.abbr}
+                name={ability.name}
+                score={sheet.abilityScores[ability.id] ?? DEFAULT_ABILITY_SCORE}
+                canEdit={canEdit}
+                onScoreChange={(value) => updateAbilityScore(ability.id, value)}
+              />
+            ))}
+          </div>
+        </SheetSection>
+      ) : null}
+
+      {template.skills.length > 0 ? (
+        <SheetSection title="Skills">
+          <div className="stat-list">
+            {template.skills.map((skill) => {
+              const manual = sheet.skillMods[skill.id] ?? 0;
+              return (
+                <DerivedStatRow
+                  key={skill.id}
+                  def={skill}
+                  abilityAbbr={abbrFor(skill)}
+                  manual={manual}
+                  total={derivedStatTotal(skill, manual, sheet.abilityScores)}
+                  canEdit={canEdit}
+                  onManualChange={(value) => updateSkillMod(skill.id, value)}
+                />
+              );
+            })}
+          </div>
+        </SheetSection>
+      ) : null}
+
+      {template.saves.length > 0 ? (
+        <SheetSection title="Saving throws">
+          <div className="stat-list">
+            {template.saves.map((save) => {
+              const manual = sheet.saveMods[save.id] ?? 0;
+              return (
+                <DerivedStatRow
+                  key={save.id}
+                  def={save}
+                  abilityAbbr={abbrFor(save)}
+                  manual={manual}
+                  total={derivedStatTotal(save, manual, sheet.abilityScores)}
+                  canEdit={canEdit}
+                  onManualChange={(value) => updateSaveMod(save.id, value)}
+                />
+              );
+            })}
+          </div>
+        </SheetSection>
+      ) : null}
 
       <SheetSection title="Details">
         <div className="sheet-field-grid">
@@ -315,6 +503,7 @@ export function CharacterSheetPanel({
   sheet,
   canEdit,
   onChange,
+  template,
   slotId,
   playerSlots,
   connectedPlayers,
@@ -409,6 +598,7 @@ export function CharacterSheetPanel({
                       <CharacterSheetForm
                         sheet={playerSheet}
                         canEdit={false}
+                        template={template}
                         slotId={slot.id}
                         compact
                       />
@@ -449,6 +639,7 @@ export function CharacterSheetPanel({
         <CharacterSheetForm
           sheet={sheet}
           canEdit={canEdit}
+          template={template}
           onChange={onChange}
           slotId={slotId}
         />

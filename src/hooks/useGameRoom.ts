@@ -10,6 +10,7 @@ import type {
   Role,
   Scene,
   ServerMessage,
+  SheetTemplate,
   Token,
   Viewport,
 } from "../lib/types";
@@ -367,6 +368,8 @@ export function useDmActions(room: GameRoom) {
         send({ type: "UPDATE_FOG", sceneId, fogDataUrl }),
       importCampaign: (manifest: CampaignManifest) =>
         send({ type: "IMPORT_CAMPAIGN", manifest }),
+      updateSheetTemplate: (template: SheetTemplate) =>
+        send({ type: "UPDATE_SHEET_TEMPLATE", template }),
       addPlayerSlot: (name: string) => send({ type: "ADD_PLAYER_SLOT", name }),
       updatePlayerSlot: (slot: PlayerSlot) => send({ type: "UPDATE_PLAYER_SLOT", slot }),
       removePlayerSlot: (slotId: string) => send({ type: "REMOVE_PLAYER_SLOT", slotId }),
