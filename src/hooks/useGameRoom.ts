@@ -13,6 +13,7 @@ import type {
   Token,
   Viewport,
 } from "../lib/types";
+import { normalizeGameState } from "../lib/types";
 import type { CampaignManifest } from "../lib/campaignManifest";
 
 /// <summary>
@@ -88,7 +89,7 @@ export function useRoomLobby(roomId: string, enabled: boolean): RoomLobby {
     socket.addEventListener("message", (event) => {
       const message = JSON.parse(event.data as string) as ServerMessage;
       if (message.type === "STATE") {
-        setState(message.state);
+        setState(normalizeGameState(message.state));
         setStatus("ready");
       } else if (message.type === "ERROR") {
         setError(message.message);
@@ -291,7 +292,7 @@ export function useGameRoom(roomId: string | null): GameRoom {
     socket.addEventListener("message", (event) => {
       const message = JSON.parse(event.data as string) as ServerMessage;
       if (message.type === "STATE") {
-        setState(message.state);
+        setState(normalizeGameState(message.state));
         setYourClientId(message.yourClientId);
         setYourRole(message.yourRole);
         if (message.yourRole) {

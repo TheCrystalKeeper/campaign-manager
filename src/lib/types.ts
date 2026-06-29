@@ -1,8 +1,9 @@
 import type { CampaignManifest } from "./campaignManifest";
 import type { MapAnnotation } from "./mapAnnotation";
+import { normalizeMapAnnotation } from "./mapAnnotation";
 
 export type { MapAnnotation } from "./mapAnnotation";
-export { ANNOTATION_DURATION_MS } from "./mapAnnotation";
+export { ANNOTATION_DURATION_MS, normalizeMapAnnotation } from "./mapAnnotation";
 
 export type Role = "dm" | "player";
 
@@ -427,7 +428,7 @@ export function normalizeGameState(state: GameState): GameState {
     tokens: (state.tokens ?? []).map((token) =>
       syncPlayerTokenFromState(token, { ...state, playerSlots, characterSheets }),
     ),
-    annotations: state.annotations ?? [],
+    annotations: (state.annotations ?? []).map((annotation) => normalizeMapAnnotation(annotation)),
     publicDiceLog: state.publicDiceLog ?? [],
   };
 }

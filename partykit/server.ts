@@ -19,7 +19,11 @@ import { normalizeScene } from "../src/lib/sceneUtils";
 import {
   ANNOTATION_DURATION_MS,
   annotationPathLength,
+  annotationRemainingMs,
+  isAnnotationExpired,
   isValidAnnotationPoints,
+  MAX_ACTIVE_ANNOTATIONS_PER_PLAYER,
+  normalizeMapAnnotation,
   trimAnnotationPoints,
 } from "../src/lib/mapAnnotation";
 import { rollDiceExpression } from "../src/lib/dice";
@@ -35,9 +39,6 @@ type ClientMeta = {
 const ROOM_KEY = "room-key";
 const VIEWPORT_THROTTLE_MS = 66;
 const MAX_PUBLIC_DICE_LOG = 50;
-const MAX_ACTIVE_ANNOTATIONS_PER_PLAYER = 4;
-const ANNOTATION_FORCED_FADE_MS = 600;
-
 export default class GameServer implements Party.Server {
   state: GameState;
   clients = new Map<string, ClientMeta>();
@@ -70,7 +71,29 @@ export default class GameServer implements Party.Server {
       }
     }
     this.clearStaleDm();
+    this.pruneAndRescheduleAnnotations();
     await this.persistState();
+  }
+
+  /// <summary>
+  /// Drops expired annotations and rebuilds removal timers after durable storage reload.
+  /// </summary>
+  pruneAndRescheduleAnnotations() {
+    const now = Date.now();
+    const annotations = (this.state.annotations ?? [])
+      .map((annotation) => normalizeMapAnnotation(annotation))
+      .filter((annotation) => !isAnnotationExpired(annotation.createdAt, now));
+
+    this.state.annotations = annotations;
+
+    for (const timer of this.annotationRemovalTimers.values()) {
+      clearTimeout(timer);
+    }
+    this.annotationRemovalTimers.clear();
+
+    for (const annotation of annotations) {
+      this.scheduleAnnotationRemoval(annotation.id, annotationRemainingMs(annotation.createdAt, now));
+    }
   }
 
   /// <summary>
@@ -397,24 +420,13 @@ export default class GameServer implements Party.Server {
       if (!this.state.scenes.some((scene) => scene.id === parsed.sceneId)) {
         return;
       }
-      const now = Date.now();
-      const playerAnnotations = (this.state.annotations ?? [])
-        .filter((item) => item.playerId === meta.playerId)
-        .sort((a, b) => a.createdAt - b.createdAt);
-      const overflowCount =
-        playerAnnotations.length - (MAX_ACTIVE_ANNOTATIONS_PER_PLAYER - 1);
-      if (overflowCount > 0) {
-        const forcedCreatedAt =
-          now - (ANNOTATION_DURATION_MS - ANNOTATION_FORCED_FADE_MS);
-        for (let index = 0; index < overflowCount; index += 1) {
-          const stale = playerAnnotations[index];
-          if (!stale) {
-            continue;
-          }
-          stale.createdAt = forcedCreatedAt;
-          this.scheduleAnnotationRemoval(stale.id, ANNOTATION_FORCED_FADE_MS);
-        }
+      const activePlayerAnnotations = (this.state.annotations ?? []).filter(
+        (item) => item.playerId === meta.playerId && !isAnnotationExpired(item.createdAt),
+      );
+      if (activePlayerAnnotations.length >= MAX_ACTIVE_ANNOTATIONS_PER_PLAYER) {
+        return;
       }
+      const now = Date.now();
       const annotation = {
         id: `ann-${crypto.randomUUID().slice(0, 8)}`,
         sceneId: parsed.sceneId,

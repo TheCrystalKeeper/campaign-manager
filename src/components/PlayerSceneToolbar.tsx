@@ -24,16 +24,16 @@ export function PlayerSceneToolbar({
   const visibleScenes = state.scenes.filter((scene) => canPlayerSeeScene(slot, scene.id));
   if (visibleScenes.length === 0) {
     return (
-      <footer className="dm-toolbar player-scene-toolbar">
+      <nav className="player-scene-tabs" aria-label="Your scenes">
         <p className="toolbar-hint">No scenes have been shared with you yet.</p>
-      </footer>
+      </nav>
     );
   }
 
   return (
-    <footer className="dm-toolbar player-scene-toolbar">
-      <div className="toolbar-group">
-        <span className="toolbar-label">Your scenes</span>
+    <nav className="player-scene-tabs" aria-label="Your scenes">
+      <span className="toolbar-label">Your scenes</span>
+      <div className="view-tabs">
         {visibleScenes.map((scene) => (
           <button
             key={scene.id}
@@ -45,6 +45,6 @@ export function PlayerSceneToolbar({
           </button>
         ))}
       </div>
-    </footer>
+    </nav>
   );
 }

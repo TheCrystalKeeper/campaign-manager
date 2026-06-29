@@ -33,6 +33,10 @@ import {
   annotationOpacity,
   annotationPathLength,
   appendAnnotationSample,
+  appendDraftAnnotationSample,
+  buildAnnotationDraftPreview,
+  isAnnotationAtMaxPoints,
+  MAX_ACTIVE_ANNOTATIONS_PER_PLAYER,
   trimAnnotationPoints,
 } from "../lib/mapAnnotation";
 
@@ -428,6 +432,10 @@ function MapTokenNode({ token, gridSize, draggable, onDragEnd }: MapTokenNodePro
         }
       }}
       onDragStart={(event) => {
+        if (event.evt.shiftKey) {
+          event.target.stopDrag();
+          return;
+        }
         if (draggable) {
           setMapCursor(event, "grabbing");
         }
@@ -448,17 +456,18 @@ function MapTokenNode({ token, gridSize, draggable, onDragEnd }: MapTokenNodePro
 type MapAnnotationArrowProps = {
   points: number[];
   opacity: number;
+  tension?: number;
 };
 
 /// <summary>
 /// Renders a freehand annotation arrow on the map canvas.
 /// </summary>
-function MapAnnotationArrow({ points, opacity }: MapAnnotationArrowProps) {
+function MapAnnotationArrow({ points, opacity, tension = 0.5 }: MapAnnotationArrowProps) {
   return (
     <>
       <Arrow
         points={points}
-        tension={0.5}
+        tension={tension}
         lineCap="round"
         lineJoin="round"
         stroke="rgba(8, 6, 5, 0.95)"
@@ -472,7 +481,7 @@ function MapAnnotationArrow({ points, opacity }: MapAnnotationArrowProps) {
       />
       <Arrow
         points={points}
-        tension={0.5}
+        tension={tension}
         lineCap="round"
         lineJoin="round"
         stroke="#f0e6d2"
@@ -497,6 +506,9 @@ type SceneGridProps = {
   width: number;
   height: number;
   gridSize: number;
+  originX: number;
+  originY: number;
+  zoomScale: number;
 };
 
 /// <summary>
@@ -521,40 +533,111 @@ function computeVisibleGridBounds(
 }
 
 /// <summary>
-/// Renders orthogonal grid lines; each line is its own Konva Line so segments are not connected.
+/// Deterministic pseudo-random in [0, 1) from stable seeds.
 /// </summary>
-function SceneGrid({ width, height, gridSize }: SceneGridProps) {
-  const verticals: number[] = [];
-  for (let x = 0; x <= width; x += gridSize) {
-    verticals.push(x);
+function gridNoise2D(worldX: number, worldY: number): number {
+  const value = Math.sin(worldX * 12.9898 + worldY * 78.233) * 43758.5453;
+  return value - Math.floor(value);
+}
+
+/// <summary>
+/// Builds a reusable hand-drawn single-cell grid tile for pattern fills.
+/// </summary>
+function createGridTile(gridSize: number): { canvas: HTMLCanvasElement; scale: number } | null {
+  if (typeof document === "undefined" || gridSize <= 0) {
+    return null;
+  }
+  const cellPx = 64;
+  const metaTileCells = 2;
+  const metaTilePx = cellPx * metaTileCells;
+  const scale = gridSize / cellPx;
+  const canvas = document.createElement("canvas");
+  canvas.width = metaTilePx;
+  canvas.height = metaTilePx;
+  const context = canvas.getContext("2d");
+  if (!context) {
+    return null;
   }
 
-  const horizontals: number[] = [];
-  for (let y = 0; y <= height; y += gridSize) {
-    horizontals.push(y);
+  context.clearRect(0, 0, metaTilePx, metaTilePx);
+  context.strokeStyle = "rgba(14, 12, 10, 0.44)";
+  context.lineWidth = 1.15;
+  context.lineCap = "round";
+  context.lineJoin = "round";
+
+  const amplitude = 0.85;
+  const step = 8;
+  const segments = Math.ceil(cellPx / step);
+
+  const drawSketchLine = (
+    vertical: boolean,
+    fixed: number,
+    seedOffset: number,
+    originX: number,
+    originY: number,
+  ) => {
+    context.beginPath();
+    let started = false;
+    for (let index = 0; index <= segments; index += 1) {
+      const along = Math.min(cellPx, index * step);
+      const gapNoise = gridNoise2D(seedOffset + index * 3.17, seedOffset + index * 7.11);
+      if (gapNoise > 0.92) {
+        started = false;
+        continue;
+      }
+      const wobble = (gridNoise2D(seedOffset + along * 0.37, seedOffset + 13.7) - 0.5) * 2 * amplitude;
+      const x = vertical ? originX + fixed + wobble : originX + along;
+      const y = vertical ? originY + along : originY + fixed + wobble;
+      if (!started) {
+        context.moveTo(x, y);
+        started = true;
+      } else {
+        context.lineTo(x, y);
+      }
+    }
+    context.stroke();
+  };
+
+  // Draw a 2x2 meta-tile with seed variants to reduce visible repetition.
+  for (let row = 0; row < metaTileCells; row += 1) {
+    for (let col = 0; col < metaTileCells; col += 1) {
+      const originX = col * cellPx;
+      const originY = row * cellPx;
+      const variantSeed = 1000 + row * 101 + col * 211;
+      drawSketchLine(true, 0.5, variantSeed + 1, originX, originY);
+      drawSketchLine(false, 0.5, variantSeed + 2, originX, originY);
+    }
   }
+
+  return { canvas, scale };
+}
+
+/// <summary>
+/// Renders sketchy grid cheaply using a repeating pattern tile.
+/// </summary>
+function SceneGrid({ width, height, gridSize, originX, originY, zoomScale }: SceneGridProps) {
+  const pattern = useMemo(() => createGridTile(gridSize), [gridSize]);
+  if (!pattern) {
+    return null;
+  }
+  const zoomOpacity = Math.max(0.35, Math.min(1, 0.5 + zoomScale / 2));
 
   return (
-    <>
-      {verticals.map((x) => (
-        <Line
-          key={`grid-v-${x}`}
-          points={[x, 0, x, height]}
-          stroke="rgba(255,255,255,0.2)"
-          strokeWidth={1}
-          listening={false}
-        />
-      ))}
-      {horizontals.map((y) => (
-        <Line
-          key={`grid-h-${y}`}
-          points={[0, y, width, y]}
-          stroke="rgba(255,255,255,0.2)"
-          strokeWidth={1}
-          listening={false}
-        />
-      ))}
-    </>
+    <Rect
+      x={0}
+      y={0}
+      width={width}
+      height={height}
+      fillPatternImage={pattern.canvas as unknown as HTMLImageElement}
+      fillPatternRepeat="repeat"
+      fillPatternScaleX={pattern.scale}
+      fillPatternScaleY={pattern.scale}
+      fillPatternOffsetX={originX / pattern.scale}
+      fillPatternOffsetY={originY / pattern.scale}
+      opacity={zoomOpacity}
+      listening={false}
+      perfectDrawEnabled={false}
+    />
   );
 }
 
@@ -621,10 +704,13 @@ export function MapCanvas({
   const [selectedLayerId, setSelectedLayerId] = useState<string | null>(null);
   const [draftAnnotation, setDraftAnnotation] = useState<number[] | null>(null);
   const [fadeClock, setFadeClock] = useState(() => Date.now());
+  const [shiftHeld, setShiftHeld] = useState(false);
   const isPanning = useRef(false);
   const isPaintingFog = useRef(false);
   const isDrawingAnnotation = useRef(false);
   const annotationPoints = useRef<number[]>([]);
+  const draftAnnotationPoints = useRef<number[]>([]);
+  const pendingCommitPointsRef = useRef<number[] | null>(null);
   const lastPointer = useRef({ x: 0, y: 0 });
   const fogCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const fogInitKeyRef = useRef("");
@@ -672,25 +758,77 @@ export function MapCanvas({
   const sceneHidden =
     !isDm && playerSlot && !canPlayerSeeScene(playerSlot, sceneId);
 
-  const sceneAnnotations = useMemo(
-    () =>
-      (state.annotations ?? []).filter(
-        (annotation) =>
-          annotation.sceneId === sceneId && annotationOpacity(annotation.createdAt, fadeClock) > 0,
-      ),
-    [fadeClock, sceneId, state.annotations],
+  const sceneAnnotationSource = useMemo(
+    () => (state.annotations ?? []).filter((annotation) => annotation.sceneId === sceneId),
+    [sceneId, state.annotations],
   );
 
-  const canAnnotate = Boolean(onAddAnnotation) && !sceneEditMode && !(isDm && fogMode);
+  const sceneAnnotations = useMemo(
+    () =>
+      sceneAnnotationSource.filter(
+        (annotation) => annotationOpacity(annotation.createdAt, fadeClock) > 0,
+      ),
+    [fadeClock, sceneAnnotationSource],
+  );
+
   const localAnnotationOwnerId = isDm ? "dm" : (playerSlotId ?? null);
 
+  const sceneAnnotationsForRender = useMemo(() => {
+    if (!draftAnnotation || !pendingCommitPointsRef.current || !localAnnotationOwnerId) {
+      return sceneAnnotations;
+    }
+    const pendingPoints = pendingCommitPointsRef.current;
+    return sceneAnnotations.filter(
+      (annotation) =>
+        annotation.playerId !== localAnnotationOwnerId ||
+        annotation.sceneId !== sceneId ||
+        !annotationsMatch(annotation.points, pendingPoints),
+    );
+  }, [draftAnnotation, localAnnotationOwnerId, sceneAnnotations, sceneId]);
+
+  const activePlayerAnnotationCount = useMemo(() => {
+    if (!localAnnotationOwnerId) {
+      return 0;
+    }
+    return (state.annotations ?? []).filter(
+      (annotation) =>
+        annotation.playerId === localAnnotationOwnerId &&
+        annotationOpacity(annotation.createdAt, fadeClock) > 0,
+    ).length;
+  }, [fadeClock, localAnnotationOwnerId, state.annotations]);
+  const annotationSlotsFull =
+    activePlayerAnnotationCount >= MAX_ACTIVE_ANNOTATIONS_PER_PLAYER;
+  const canAnnotate =
+    Boolean(onAddAnnotation) &&
+    !sceneEditMode &&
+    !(isDm && fogMode) &&
+    !annotationSlotsFull;
+
   useEffect(() => {
-    if (sceneAnnotations.length === 0 && !draftAnnotation) {
+    const syncShift = (event: KeyboardEvent) => {
+      if (event.key === "Shift") {
+        setShiftHeld(event.type === "keydown");
+      }
+    };
+    const clearShift = () => setShiftHeld(false);
+
+    window.addEventListener("keydown", syncShift);
+    window.addEventListener("keyup", syncShift);
+    window.addEventListener("blur", clearShift);
+    return () => {
+      window.removeEventListener("keydown", syncShift);
+      window.removeEventListener("keyup", syncShift);
+      window.removeEventListener("blur", clearShift);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (sceneAnnotationSource.length === 0 && !draftAnnotation) {
       return;
     }
     const timer = setInterval(() => setFadeClock(Date.now()), 50);
     return () => clearInterval(timer);
-  }, [draftAnnotation, sceneAnnotations.length]);
+  }, [draftAnnotation, sceneAnnotationSource]);
 
   const gridBounds = useMemo(() => {
     const gridSize = activeScene?.gridSize ?? 50;
@@ -842,7 +980,7 @@ export function MapCanvas({
   useEffect(() => {
     if (
       !pendingAnnotationCommitRef.current ||
-      !draftAnnotation ||
+      !pendingCommitPointsRef.current ||
       !localAnnotationOwnerId
     ) {
       return;
@@ -851,18 +989,19 @@ export function MapCanvas({
       (annotation) =>
         annotation.playerId === localAnnotationOwnerId &&
         annotation.sceneId === sceneId &&
-        annotationsMatch(annotation.points, draftAnnotation),
+        annotationsMatch(annotation.points, pendingCommitPointsRef.current!),
     );
     if (!committed) {
       return;
     }
     pendingAnnotationCommitRef.current = false;
+    pendingCommitPointsRef.current = null;
     if (annotationCommitTimerRef.current) {
       clearTimeout(annotationCommitTimerRef.current);
       annotationCommitTimerRef.current = null;
     }
     setDraftAnnotation(null);
-  }, [draftAnnotation, localAnnotationOwnerId, sceneAnnotations, sceneId]);
+  }, [localAnnotationOwnerId, sceneAnnotations, sceneId]);
 
   const saveSettingsViewport = useCallback(
     (next: Viewport) => {
@@ -1047,8 +1186,11 @@ export function MapCanvas({
       canAnnotate &&
       event.evt.button === 0 &&
       event.evt.shiftKey &&
-      !isOnDraggableNode(event)
+      (isDm ? !isOnDraggableNode(event) : true)
     ) {
+      if (annotationSlotsFull) {
+        return;
+      }
       event.evt.preventDefault();
       const world = screenToWorld(pointer.x, pointer.y);
       isDrawingAnnotation.current = true;
@@ -1058,6 +1200,7 @@ export function MapCanvas({
         annotationCommitTimerRef.current = null;
       }
       annotationPoints.current = [world.x, world.y];
+      draftAnnotationPoints.current = [world.x, world.y];
       setDraftAnnotation([world.x, world.y]);
       return;
     }
@@ -1083,11 +1226,29 @@ export function MapCanvas({
 
     if (isDrawingAnnotation.current && (event.evt.buttons & 1) !== 0) {
       const world = screenToWorld(pointer.x, pointer.y);
-      const next = appendAnnotationSample(annotationPoints.current, world.x, world.y);
-      if (next.length !== annotationPoints.current.length) {
-        annotationPoints.current = trimAnnotationPoints(next);
-        setDraftAnnotation(annotationPoints.current);
+      const atMaxPoints = isAnnotationAtMaxPoints(annotationPoints.current);
+
+      if (!atMaxPoints) {
+        const sparseNext = appendAnnotationSample(annotationPoints.current, world.x, world.y);
+        if (sparseNext.length !== annotationPoints.current.length) {
+          annotationPoints.current = trimAnnotationPoints(sparseNext);
+        }
+        draftAnnotationPoints.current = appendDraftAnnotationSample(
+          draftAnnotationPoints.current,
+          world.x,
+          world.y,
+        );
       }
+
+      setDraftAnnotation(
+        buildAnnotationDraftPreview(
+          annotationPoints.current,
+          draftAnnotationPoints.current,
+          world.x,
+          world.y,
+          atMaxPoints,
+        ),
+      );
       return;
     }
 
@@ -1115,10 +1276,13 @@ export function MapCanvas({
       const pointer = stage?.getPointerPosition();
       if (pointer && activeScene && onAddAnnotation) {
         const world = screenToWorld(pointer.x, pointer.y);
-        const points = trimAnnotationPoints(
-          appendAnnotationSample(annotationPoints.current, world.x, world.y),
-        );
+        const points = isAnnotationAtMaxPoints(annotationPoints.current)
+          ? annotationPoints.current
+          : trimAnnotationPoints(
+              appendAnnotationSample(annotationPoints.current, world.x, world.y),
+            );
         if (annotationPathLength(points) >= ANNOTATION_MIN_LENGTH) {
+          pendingCommitPointsRef.current = points;
           onAddAnnotation(activeScene.id, points, annotationColor);
           pendingAnnotationCommitRef.current = true;
           if (annotationCommitTimerRef.current) {
@@ -1126,6 +1290,7 @@ export function MapCanvas({
           }
           annotationCommitTimerRef.current = setTimeout(() => {
             pendingAnnotationCommitRef.current = false;
+            pendingCommitPointsRef.current = null;
             setDraftAnnotation(null);
             annotationCommitTimerRef.current = null;
           }, ANNOTATION_COMMIT_GRACE_MS);
@@ -1137,6 +1302,7 @@ export function MapCanvas({
       }
       isDrawingAnnotation.current = false;
       annotationPoints.current = [];
+      draftAnnotationPoints.current = [];
     }
 
     if (isPaintingFog.current && activeScene && fogCanvasRef.current) {
@@ -1229,6 +1395,9 @@ export function MapCanvas({
                   width={gridBounds.width}
                   height={gridBounds.height}
                   gridSize={activeScene.gridSize}
+                  originX={gridBounds.x}
+                  originY={gridBounds.y}
+                  zoomScale={viewport.scale}
                 />
               </Group>
             ) : null}
@@ -1244,7 +1413,7 @@ export function MapCanvas({
             {sceneTokens.map((token) => {
               const isOwnToken = !isDm && token.ownerPlayerId === playerSlotId;
               const canDragToken =
-                (isDm && !fogMode && !sceneEditMode) || (isOwnToken && !sceneEditMode);
+                (isDm && !fogMode && !sceneEditMode) || (isOwnToken && !sceneEditMode && !shiftHeld);
 
               return (
                 <MapTokenNode
@@ -1273,17 +1442,18 @@ export function MapCanvas({
                 listening={false}
               />
             ) : null}
-            {sceneAnnotations.map((annotation) => (
+            {sceneAnnotationsForRender.map((annotation) => (
               <MapAnnotationArrow
                 key={annotation.id}
                 points={annotation.points}
                 opacity={annotationOpacity(annotation.createdAt, fadeClock)}
               />
             ))}
-            {draftAnnotation && draftAnnotation.length >= 4 ? (
+            {draftAnnotation && draftAnnotation.length >= 2 ? (
               <MapAnnotationArrow
                 points={draftAnnotation}
                 opacity={0.85}
+                tension={0}
               />
             ) : null}
             {isDm && sceneEditMode ? (
@@ -1302,15 +1472,6 @@ export function MapCanvas({
         </Layer>
       </Stage>
       )}
-      {!sceneHidden && !sceneEditMode && activeScene && activeScene.gridSize > 0 ? (
-        <div className="map-scale-overlay" aria-label="Map scale">
-          <div
-            className="map-scale-bar"
-            style={{ width: Math.max(24, activeScene.gridSize * viewport.scale) }}
-          />
-          <span className="map-scale-caption">1 yard</span>
-        </div>
-      ) : null}
       {!isDm && !sceneHidden ? (
         <div className="player-badge">
           Drag to pan · scroll to zoom · drag your token · Shift+drag to annotate

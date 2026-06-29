@@ -16,6 +16,7 @@ import {
   createEmptyScene,
   normalizeScene,
   removeMapLayer,
+  resizeMapLayer,
   scenesEqual,
 } from "../lib/sceneUtils";
 
@@ -305,7 +306,10 @@ export function SceneSettingsPanel({
 
               <section className="settings-section">
                 <h3>Map images</h3>
-                <p className="settings-hint">Drag images on the map to reposition them.</p>
+                <p className="settings-hint">
+                  Drag images on the map to reposition them. Set width and height for each layer
+                  below.
+                </p>
                 {uploadError ? <p className="settings-error">{uploadError}</p> : null}
                 <button
                   type="button"
@@ -328,8 +332,48 @@ export function SceneSettingsPanel({
                     {scene.layers.map((layer) => (
                       <li key={layer.id}>
                         <span>{layer.label ?? "Image"}</span>
+                        <div className="settings-row layer-size-fields">
+                          <label className="settings-field">
+                            Width (px)
+                            <input
+                              type="number"
+                              min={10}
+                              max={20000}
+                              value={layer.width}
+                              onChange={(event) =>
+                                updateScene(
+                                  resizeMapLayer(
+                                    scene,
+                                    layer.id,
+                                    Number(event.target.value),
+                                    layer.height,
+                                  ),
+                                )
+                              }
+                            />
+                          </label>
+                          <label className="settings-field">
+                            Height (px)
+                            <input
+                              type="number"
+                              min={10}
+                              max={20000}
+                              value={layer.height}
+                              onChange={(event) =>
+                                updateScene(
+                                  resizeMapLayer(
+                                    scene,
+                                    layer.id,
+                                    layer.width,
+                                    Number(event.target.value),
+                                  ),
+                                )
+                              }
+                            />
+                          </label>
+                        </div>
                         <span className="layer-meta">
-                          {layer.width}×{layer.height} at ({layer.x}, {layer.y})
+                          Position ({layer.x}, {layer.y})
                         </span>
                         <button
                           type="button"

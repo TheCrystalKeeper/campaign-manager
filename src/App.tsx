@@ -141,14 +141,7 @@ export default function App() {
                 fogBrushMode={fogBrushMode}
                 onFogBrushModeChange={setFogBrushMode}
               />
-            ) : (
-              <PlayerSceneToolbar
-                state={state}
-                playerSlotId={room.yourPlayerId!}
-                viewingSceneId={playerViewingSceneId}
-                onViewingSceneChange={setPlayerViewingSceneId}
-              />
-            )}
+            ) : null}
           </section>
         );
 
@@ -254,6 +247,13 @@ export default function App() {
               Scenes
             </button>
           </nav>
+        ) : state && status === "joined" && room.yourPlayerId ? (
+          <PlayerSceneToolbar
+            state={state}
+            playerSlotId={room.yourPlayerId}
+            viewingSceneId={playerViewingSceneId}
+            onViewingSceneChange={setPlayerViewingSceneId}
+          />
         ) : null}
 
         <div className="header-right">

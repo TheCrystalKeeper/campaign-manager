@@ -294,6 +294,26 @@ export function moveMapLayer(scene: Scene, layerId: string, x: number, y: number
 }
 
 /// <summary>
+/// Updates a layer size and recalculates scene bounds.
+/// </summary>
+export function resizeMapLayer(
+  scene: Scene,
+  layerId: string,
+  width: number,
+  height: number,
+): Scene {
+  const nextWidth = Math.max(10, Math.round(width));
+  const nextHeight = Math.max(10, Math.round(height));
+
+  return recalcSceneBounds({
+    ...scene,
+    layers: scene.layers.map((layer) =>
+      layer.id === layerId ? { ...layer, width: nextWidth, height: nextHeight } : layer,
+    ),
+  });
+}
+
+/// <summary>
 /// Removes a map layer from the scene.
 /// </summary>
 export function removeMapLayer(scene: Scene, layerId: string): Scene {
