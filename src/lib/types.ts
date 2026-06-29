@@ -56,6 +56,8 @@ export type Token = {
   ownerPlayerId: string | null;
 };
 
+export type HitPoints = { current: number; max: number };
+
 export type CharacterSheet = {
   characterName: string;
   playerName: string;
@@ -75,6 +77,36 @@ export type CharacterSheet = {
   backstoryPersonality: string;
   notes: string;
   iconUrl: string | null;
+  /** Combat block (game-loop resources kept outside the configurable template). */
+  hp: HitPoints;
+  ac: number;
+  initiative: number;
+  /** Player-entered ability scores keyed by AbilityDef.id (e.g. 16). */
+  abilityScores: Record<string, number>;
+  /** Manual modifiers added to each skill, keyed by DerivedStatDef.id. */
+  skillMods: Record<string, number>;
+  /** Manual modifiers added to each saving throw, keyed by DerivedStatDef.id. */
+  saveMods: Record<string, number>;
+};
+
+export type AbilityDef = {
+  id: string;
+  name: string;
+  abbr: string;
+};
+
+/// <summary>
+/// A skill or saving throw definition. Tagged union on `mode` so new computation
+/// modes (e.g. a future "formula") can be added without reworking call sites.
+/// </summary>
+export type DerivedStatDef =
+  | { id: string; name: string; mode: "ability"; abilityId: string }
+  | { id: string; name: string; mode: "constant" };
+
+export type SheetTemplate = {
+  abilities: AbilityDef[];
+  skills: DerivedStatDef[];
+  saves: DerivedStatDef[];
 };
 
 type LegacyCharacterSheet = Partial<CharacterSheet> & {
@@ -132,6 +164,7 @@ export type GameState = {
   ping: { x: number; y: number; sceneId: string } | null;
   annotations: MapAnnotation[];
   publicDiceLog: DiceRoll[];
+  sheetTemplate: SheetTemplate;
 };
 
 export type JoinMessage =
@@ -163,7 +196,8 @@ export type ClientMessage =
   | { type: "ADD_PLAYER_SLOT"; name: string }
   | { type: "UPDATE_PLAYER_SLOT"; slot: PlayerSlot }
   | { type: "REMOVE_PLAYER_SLOT"; slotId: string }
-  | { type: "ROLL_DICE"; expression: string; private?: boolean };
+  | { type: "ROLL_DICE"; expression: string; private?: boolean }
+  | { type: "UPDATE_SHEET_TEMPLATE"; template: SheetTemplate };
 
 export type ServerMessage =
   | { type: "STATE"; state: GameState; yourClientId: string; yourRole: Role | null }
@@ -259,7 +293,118 @@ export function createDefaultSheet(name: string): CharacterSheet {
     backstoryPersonality: "",
     notes: "",
     iconUrl: null,
+    hp: { current: 0, max: 0 },
+    ac: 0,
+    initiative: 0,
+    abilityScores: {},
+    skillMods: {},
+    saveMods: {},
   };
+}
+
+/// Baseline ability score used when a player hasn't entered one yet (modifier +0).
+export const DEFAULT_ABILITY_SCORE = 10;
+
+/// <summary>
+/// Standard 5e ability modifier: floor((score - 10) / 2).
+/// </summary>
+export function abilityModifier(score: number): number {
+  return Math.floor((score - 10) / 2);
+}
+
+/// <summary>
+/// Computes a skill or saving throw total: ability modifier plus the player's manual
+/// modifier, or just the manual modifier for constant stats. A missing ability score
+/// is treated as 0 — consistent with how the sheet renders an unset score — so the
+/// skill total always reflects the modifier shown on the linked ability.
+/// </summary>
+export function derivedStatTotal(
+  def: DerivedStatDef,
+  manual: number,
+  abilityScores: Record<string, number>,
+): number {
+  switch (def.mode) {
+    case "ability":
+      return abilityModifier(abilityScores[def.abilityId] ?? DEFAULT_ABILITY_SCORE) + manual;
+    case "constant":
+      return manual;
+  }
+}
+
+/// <summary>
+/// Formats a modifier with an explicit sign (e.g. +2, 0, -1).
+/// </summary>
+export function formatModifier(value: number): string {
+  return value >= 0 ? `+${value}` : `${value}`;
+}
+
+export function createAbilityDef(name: string, abbr: string): AbilityDef {
+  return {
+    id: `ability-${crypto.randomUUID().slice(0, 8)}`,
+    name: name.trim() || "Ability",
+    abbr: abbr.trim() || "ABL",
+  };
+}
+
+export function createDerivedStatDef(
+  name: string,
+  abilityId: string | null,
+): DerivedStatDef {
+  const id = `stat-${crypto.randomUUID().slice(0, 8)}`;
+  return abilityId
+    ? { id, name: name.trim() || "Stat", mode: "ability", abilityId }
+    : { id, name: name.trim() || "Stat", mode: "constant" };
+}
+
+/// <summary>
+/// Builds the standard D&D 5e sheet template: 6 abilities, 18 skills, 6 saving throws.
+/// </summary>
+export function createDefaultSheetTemplate(): SheetTemplate {
+  const abilities: AbilityDef[] = [
+    { id: "str", name: "Strength", abbr: "STR" },
+    { id: "dex", name: "Dexterity", abbr: "DEX" },
+    { id: "con", name: "Constitution", abbr: "CON" },
+    { id: "int", name: "Intelligence", abbr: "INT" },
+    { id: "wis", name: "Wisdom", abbr: "WIS" },
+    { id: "cha", name: "Charisma", abbr: "CHA" },
+  ];
+
+  const skillMap: Array<[string, string, string]> = [
+    ["skill-acrobatics", "Acrobatics", "dex"],
+    ["skill-animal-handling", "Animal Handling", "wis"],
+    ["skill-arcana", "Arcana", "int"],
+    ["skill-athletics", "Athletics", "str"],
+    ["skill-deception", "Deception", "cha"],
+    ["skill-history", "History", "int"],
+    ["skill-insight", "Insight", "wis"],
+    ["skill-intimidation", "Intimidation", "cha"],
+    ["skill-investigation", "Investigation", "int"],
+    ["skill-medicine", "Medicine", "wis"],
+    ["skill-nature", "Nature", "int"],
+    ["skill-perception", "Perception", "wis"],
+    ["skill-performance", "Performance", "cha"],
+    ["skill-persuasion", "Persuasion", "cha"],
+    ["skill-religion", "Religion", "int"],
+    ["skill-sleight-of-hand", "Sleight of Hand", "dex"],
+    ["skill-stealth", "Stealth", "dex"],
+    ["skill-survival", "Survival", "wis"],
+  ];
+
+  const skills: DerivedStatDef[] = skillMap.map(([id, name, abilityId]) => ({
+    id,
+    name,
+    mode: "ability",
+    abilityId,
+  }));
+
+  const saves: DerivedStatDef[] = abilities.map((ability) => ({
+    id: `save-${ability.id}`,
+    name: ability.name,
+    mode: "ability",
+    abilityId: ability.id,
+  }));
+
+  return { abilities, skills, saves };
 }
 
 /// <summary>
@@ -284,10 +429,33 @@ function mergeLegacyStoryFields(sheet: LegacyCharacterSheet): string {
 }
 
 /// <summary>
+/// Returns whether two numeric records have the same keys and values.
+/// </summary>
+function numberRecordsEqual(
+  a: Record<string, number>,
+  b: Record<string, number>,
+): boolean {
+  const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+  for (const key of keys) {
+    if (a[key] !== b[key]) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/// <summary>
 /// Returns whether two character sheets have the same field values.
 /// </summary>
 export function characterSheetsEqual(a: CharacterSheet, b: CharacterSheet): boolean {
   return (
+    a.hp.current === b.hp.current &&
+    a.hp.max === b.hp.max &&
+    a.ac === b.ac &&
+    a.initiative === b.initiative &&
+    numberRecordsEqual(a.abilityScores, b.abilityScores) &&
+    numberRecordsEqual(a.skillMods, b.skillMods) &&
+    numberRecordsEqual(a.saveMods, b.saveMods) &&
     a.characterName === b.characterName &&
     a.playerName === b.playerName &&
     a.characterClass === b.characterClass &&
@@ -344,6 +512,80 @@ export function normalizeCharacterSheet(
       sheet.backstoryPersonality ?? (legacyStory || defaults.backstoryPersonality),
     notes: sheet.notes ?? defaults.notes,
     iconUrl: sheet.iconUrl ?? sheet.portraitUrl ?? null,
+    hp: {
+      current: numberOr(sheet.hp?.current, defaults.hp.current),
+      max: numberOr(sheet.hp?.max, defaults.hp.max),
+    },
+    ac: numberOr(sheet.ac, defaults.ac),
+    initiative: numberOr(sheet.initiative, defaults.initiative),
+    abilityScores: sanitizeNumberRecord(sheet.abilityScores),
+    skillMods: sanitizeNumberRecord(sheet.skillMods),
+    saveMods: sanitizeNumberRecord(sheet.saveMods),
+  };
+}
+
+/// <summary>
+/// Returns a finite number, or the fallback when the value is missing or invalid.
+/// </summary>
+function numberOr(value: unknown, fallback: number): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+/// <summary>
+/// Keeps only finite numeric entries from a persisted record (defaults to empty).
+/// </summary>
+function sanitizeNumberRecord(
+  record: Record<string, number> | undefined,
+): Record<string, number> {
+  if (!record || typeof record !== "object") {
+    return {};
+  }
+  const result: Record<string, number> = {};
+  for (const [key, value] of Object.entries(record)) {
+    if (typeof value === "number" && Number.isFinite(value)) {
+      result[key] = value;
+    }
+  }
+  return result;
+}
+
+/// <summary>
+/// Validates a persisted sheet template, dropping malformed entries and falling back
+/// to the standard 5e template when absent. Skills/saves referencing a missing ability
+/// are downgraded to constant stats so the sheet still renders.
+/// </summary>
+export function normalizeSheetTemplate(
+  template: SheetTemplate | undefined,
+): SheetTemplate {
+  if (!template || !Array.isArray(template.abilities)) {
+    return createDefaultSheetTemplate();
+  }
+
+  const abilities = template.abilities
+    .filter((ability) => ability && typeof ability.id === "string")
+    .map((ability) => ({
+      id: ability.id,
+      name: typeof ability.name === "string" ? ability.name : "Ability",
+      abbr: typeof ability.abbr === "string" ? ability.abbr : "ABL",
+    }));
+
+  const abilityIds = new Set(abilities.map((ability) => ability.id));
+
+  const normalizeStats = (stats: DerivedStatDef[] | undefined): DerivedStatDef[] =>
+    (Array.isArray(stats) ? stats : [])
+      .filter((stat) => stat && typeof stat.id === "string")
+      .map((stat) => {
+        const name = typeof stat.name === "string" ? stat.name : "Stat";
+        if (stat.mode === "ability" && abilityIds.has(stat.abilityId)) {
+          return { id: stat.id, name, mode: "ability", abilityId: stat.abilityId };
+        }
+        return { id: stat.id, name, mode: "constant" };
+      });
+
+  return {
+    abilities,
+    skills: normalizeStats(template.skills),
+    saves: normalizeStats(template.saves),
   };
 }
 
@@ -430,6 +672,7 @@ export function normalizeGameState(state: GameState): GameState {
     ),
     annotations: (state.annotations ?? []).map((annotation) => normalizeMapAnnotation(annotation)),
     publicDiceLog: state.publicDiceLog ?? [],
+    sheetTemplate: normalizeSheetTemplate(state.sheetTemplate),
   };
 }
 
@@ -505,5 +748,6 @@ export function createInitialState(roomId: string): GameState {
     ping: null,
     annotations: [],
     publicDiceLog: [],
+    sheetTemplate: createDefaultSheetTemplate(),
   };
 }

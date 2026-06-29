@@ -1871,6 +1871,128 @@ body.resizing-sidebar {
   flex: 1;
 }
 
+/* Abilities */
+.ability-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.4rem;
+}
+
+.character-form-compact .ability-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.ability-card {
+  display: grid;
+  justify-items: center;
+  gap: 0.25rem;
+  padding: 0.4rem 0.3rem;
+  background: var(--bg);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+}
+
+.ability-abbr {
+  font-family: var(--font-display);
+  font-size: 0.65rem;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+.ability-card .ability-score {
+  width: 100%;
+  text-align: center;
+  padding: 0.3rem 0.2rem;
+}
+
+.ability-mod {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--accent-bright);
+}
+
+/* Skills & saving throws */
+.stat-list {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.stat-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8125rem;
+}
+
+.stat-total {
+  flex: 0 0 2.2rem;
+  text-align: center;
+  font-weight: 600;
+  color: var(--accent-bright);
+  padding: 0.2rem 0;
+  background: var(--bg);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+}
+
+.stat-name {
+  flex: 1;
+  min-width: 0;
+}
+
+.stat-ability-tag {
+  flex: 0 0 2.5rem;
+  text-align: center;
+  font-size: 0.65rem;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.stat-row .stat-mod-input {
+  flex: 0 0 3.2rem;
+  text-align: center;
+  padding: 0.3rem 0.2rem;
+}
+
+/* DM sheet template editor */
+.template-group {
+  display: grid;
+  gap: 0.35rem;
+  margin-bottom: 0.6rem;
+}
+
+.template-group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.template-group-header h4 {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.template-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.template-row .template-abbr {
+  flex: 0 0 3.5rem;
+  text-transform: uppercase;
+}
+
+.template-row .template-name {
+  flex: 1;
+  min-width: 0;
+}
+
+.template-row .template-mode {
+  flex: 0 0 5.5rem;
+}
+
 .party-list {
   display: grid;
   gap: 0.5rem;

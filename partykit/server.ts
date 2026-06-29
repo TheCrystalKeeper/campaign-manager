@@ -5,6 +5,7 @@ import {
   createPlayerSlot,
   normalizeCharacterSheet,
   normalizeGameState,
+  normalizeSheetTemplate,
   normalizeToken,
   syncPlayerTokenFromState,
   type ClientMessage,
@@ -626,6 +627,10 @@ export default class GameServer implements Party.Server {
         void this.broadcastState();
         break;
       }
+      case "UPDATE_SHEET_TEMPLATE":
+        this.state.sheetTemplate = normalizeSheetTemplate(parsed.template);
+        void this.broadcastState();
+        break;
       case "REMOVE_PLAYER_SLOT": {
         if (this.isSlotTaken(parsed.slotId)) {
           this.sendTo(sender, {

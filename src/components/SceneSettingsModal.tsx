@@ -9,6 +9,7 @@ import {
 import type { useDmActions } from "../hooks/useGameRoom";
 import { useDebouncedCallback } from "../hooks/useDebouncedCallback";
 import { saveCampaignToDisk } from "../lib/devSaveCampaign";
+import { SheetTemplateEditor } from "./SheetTemplateEditor";
 import { uploadMapImage } from "../lib/uploadAsset";
 import { createFullFogDataUrl } from "../lib/fogCanvas";
 import {
@@ -479,6 +480,8 @@ export function SceneSettingsPanel({
               ) : null}
             </>
           ) : null}
+
+          <SheetTemplateEditor template={state.sheetTemplate} dm={dm} />
         </div>
     </div>
   );
