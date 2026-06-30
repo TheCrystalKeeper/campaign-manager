@@ -7,6 +7,7 @@ import { SceneAccessPanel } from "./components/SceneAccessPanel";
 import { PlayerSceneToolbar } from "./components/PlayerSceneToolbar";
 import { DicePanel } from "./components/DicePanel";
 import { CharacterSheetPanel } from "./components/CharacterSheet";
+import { TokenLibraryPanel } from "./components/TokenLibraryPanel";
 import { ResizableSplit } from "./components/ResizableSplit";
 import { useDmActions, useGameRoom, usePlayerSheet, type JoinParams } from "./hooks/useGameRoom";
 import type { FogBrushMode } from "./lib/fogCanvas";
@@ -17,7 +18,7 @@ type SessionParams = JoinParams & {
   roomId: string;
 };
 
-export type DmView = "main" | "players" | "scenes";
+export type DmView = "main" | "players" | "scenes" | "tokens";
 
 /// <summary>
 /// Root application shell: join flow, game room layout, and role-specific panels.
@@ -93,7 +94,7 @@ export default function App() {
   const sceneEditMode = isDm && dmView === "scenes";
   const toolbarMode = dmView === "main" ? "play" : "main";
   const playControls = isDm && dmView === "main";
-  const showMap = !isDm || dmView !== "players";
+  const showMap = !isDm || (dmView !== "players" && dmView !== "tokens");
 
   const displayName =
     session.role === "dm"
@@ -174,6 +175,8 @@ export default function App() {
               isDm={isDm}
               dm={dm}
             />
+          ) : dmView === "tokens" ? (
+            <TokenLibraryPanel state={state} dm={dm} />
           ) : (
             <SceneSettingsPanel
               state={state}
@@ -209,7 +212,13 @@ export default function App() {
         );
 
         return (
-          <main className={`game-layout${dmView === "players" && isDm ? " players-layout" : ""}`}>
+          <main
+            className={`game-layout${
+              isDm && (dmView === "players" || dmView === "tokens")
+                ? ` ${dmView === "players" ? "players" : "tokens"}-layout`
+                : ""
+            }`}
+          >
             {showMap ? (
               <ResizableSplit main={mapSection} middle={dicePanel} sidebar={sidebarPanel} />
             ) : (
@@ -248,6 +257,13 @@ export default function App() {
               onClick={() => setDmView("scenes")}
             >
               Scenes
+            </button>
+            <button
+              type="button"
+              className={dmView === "tokens" ? "active" : ""}
+              onClick={() => setDmView("tokens")}
+            >
+              Tokens
             </button>
           </nav>
         ) : state && status === "joined" && room.yourPlayerId ? (

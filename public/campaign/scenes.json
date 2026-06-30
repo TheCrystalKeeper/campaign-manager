@@ -1,158 +1,36 @@
 {
   "version": 1,
-  "activeSceneId": "scene-67e544db",
+  "activeSceneId": "scene-59122a20",
   "scenes": [
     {
-      "id": "scene-1",
-      "name": "Dungeon",
+      "id": "scene-59122a20",
+      "name": "World",
       "layers": [
         {
-          "id": "scene-1-layer-1",
-          "url": "/maps/sample-dungeon.svg",
-          "x": 3.499200000000087,
-          "y": -2.842170943040401e-14,
-          "width": 800,
-          "height": 600,
-          "label": "Dungeon"
-        }
-      ],
-      "width": 883.4992000000001,
-      "height": 680,
-      "gridSize": 50,
-      "showGrid": false,
-      "fogDataUrl": null,
-      "fogEnabled": false,
-      "defaultViewport": {
-        "scale": 0.8573388203017831,
-        "x": 354.406035665295,
-        "y": 74.4771002403576
-      },
-      "backgroundColor": "#0d0f14"
-    },
-    {
-      "id": "scene-2",
-      "name": "Tavern",
-      "layers": [
-        {
-          "id": "scene-2-layer-1",
-          "url": "/maps/sample-tavern.svg",
+          "id": "layer-efefcca2",
+          "url": "/maps/scene-59122a20-layer-efefcca2.jpg",
           "x": 0,
           "y": 0,
-          "width": 800,
-          "height": 600,
-          "label": "Tavern"
+          "width": 1448,
+          "height": 1086,
+          "label": "worldmaptest"
         }
       ],
-      "width": 880,
-      "height": 680,
-      "gridSize": 50,
-      "showGrid": true,
-      "fogDataUrl": null,
-      "fogEnabled": false,
-      "defaultViewport": {
-        "x": 0,
-        "y": 0,
-        "scale": 1
-      },
-      "backgroundColor": "#0d0f14"
-    },
-    {
-      "id": "scene-9f478e9e",
-      "name": "Scene 3",
-      "layers": [],
-      "width": 800,
-      "height": 600,
-      "gridSize": 50,
+      "width": 1528,
+      "height": 1166,
+      "centerX": 400,
+      "centerY": 300,
+      "playerPanLimit": 0,
+      "gridSize": 54,
       "showGrid": true,
       "fogEnabled": false,
       "fogDataUrl": null,
       "defaultViewport": {
-        "x": 400,
-        "y": 94.04424917621219,
-        "scale": 1
+        "scale": 0.6306737625846109,
+        "x": 120.49987917778947,
+        "y": 67.61256411812414
       },
-      "backgroundColor": "#0d0f14"
-    },
-    {
-      "id": "scene-318b6918",
-      "name": "Scene 4",
-      "layers": [
-        {
-          "id": "layer-53bb0a24",
-          "url": "/maps/scene-318b6918-layer-53bb0a24.jpg",
-          "x": 0,
-          "y": 0,
-          "width": 1930,
-          "height": 1508,
-          "label": "jpgmapzoomedin"
-        }
-      ],
-      "width": 2010,
-      "height": 1588,
-      "gridSize": 50,
-      "showGrid": false,
-      "fogEnabled": false,
-      "fogDataUrl": null,
-      "defaultViewport": {
-        "scale": 0.34046104136316035,
-        "x": 449.2305206344935,
-        "y": 161.89911153648256
-      },
-      "backgroundColor": "#1e3231"
-    },
-    {
-      "id": "scene-3027518b",
-      "name": "Scene 5",
-      "layers": [
-        {
-          "id": "layer-86da4ba2",
-          "url": "/maps/scene-3027518b-layer-86da4ba2.jpg",
-          "x": 0,
-          "y": 0,
-          "width": 3430,
-          "height": 1750,
-          "label": "map_49x25"
-        }
-      ],
-      "width": 3510,
-      "height": 1830,
-      "gridSize": 50,
-      "showGrid": false,
-      "fogEnabled": false,
-      "fogDataUrl": null,
-      "defaultViewport": {
-        "x": 0,
-        "y": 0,
-        "scale": 1
-      },
-      "backgroundColor": "#efeae2"
-    },
-    {
-      "id": "scene-67e544db",
-      "name": "Scene 6",
-      "layers": [
-        {
-          "id": "layer-a2dfa4c9",
-          "url": "/maps/scene-67e544db-layer-a2dfa4c9.jpg",
-          "x": 178.35938823211043,
-          "y": 121.51476796622384,
-          "width": 1738,
-          "height": 1458,
-          "label": "anothercave"
-        }
-      ],
-      "width": 1996.3593882321104,
-      "height": 1659.5147679662239,
-      "gridSize": 90,
-      "showGrid": true,
-      "fogEnabled": false,
-      "fogDataUrl": null,
-      "defaultViewport": {
-        "scale": 1.259711999999991,
-        "x": -558.4780777325516,
-        "y": -701.0700513471343
-      },
-      "backgroundColor": "#1e3231"
+      "backgroundColor": "#1f3739"
     }
   ]
 }

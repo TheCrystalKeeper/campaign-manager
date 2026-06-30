@@ -1,9 +1,18 @@
 import type { CampaignManifest } from "./campaignManifest";
 import type { MapAnnotation } from "./mapAnnotation";
 import { normalizeMapAnnotation } from "./mapAnnotation";
+import type { TokenTemplate } from "./tokenTemplate";
+import { normalizeTokenTemplate } from "./tokenTemplate";
 
 export type { MapAnnotation } from "./mapAnnotation";
 export { ANNOTATION_DURATION_MS, normalizeMapAnnotation } from "./mapAnnotation";
+export type { TokenTemplate, TokenTemplateCategory } from "./tokenTemplate";
+export {
+  createTokenTemplate,
+  normalizeTokenTemplate,
+  TOKEN_TEMPLATE_CATEGORIES,
+  tokenFromTemplate,
+} from "./tokenTemplate";
 
 export type Role = "dm" | "player";
 
@@ -165,6 +174,7 @@ export type GameState = {
   annotations: MapAnnotation[];
   publicDiceLog: DiceRoll[];
   sheetTemplate: SheetTemplate;
+  tokenTemplates: TokenTemplate[];
 };
 
 export type JoinMessage =
@@ -196,6 +206,9 @@ export type ClientMessage =
   | { type: "ADD_PLAYER_SLOT"; name: string }
   | { type: "UPDATE_PLAYER_SLOT"; slot: PlayerSlot }
   | { type: "REMOVE_PLAYER_SLOT"; slotId: string }
+  | { type: "ADD_TOKEN_TEMPLATE"; template: TokenTemplate }
+  | { type: "UPDATE_TOKEN_TEMPLATE"; template: TokenTemplate }
+  | { type: "REMOVE_TOKEN_TEMPLATE"; templateId: string }
   | { type: "ROLL_DICE"; expression: string; private?: boolean }
   | { type: "UPDATE_SHEET_TEMPLATE"; template: SheetTemplate };
 
@@ -673,6 +686,7 @@ export function normalizeGameState(state: GameState): GameState {
     annotations: (state.annotations ?? []).map((annotation) => normalizeMapAnnotation(annotation)),
     publicDiceLog: state.publicDiceLog ?? [],
     sheetTemplate: normalizeSheetTemplate(state.sheetTemplate),
+    tokenTemplates: (state.tokenTemplates ?? []).map((template) => normalizeTokenTemplate(template)),
   };
 }
 
@@ -749,5 +763,6 @@ export function createInitialState(roomId: string): GameState {
     annotations: [],
     publicDiceLog: [],
     sheetTemplate: createDefaultSheetTemplate(),
+    tokenTemplates: [],
   };
 }

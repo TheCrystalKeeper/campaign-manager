@@ -14,6 +14,8 @@ import {
 } from "../lib/fogCanvas";
 import {
   clampPlayerViewport,
+  clampViewport,
+  clampViewportScale,
   fitViewportToScene,
   isDefaultViewport,
   loadImageForCanvas,
@@ -890,6 +892,7 @@ export function MapCanvas({
       savedSessionViewport ??
       (viewportMode === "edit" ? savedEditViewport : null) ??
       normalizedViewport;
+    next = clampViewport(next);
     if (!isDm && !sceneEditMode) {
       next = clampPlayerViewport(next, activeScene, size.width, size.height);
     }
@@ -1024,10 +1027,11 @@ export function MapCanvas({
     if (!viewCommand || !sceneEditMode || !activeScene) {
       return;
     }
-    const next =
+    const next = clampViewport(
       viewCommand.type === "reset"
         ? { ...DEFAULT_VIEWPORT }
-        : fitViewportToScene(activeScene, size.width, size.height);
+        : fitViewportToScene(activeScene, size.width, size.height),
+    );
     viewportRef.current = next;
     setLocalViewport(next);
     persistSessionViewport(next);
@@ -1046,7 +1050,7 @@ export function MapCanvas({
 
   const setViewport = useCallback(
     (next: Viewport) => {
-      let resolved = next;
+      let resolved = clampViewport(next);
       if (!isDm && !sceneEditMode && activeScene) {
         resolved = clampPlayerViewport(resolved, activeScene, size.width, size.height);
       }
@@ -1142,7 +1146,9 @@ export function MapCanvas({
     }
     const scaleBy = 1.08;
     const direction = event.evt.deltaY > 0 ? -1 : 1;
-    const nextScale = Math.min(4, Math.max(0.2, viewport.scale * (direction > 0 ? scaleBy : 1 / scaleBy)));
+    const nextScale = clampViewportScale(
+      viewport.scale * (direction > 0 ? scaleBy : 1 / scaleBy),
+    );
     const mousePointTo = {
       x: (pointer.x - viewport.x) / viewport.scale,
       y: (pointer.y - viewport.y) / viewport.scale,

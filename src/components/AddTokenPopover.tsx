@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from "react";
-import type { GameState, Token, TokenKind } from "../lib/types";
+import type { GameState, Token, TokenKind, TokenTemplate } from "../lib/types";
 import { playerTokenColorForSlot, TOKEN_ENEMY_COLOR } from "../lib/types";
 import { uploadTokenImage } from "../lib/uploadAsset";
 import type { useDmActions } from "../hooks/useGameRoom";
@@ -27,6 +27,7 @@ export function AddTokenPopover({ state, dm, anchorRef, onClose }: AddTokenPopov
     state.playerSlots[0]?.id ?? null,
   );
   const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [enemyColor, setEnemyColor] = useState(TOKEN_ENEMY_COLOR);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -62,6 +63,7 @@ export function AddTokenPopover({ state, dm, anchorRef, onClose }: AddTokenPopov
     setError(null);
     if (nextKind === "enemy") {
       setOwnerPlayerId(null);
+      setEnemyColor(TOKEN_ENEMY_COLOR);
       if (!label.trim() || state.playerSlots.some((slot) => slot.name === label)) {
         setLabel("Enemy");
       }
@@ -69,6 +71,15 @@ export function AddTokenPopover({ state, dm, anchorRef, onClose }: AddTokenPopov
     }
     const firstSlot = state.playerSlots[0];
     setOwnerPlayerId(firstSlot?.id ?? null);
+  };
+
+  const applyTemplate = (template: TokenTemplate) => {
+    setKind("enemy");
+    setOwnerPlayerId(null);
+    setLabel(template.label);
+    setImageUrl(template.imageUrl);
+    setEnemyColor(template.color);
+    setError(null);
   };
 
   const handleImageFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -119,7 +130,7 @@ export function AddTokenPopover({ state, dm, anchorRef, onClose }: AddTokenPopov
       kind,
       color:
         kind === "enemy"
-          ? TOKEN_ENEMY_COLOR
+          ? enemyColor
           : playerTokenColorForSlot(ownerPlayerId!, state.playerSlots),
       imageUrl,
       ownerPlayerId: kind === "player" ? ownerPlayerId : null,
@@ -166,6 +177,31 @@ export function AddTokenPopover({ state, dm, anchorRef, onClose }: AddTokenPopov
             Enemy
           </label>
         </fieldset>
+
+        {kind === "enemy" && (state.tokenTemplates?.length ?? 0) > 0 ? (
+          <label className="token-add-field">
+            From library
+            <select
+              defaultValue=""
+              onChange={(event) => {
+                const template = state.tokenTemplates?.find(
+                  (item) => item.id === event.target.value,
+                );
+                if (template) {
+                  applyTemplate(template);
+                }
+                event.target.value = "";
+              }}
+            >
+              <option value="">Choose a saved token…</option>
+              {state.tokenTemplates?.map((template) => (
+                <option key={template.id} value={template.id}>
+                  {template.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
 
         <label className="token-add-field">
           Name

@@ -14,6 +14,7 @@ import type {
   Token,
   Viewport,
 } from "../lib/types";
+import type { TokenTemplate } from "../lib/tokenTemplate";
 import { normalizeGameState } from "../lib/types";
 import type { CampaignManifest } from "../lib/campaignManifest";
 
@@ -374,6 +375,12 @@ export function useDmActions(room: GameRoom) {
       addPlayerSlot: (name: string) => send({ type: "ADD_PLAYER_SLOT", name }),
       updatePlayerSlot: (slot: PlayerSlot) => send({ type: "UPDATE_PLAYER_SLOT", slot }),
       removePlayerSlot: (slotId: string) => send({ type: "REMOVE_PLAYER_SLOT", slotId }),
+      addTokenTemplate: (template: TokenTemplate) =>
+        send({ type: "ADD_TOKEN_TEMPLATE", template }),
+      updateTokenTemplate: (template: TokenTemplate) =>
+        send({ type: "UPDATE_TOKEN_TEMPLATE", template }),
+      removeTokenTemplate: (templateId: string) =>
+        send({ type: "REMOVE_TOKEN_TEMPLATE", templateId }),
     }),
     [send, yourRole],
   );

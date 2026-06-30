@@ -8,6 +8,25 @@ const MAX_WS_IMAGE_BYTES = 280_000;
 
 export const STANDARD_GRID_ROWS = 20;
 export const VIEWPORT_GRID_ROWS = 15;
+export const MIN_VIEWPORT_SCALE = 0.2;
+export const MAX_VIEWPORT_SCALE = 2;
+
+/// <summary>
+/// Clamps zoom scale so map images are not stretched past native resolution.
+/// </summary>
+export function clampViewportScale(scale: number): number {
+  return Math.min(MAX_VIEWPORT_SCALE, Math.max(MIN_VIEWPORT_SCALE, scale));
+}
+
+/// <summary>
+/// Applies zoom limits to a viewport without changing pan position.
+/// </summary>
+export function clampViewport(viewport: Viewport): Viewport {
+  return {
+    ...viewport,
+    scale: clampViewportScale(viewport.scale),
+  };
+}
 
 /// <summary>
 /// Fills in scene center coordinates when missing from persisted data.
@@ -404,8 +423,8 @@ export function viewportForNormalizedScene(
   const gridSize = resolved.gridSize > 0 ? resolved.gridSize : 50;
   const normalizedScale =
     (canvasHeight - padding * 2) / (VIEWPORT_GRID_ROWS * gridSize);
-  const scale = Math.min(normalizedScale, 2);
-  const clampedScale = Math.max(0.05, scale);
+  const scale = Math.min(normalizedScale, MAX_VIEWPORT_SCALE);
+  const clampedScale = clampViewportScale(scale);
   return {
     scale: clampedScale,
     x: canvasWidth / 2 - resolved.centerX * clampedScale,

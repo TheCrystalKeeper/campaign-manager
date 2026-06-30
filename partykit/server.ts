@@ -17,6 +17,7 @@ import {
   type ServerMessage,
 } from "../src/lib/types";
 import { normalizeScene } from "../src/lib/sceneUtils";
+import { normalizeTokenTemplate } from "../src/lib/tokenTemplate";
 import {
   ANNOTATION_DURATION_MS,
   annotationPathLength,
@@ -551,6 +552,26 @@ export default class GameServer implements Party.Server {
         break;
       case "REMOVE_TOKEN":
         this.state.tokens = this.state.tokens.filter((token) => token.id !== parsed.tokenId);
+        void this.broadcastState();
+        break;
+      case "ADD_TOKEN_TEMPLATE": {
+        const template = normalizeTokenTemplate(parsed.template);
+        this.state.tokenTemplates = [...(this.state.tokenTemplates ?? []), template];
+        void this.broadcastState();
+        break;
+      }
+      case "UPDATE_TOKEN_TEMPLATE": {
+        const template = normalizeTokenTemplate(parsed.template);
+        this.state.tokenTemplates = (this.state.tokenTemplates ?? []).map((item) =>
+          item.id === template.id ? template : item,
+        );
+        void this.broadcastState();
+        break;
+      }
+      case "REMOVE_TOKEN_TEMPLATE":
+        this.state.tokenTemplates = (this.state.tokenTemplates ?? []).filter(
+          (item) => item.id !== parsed.templateId,
+        );
         void this.broadcastState();
         break;
       case "SET_PING":
