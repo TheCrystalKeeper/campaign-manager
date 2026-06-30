@@ -17,6 +17,22 @@ import type {
 import type { TokenTemplate } from "../lib/tokenTemplate";
 import { normalizeGameState } from "../lib/types";
 import type { CampaignManifest } from "../lib/campaignManifest";
+import type { CursorPoint, DiceTrack, DieSpec, DieTransform, WorldPoint } from "../dice3d/diceProtocol";
+
+/** Transient dice events (throws + live drag motion) that drive the 3D dice arena. */
+export type DiceEvent =
+  | Extract<ServerMessage, { type: "DICE_THROW" }>
+  | Extract<ServerMessage, { type: "DICE_MOTION" }>;
+
+export type ThrowDicePayload = {
+  rollId: string;
+  specs: DieSpec[];
+  track: DiceTrack;
+  modifier: number;
+  private?: boolean;
+  /** Map/world anchor for this roll's tray. */
+  trayCenter?: WorldPoint;
+};
 
 /// <summary>
 /// Resolves the PartyKit host for dev (Vite proxy) or production (env var).
@@ -50,6 +66,15 @@ export type GameRoom = {
   send: (message: ClientMessage) => void;
   join: (params: JoinParams) => void;
   rollDice: (expression: string, options?: { private?: boolean }) => void;
+  throwDice: (payload: ThrowDicePayload) => void;
+  sendDiceMotion: (
+    rollId: string,
+    specs: DieSpec[] | undefined,
+    transforms: DieTransform[],
+    cursor?: CursorPoint,
+    trayCenter?: WorldPoint,
+  ) => void;
+  subscribeDice: (handler: (event: DiceEvent) => void) => () => void;
 };
 
 export type RoomLobby = {
@@ -222,6 +247,7 @@ export function useGameRoom(roomId: string | null): GameRoom {
   const [privateDiceLog, setPrivateDiceLog] = useState<DiceRoll[]>([]);
   const socketRef = useRef<PartySocket | null>(null);
   const pendingJoinRef = useRef<JoinMessage | null>(null);
+  const diceListenersRef = useRef<Set<(event: DiceEvent) => void>>(new Set());
 
   const send = useCallback((message: ClientMessage) => {
     const socket = socketRef.current;
@@ -236,6 +262,41 @@ export function useGameRoom(roomId: string | null): GameRoom {
     },
     [send],
   );
+
+  const throwDice = useCallback(
+    (payload: ThrowDicePayload) => {
+      send({
+        type: "DICE_THROW_REQUEST",
+        rollId: payload.rollId,
+        specs: payload.specs,
+        track: payload.track,
+        modifier: payload.modifier,
+        private: payload.private,
+        trayCenter: payload.trayCenter,
+      });
+    },
+    [send],
+  );
+
+  const sendDiceMotion = useCallback(
+    (
+      rollId: string,
+      specs: DieSpec[] | undefined,
+      transforms: DieTransform[],
+      cursor?: CursorPoint,
+      trayCenter?: WorldPoint,
+    ) => {
+      send({ type: "DICE_MOTION", rollId, specs, transforms, cursor, trayCenter });
+    },
+    [send],
+  );
+
+  const subscribeDice = useCallback((handler: (event: DiceEvent) => void) => {
+    diceListenersRef.current.add(handler);
+    return () => {
+      diceListenersRef.current.delete(handler);
+    };
+  }, []);
 
   const join = useCallback(
     (params: JoinParams) => {
@@ -307,6 +368,10 @@ export function useGameRoom(roomId: string | null): GameRoom {
         setError(null);
       } else if (message.type === "DM_DICE_ROLL") {
         setPrivateDiceLog((current) => [...current, message.roll].slice(-50));
+      } else if (message.type === "DICE_THROW" || message.type === "DICE_MOTION") {
+        for (const listener of diceListenersRef.current) {
+          listener(message);
+        }
       } else if (message.type === "ERROR") {
         setError(message.message);
         setStatus("connected");
@@ -343,6 +408,9 @@ export function useGameRoom(roomId: string | null): GameRoom {
     send,
     join,
     rollDice,
+    throwDice,
+    sendDiceMotion,
+    subscribeDice,
   };
 }
 
