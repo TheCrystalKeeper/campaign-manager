@@ -2894,6 +2894,28 @@ body.resizing-sidebar {
   opacity: 0.8;
 }
 
+/* DM-only toggle: make physical rolls secret (players see blank dice). */
+.dice-secret-toggle {
+  font-weight: 600;
+}
+
+.dice-secret-toggle--on {
+  background: #5a4060;
+  color: #e8d0f0;
+  border-color: #7a5a86;
+}
+
+.dice-secret-banner {
+  margin: 0 0 8px;
+  padding: 5px 9px;
+  font-size: 0.78em;
+  font-weight: 600;
+  color: #e8d0f0;
+  background: rgba(80, 50, 90, 0.28);
+  border: 1px solid rgba(122, 90, 134, 0.65);
+  border-radius: 6px;
+}
+
 /* ---- Remote roller cursor (shown while another player rolls) ---- */
 .dice-remote-cursor {
   position: absolute;

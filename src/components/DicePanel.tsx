@@ -7,8 +7,6 @@ type DicePanelProps = {
   yourPlayerId: string | null;
   publicRolls: DiceRoll[];
   privateRolls: DiceRoll[];
-  /** Instant roll (no animation) — used for the Instant buttons and DM secret rolls. */
-  onRoll: (expression: string, options?: { private?: boolean }) => void;
   /** Arms a physical die set in the 3D arena (d100 becomes a percentile d10 + d10). */
   onArm: (sides: number) => void;
   /** Throws the currently armed dice without a manual drag. */
@@ -19,6 +17,8 @@ type DicePanelProps = {
   onInstantExpression: (expression: string) => void;
   /** Resolves the currently armed dice with a quick spin-to-value reveal. */
   onInstantArmed: () => void;
+  /** DM-only: toggles whether the DM's rolls are secret (players see blank dice). */
+  onSetSecretMode: (on: boolean) => void;
   hasArmed: boolean;
   trayVisible: boolean;
   onToggleTray: (visible: boolean) => void;
@@ -34,12 +34,12 @@ export function DicePanel({
   yourPlayerId,
   publicRolls,
   privateRolls,
-  onRoll,
   onArm,
   onThrowArmed,
   onThrowExpression,
   onInstantExpression,
   onInstantArmed,
+  onSetSecretMode,
   hasArmed,
   trayVisible,
   onToggleTray,
@@ -49,6 +49,10 @@ export function DicePanel({
   const [expression, setExpression] = useState("1d20");
   const [collapsed, setCollapsed] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
+  // DM-only: while on, every physical roll the DM makes is secret — players see the dice
+  // tumble blank (no numbers) and only the DM sees the result (logged to the secret log).
+  const [secretRoll, setSecretRoll] = useState(false);
+  const rollPrivate = isDm && secretRoll;
 
   const validExpression = (): string | null => {
     const trimmed = expression.trim();
@@ -76,12 +80,12 @@ export function DicePanel({
     }
   };
 
-  const handleSecretSubmit = (event: React.FormEvent) => {
-    event.preventDefault();
-    const trimmed = validExpression();
-    if (trimmed) {
-      onRoll(trimmed, { private: true });
-    }
+  const toggleSecret = () => {
+    setSecretRoll((on) => {
+      const next = !on;
+      onSetSecretMode(next);
+      return next;
+    });
   };
 
   if (collapsed) {
@@ -108,6 +112,21 @@ export function DicePanel({
       <div className="dice-tray-header">
         <h2>Dice</h2>
         <div className="dice-tray-header-actions">
+          {isDm ? (
+            <button
+              type="button"
+              className={`btn-compact dice-secret-toggle${secretRoll ? " dice-secret-toggle--on" : ""}`}
+              aria-pressed={secretRoll}
+              title={
+                secretRoll
+                  ? "Secret rolls ON — players see blank dice; only you see the numbers"
+                  : "Make your rolls secret — players see blank dice"
+              }
+              onClick={toggleSecret}
+            >
+              {secretRoll ? "🔒 Secret" : "🔓 Public"}
+            </button>
+          ) : null}
           <button
             type="button"
             className="btn-compact dice-icon-btn"
@@ -139,6 +158,11 @@ export function DicePanel({
 
       <div className="dice-tray-body">
         <div className="dice-tray-controls">
+          {rollPrivate ? (
+            <p className="dice-secret-banner" role="status">
+              🔒 Secret mode — players see blank dice; only you see the numbers.
+            </p>
+          ) : null}
           <form className="dice-roll-form" onSubmit={handleSubmit}>
             <input
               type="text"
@@ -197,28 +221,6 @@ export function DicePanel({
           ) : null}
 
           {localError ? <p className="dice-error">{localError}</p> : null}
-
-          {isDm ? (
-            <section className="dice-secret-section" aria-label="Secret DM rolls">
-              <div className="dice-secret-header">
-                <h3>Secret rolls</h3>
-                <span className="dice-secret-note">Only you can see these</span>
-              </div>
-              <form className="dice-roll-form dice-secret-form" onSubmit={handleSecretSubmit}>
-                <input
-                  type="text"
-                  value={expression}
-                  onChange={(event) => setExpression(event.target.value)}
-                  placeholder="1d20"
-                  aria-label="Secret dice expression"
-                  spellCheck={false}
-                />
-                <button type="submit" className="dice-secret-button btn-compact" title="Secret roll">
-                  Secret
-                </button>
-              </form>
-            </section>
-          ) : null}
         </div>
 
         <div className="dice-tray-logs">

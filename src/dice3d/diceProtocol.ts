@@ -35,23 +35,8 @@ export interface DieSpec {
 /** Max dice in one throw (matches the server-side cap). */
 export const MAX_DICE_PER_THROW = 20;
 
-/** How many grid cells the dice roll region extends past each map edge. */
+/** How many grid cells the dice tray anchor may sit past each map edge. */
 export const ROLL_REGION_BORDER_CELLS = 3;
-/** Floor on the roll region (grid cells) so a tiny scene isn't cramped. */
-export const ROLL_REGION_MIN_CELLS = 12;
-/** Cap on the roll region (grid cells) so a huge scene stays contained + snappy. */
-export const ROLL_REGION_MAX_CELLS = 26;
-
-/// <summary>
-/// Sizes the dice roll region (in grid cells) from the shared map size: the map plus a
-/// fixed-cell border on each side, clamped to a sane min/max. Map size is authoritative
-/// shared state, so this is identical on every client (deterministic physics box).
-/// </summary>
-export function rollRegionCells(mapCellsW: number, mapCellsH: number): { w: number; h: number } {
-  const fit = (cells: number) =>
-    Math.max(ROLL_REGION_MIN_CELLS, Math.min(ROLL_REGION_MAX_CELLS, cells + 2 * ROLL_REGION_BORDER_CELLS));
-  return { w: fit(mapCellsW), h: fit(mapCellsH) };
-}
 
 /** Initial kinematic state for one die at the moment of release. */
 export interface DieThrowState {

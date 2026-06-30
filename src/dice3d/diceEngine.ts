@@ -4,12 +4,12 @@ import {
   addRevealDecal,
   buildDieGeometry,
   buildDieMesh,
+  hideDieNumbers,
   relabelDieFace,
   type DieGeometry,
 } from "./diceGeometry";
 import {
   quantize,
-  ROLL_REGION_MIN_CELLS,
   type DiceImpact,
   type DiceTrack,
   type DieSpec,
@@ -36,17 +36,25 @@ import {
 /// </summary>
 
 const DIE_SCALE = 0.95; // physics radius of a die (physics units)
-// Physics units -> map/world units: a die spans ~1 grid cell so dice read consistently
-// against the grid regardless of zoom (k = DIE_DIAMETER_CELLS*gridSize/(2*DIE_SCALE)).
-const DIE_DIAMETER_CELLS = 1.0;
-// The physics play box is sized from the shared map (see rollRegionCells): a region of N
-// grid cells maps to a physics half-extent of N*DIE_SCALE/DIE_DIAMETER_CELLS (gridSize
-// cancels, so the box is window/grid-independent and the recorded track stays deterministic).
-// Orthographic camera height + far plane, in die radii (scale with `k` so clipping holds
-// for any gridSize). Camera is top-down; height doesn't affect apparent (ortho) size.
+// The dice tumble in a fixed, shared physics box (half-extents). It's identical on every
+// client (so the recorded track is window-independent), and each client fits it to a
+// fraction of its OWN map pane — so dice are a consistent on-screen size that adapts to any
+// window/monitor and does NOT change with map zoom.
+const AREA_HALF_W = 7.5;
+const AREA_HALF_H = 5.5;
+// The roll box is fit into this fraction of the (smaller-constrained) window dimension. Using
+// the full window (not the map pane) keeps the dice the same size for the DM and players even
+// though the DM's map pane is smaller (extra DM UI).
+const REGION_WINDOW_FRACTION = 0.6;
+// The window-proportional fit is eased toward this reference (px per AREA_HALF unit) so dice
+// don't grow/shrink too fast with window size. RESPONSE 1 = fully window-proportional, 0 =
+// fixed size; lower keeps dice closer to the reference on small/large windows.
+const FIT_REFERENCE_PX = 30;
+const FIT_WINDOW_RESPONSE = 0.4;
+// Orthographic camera height + far plane, in die radii (scale with `k` so clipping holds at
+// any zoom). Camera is top-down; height doesn't affect apparent (ortho) size.
 const CAMERA_HEIGHT_UNITS = 30;
 const CAMERA_FAR_UNITS = 60;
-const DEFAULT_GRID_SIZE = 50;
 const WALL_HEIGHT = 8;
 const GRAVITY = -34;
 const FIXED_DT = 1 / 60;
@@ -105,7 +113,7 @@ interface RollInstance {
 }
 
 export interface DiceEngineCallbacks {
-  /** Local drag/shake samples + roller cursor (shared map/world coords). */
+  /** Local drag/shake samples + roller cursor (normalized 0..1 within the map pane). */
   onMotion?: (rollId: string, transforms: DieTransform[], cursor: WorldPoint) => void;
   /** Local throw released; send this recorded track to the server. */
   onRelease?: (rollId: string, track: DiceTrack) => void;
@@ -132,11 +140,9 @@ export class DiceEngine {
   private area = { left: 0, top: 0, width: 1, height: 1 };
   // Live map viewport (Konva): screen px = viewport.{x,y} + world * scale (pane-relative).
   private mapViewport = { x: 0, y: 0, scale: 1 };
-  // Physics units -> map/world units (tracks the scene grid size).
-  private k = physicsToWorldScale(DEFAULT_GRID_SIZE);
-  // Physics play-box half-extents, sized from the shared map (see setMapProjection).
-  private areaHalfW = regionCellsToAreaHalf(ROLL_REGION_MIN_CELLS);
-  private areaHalfH = regionCellsToAreaHalf(ROLL_REGION_MIN_CELLS);
+  // Physics units -> map/world units. Recomputed from the pane + zoom so the dice are a
+  // fixed on-screen size at any zoom (see recomputeScale).
+  private k = 1;
 
   private rolls = new Map<string, RollInstance>();
   private fadeWaiters = new Map<string, Array<() => void>>();
@@ -211,35 +217,58 @@ export class DiceEngine {
   }
 
   /// <summary>
-  /// Updates the shared map projection (viewport + grid). The camera follows the live
-  /// viewport so dice stay glued to the map through pan/zoom, and `k` keeps dice sized
-  /// consistently against the grid. Called whenever the map viewport changes.
+  /// Updates the live map viewport. Each roll is re-centered on this client's map pane every
+  /// change, so resting dice stay put on screen (centered, fixed size) instead of tracking the
+  /// map — they don't move when you pan/zoom. Called whenever the map viewport changes.
   /// </summary>
-  setMapProjection(projection: {
-    viewport: { x: number; y: number; scale: number };
-    gridSize: number;
-    regionCellsW: number;
-    regionCellsH: number;
-  }) {
+  setMapProjection(projection: { viewport: { x: number; y: number; scale: number } }) {
     const scale = projection.viewport.scale > 0 ? projection.viewport.scale : 1;
     this.mapViewport = { x: projection.viewport.x, y: projection.viewport.y, scale };
-    const gridSize = projection.gridSize > 0 ? projection.gridSize : DEFAULT_GRID_SIZE;
-    if (projection.regionCellsW > 0) {
-      this.areaHalfW = regionCellsToAreaHalf(projection.regionCellsW);
+    this.recomputeScale();
+    const center = this.paneCenterWorld();
+    for (const roll of this.rolls.values()) {
+      roll.trayCenter = center;
+      roll.group.position.set(center[0], 0, center[1]);
     }
-    if (projection.regionCellsH > 0) {
-      this.areaHalfH = regionCellsToAreaHalf(projection.regionCellsH);
-    }
-    const nextK = physicsToWorldScale(gridSize);
+    this.updateCamera();
+    this.requestRender();
+  }
+
+  /// <summary>
+  /// The map pane's center in world coords for the current viewport. Every roll is anchored
+  /// here (per-client), so the dice always sit centered in this viewer's map pane.
+  /// </summary>
+  private paneCenterWorld(): WorldPoint {
+    const scale = this.mapViewport.scale > 0 ? this.mapViewport.scale : 1;
+    return [
+      (this.area.width / 2 - this.mapViewport.x) / scale,
+      (this.area.height / 2 - this.mapViewport.y) / scale,
+    ];
+  }
+
+  /// <summary>
+  /// Sizes the physics->screen scale `k` so the shared roll box fits REGION_WINDOW_FRACTION of
+  /// this client's window (aspect-aware) and is independent of zoom. Dividing by the live
+  /// `scale` cancels the camera zoom (die screen px = DIE_SCALE*k*scale depends only on the
+  /// window), and the shared AREA_HALF box keeps the recorded tumble window-independent.
+  /// </summary>
+  private recomputeScale() {
+    // Size off the full window (this.container), not the map pane — the pane differs between
+    // the DM (extra UI) and players, but the full-window dice canvas is identical for both.
+    const winW = Math.max(this.container.clientWidth, 1);
+    const winH = Math.max(this.container.clientHeight, 1);
+    const scale = this.mapViewport.scale > 0 ? this.mapViewport.scale : 1;
+    // Window-proportional fit, then eased toward a reference so dice don't grow/shrink too fast
+    // with window size (e.g. small windows keep dice closer to the reference, not tiny).
+    const windowFit = REGION_WINDOW_FRACTION * Math.min(winW / (2 * AREA_HALF_W), winH / (2 * AREA_HALF_H));
+    const fitPx = FIT_REFERENCE_PX + (windowFit - FIT_REFERENCE_PX) * FIT_WINDOW_RESPONSE;
+    const nextK = fitPx / scale;
     if (nextK !== this.k) {
       this.k = nextK;
-      // Grid size changed: resize every active roll's tray to match the new scale.
       for (const roll of this.rolls.values()) {
         roll.group.scale.setScalar(this.k);
       }
     }
-    this.updateCamera();
-    this.requestRender();
   }
 
   private layout() {
@@ -257,6 +286,7 @@ export class DiceEngine {
     }
     this.area = { left: arect.left, top: arect.top, width: arect.width, height: arect.height };
     this.applyClip(crect);
+    this.recomputeScale();
     this.updateCamera();
     this.requestRender();
   }
@@ -309,24 +339,25 @@ export class DiceEngine {
 
   /// <summary>Maps a window pointer to a roll's physics-floor coords via its tray center.</summary>
   private pointerToPhysics(clientX: number, clientY: number, trayCenter: WorldPoint): { x: number; z: number } {
-    const world = this.cursorWorld(clientX, clientY);
-    return { x: (world[0] - trayCenter[0]) / this.k, z: (world[1] - trayCenter[1]) / this.k };
+    const scale = this.mapViewport.scale > 0 ? this.mapViewport.scale : 1;
+    const worldX = (clientX - this.area.left - this.mapViewport.x) / scale;
+    const worldY = (clientY - this.area.top - this.mapViewport.y) / scale;
+    return { x: (worldX - trayCenter[0]) / this.k, z: (worldY - trayCenter[1]) / this.k };
   }
 
-  /// <summary>Roller cursor in shared map/world coords (projected per-viewer on receipt).</summary>
-  private cursorWorld(clientX: number, clientY: number): WorldPoint {
-    const scale = this.mapViewport.scale;
+  /// <summary>Roller cursor normalized 0..1 within the map pane (projected per-viewer's pane).</summary>
+  private cursorNorm(clientX: number, clientY: number): WorldPoint {
     return [
-      (clientX - this.area.left - this.mapViewport.x) / scale,
-      (clientY - this.area.top - this.mapViewport.y) / scale,
+      clamp((clientX - this.area.left) / Math.max(this.area.width, 1), 0, 1),
+      clamp((clientY - this.area.top) / Math.max(this.area.height, 1), 0, 1),
     ];
   }
 
   private areaClamp(x: number, z: number): { x: number; z: number } {
     const m = DIE_SCALE + 0.2;
     return {
-      x: clamp(x, -this.areaHalfW + m, this.areaHalfW - m),
-      z: clamp(z, -this.areaHalfH + m, this.areaHalfH - m),
+      x: clamp(x, -AREA_HALF_W + m, AREA_HALF_W - m),
+      z: clamp(z, -AREA_HALF_H + m, AREA_HALF_H - m),
     };
   }
 
@@ -337,7 +368,7 @@ export class DiceEngine {
     return { spec, geom, mesh };
   }
 
-  /// <summary>Wraps a roll's dice in a tray group anchored to the map at `trayCenter`.</summary>
+  /// <summary>Wraps a roll's dice in a tray group centered at the pane center (`center`).</summary>
   private makeGroup(dice: DieInstance[], trayCenter: WorldPoint): THREE.Group {
     const group = new THREE.Group();
     group.position.set(trayCenter[0], 0, trayCenter[1]);
@@ -349,8 +380,8 @@ export class DiceEngine {
 
   // ---- Arming + local pointer interaction ----
 
-  /// <summary>Places a roll's dice on the map tray ready to be grabbed or thrown.</summary>
-  arm(rollId: string, specs: DieSpec[], trayCenter: WorldPoint) {
+  /// <summary>Places a roll's dice centered in the map pane ready to be grabbed or thrown.</summary>
+  arm(rollId: string, specs: DieSpec[]) {
     this.clearRoll(rollId);
     const dice = specs.map((spec) => this.createDie(spec));
     const spread = DIE_SCALE * 2.4;
@@ -360,8 +391,9 @@ export class DiceEngine {
       die.mesh.position.set(pos.x, DIE_SCALE * 1.6, pos.z);
       die.mesh.quaternion.copy(randomQuat());
     });
-    const group = this.makeGroup(dice, trayCenter);
-    this.rolls.set(rollId, this.newRoll(rollId, dice, "armed", true, group, trayCenter));
+    const center = this.paneCenterWorld();
+    const group = this.makeGroup(dice, center);
+    this.rolls.set(rollId, this.newRoll(rollId, dice, "armed", true, group, center));
     this.requestRender();
   }
 
@@ -425,7 +457,7 @@ export class DiceEngine {
 
     if (now - this.drag.lastMotionSent > MOTION_THROTTLE_MS) {
       this.drag.lastMotionSent = now;
-      this.callbacks.onMotion?.(this.drag.rollId, this.snapshotTransforms(roll), this.cursorWorld(clientX, clientY));
+      this.callbacks.onMotion?.(this.drag.rollId, this.snapshotTransforms(roll), this.cursorNorm(clientX, clientY));
     }
     this.requestRender();
   }
@@ -544,8 +576,8 @@ export class DiceEngine {
 
     const wallBody = world.createRigidBody(RAPIER.RigidBodyDesc.fixed());
     const t = 0.5;
-    const hw = this.areaHalfW;
-    const hh = this.areaHalfH;
+    const hw = AREA_HALF_W;
+    const hh = AREA_HALF_H;
     const wall = (hx: number, hy: number, hz: number, x: number, z: number) =>
       world.createCollider(
         RAPIER.ColliderDesc.cuboid(hx, hy, hz).setTranslation(x, WALL_HEIGHT, z).setRestitution(0.4),
@@ -646,14 +678,17 @@ export class DiceEngine {
     track: DiceTrack,
     faceValues: number[],
     local: boolean,
-    trayCenter: WorldPoint,
+    blank = false,
   ) {
     this.clearRoll(rollId);
     const byId = new Map(track.dice.map((d) => [d.id, d.samples]));
     const dice = specs.map((spec, i) => {
       const die = this.createDie(spec);
       die.samples = byId.get(spec.id) ?? [];
-      if (spec.kind === "custom") {
+      if (blank) {
+        // Secret roll on a non-DM client: render the die blank, no relabel/reveal ever.
+        hideDieNumbers(die.mesh);
+      } else if (spec.kind === "custom") {
         // Blank during the tumble; the value is revealed (faded in) once it lands.
         die.revealLabel = String(faceValues[i]);
       } else {
@@ -662,8 +697,9 @@ export class DiceEngine {
       }
       return die;
     });
-    const group = this.makeGroup(dice, trayCenter);
-    const roll = this.newRoll(rollId, dice, "track", local, group, trayCenter);
+    const center = this.paneCenterWorld();
+    const group = this.makeGroup(dice, center);
+    const roll = this.newRoll(rollId, dice, "track", local, group, center);
     roll.track = track;
     roll.trackStart = performance.now();
     this.rolls.set(rollId, roll);
@@ -672,12 +708,22 @@ export class DiceEngine {
   }
 
   /// <summary>Shows another player's live drag/shake before they release.</summary>
-  applyRemoteMotion(rollId: string, specs: DieSpec[], transforms: DieTransform[], trayCenter: WorldPoint) {
+  applyRemoteMotion(
+    rollId: string,
+    specs: DieSpec[],
+    transforms: DieTransform[],
+    blank = false,
+  ) {
     let roll = this.rolls.get(rollId);
     if (!roll) {
       const dice = specs.map((spec) => this.createDie(spec));
-      const group = this.makeGroup(dice, trayCenter);
-      roll = this.newRoll(rollId, dice, "remote-motion", false, group, trayCenter);
+      if (blank) {
+        // DM secret roll: show the shake but never the numbers.
+        dice.forEach((die) => hideDieNumbers(die.mesh));
+      }
+      const center = this.paneCenterWorld();
+      const group = this.makeGroup(dice, center);
+      roll = this.newRoll(rollId, dice, "remote-motion", false, group, center);
       this.rolls.set(rollId, roll);
     }
     if (roll.mode === "track") {
@@ -976,16 +1022,6 @@ const qa = new THREE.Quaternion();
 const qb = new THREE.Quaternion();
 const upVec = new THREE.Vector3(0, 1, 0);
 const tmpNormal = new THREE.Vector3();
-
-/// <summary>Physics units -> map/world units, so a die spans ~DIE_DIAMETER_CELLS grid cells.</summary>
-function physicsToWorldScale(gridSize: number): number {
-  return (DIE_DIAMETER_CELLS * gridSize) / (2 * DIE_SCALE);
-}
-
-/// <summary>Physics half-extent for a roll region of the given full width/height in grid cells.</summary>
-function regionCellsToAreaHalf(regionCells: number): number {
-  return (regionCells * DIE_SCALE) / DIE_DIAMETER_CELLS;
-}
 
 function recordSample(out: number[], body: RAPIER.RigidBody) {
   const t = body.translation();

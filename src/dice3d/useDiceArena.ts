@@ -14,20 +14,13 @@ import type { DiceEngine } from "./diceEngine";
 /** Live map projection the dice arena needs to anchor + draw dice on the shared map. */
 export interface MapProjection {
   viewport: Viewport;
-  gridSize: number;
   /** Current view center in map/world coords; used as a roll's tray anchor. */
   center: WorldPoint;
-  /** Roll region size in grid cells (sized from the shared map), for the physics box. */
-  regionCellsW: number;
-  regionCellsH: number;
 }
 
 const DEFAULT_PROJECTION: MapProjection = {
   viewport: { x: 0, y: 0, scale: 1 },
-  gridSize: 50,
   center: [0, 0],
-  regionCellsW: 12,
-  regionCellsH: 12,
 };
 
 /// <summary>
@@ -45,7 +38,6 @@ const CURSOR_EPS = 0.35;
 interface ArmedRoll {
   specs: DieSpec[];
   modifier: number;
-  private: boolean;
   /** Map/world anchor captured when the roll was armed. */
   trayCenter: WorldPoint;
 }
@@ -80,7 +72,7 @@ export interface DiceArenaController {
   /** The roller's cursor to draw while someone else is rolling, or null. */
   remoteCursor: RemoteCursor | null;
   /** Arms a die set (d100 becomes a percentile d10 + a unit d10) ready to grab/throw. */
-  arm: (sides: number, options?: { modifier?: number; private?: boolean }) => void;
+  arm: (sides: number, options?: { modifier?: number }) => void;
   /** Throws the currently armed dice without a manual drag. */
   throwArmed: () => void;
   /** Parses an expression (e.g. "1d77", "2d6+3") and throws it physically. */
@@ -89,6 +81,8 @@ export interface DiceArenaController {
   instantArmed: () => void;
   /** Parses an expression and resolves it with a quick spin-to-value reveal. */
   instantExpression: (expression: string) => void;
+  /** DM-only: while on, the DM's rolls are secret (players see blank dice, no numbers). */
+  setSecretMode: (on: boolean) => void;
 }
 
 function uid(): string {
@@ -131,6 +125,8 @@ export function useDiceArena(room: GameRoom): DiceArenaController {
   const cursorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const motionStateRef = useRef<Map<string, MotionSendState>>(new Map());
   const remoteSpecsRef = useRef<Map<string, DieSpec[]>>(new Map());
+  // DM-only secret mode, read live at throw/drag time so it can't go stale.
+  const secretModeRef = useRef(false);
 
   const [ready, setReady] = useState(false);
   const [hasArmed, setHasArmed] = useState(false);
@@ -141,15 +137,16 @@ export function useDiceArena(room: GameRoom): DiceArenaController {
   roomRef.current = room;
 
   const showRemoteCursor = useCallback((cursor: WorldPoint, rollerId: string, name: string) => {
-    // The cursor is in shared map/world coords; project it through our own viewport so it
-    // lands at the same map location regardless of our window size or zoom.
+    // The cursor is normalized 0..1 within the roller's map pane; place it at the same
+    // relative spot in our own pane (dice are centered per-viewer, so this stays aligned).
     const rect = mapElRef.current?.getBoundingClientRect();
     const left = rect ? rect.left : 0;
     const top = rect ? rect.top : 0;
-    const { viewport } = projectionRef.current;
+    const width = rect ? rect.width : window.innerWidth;
+    const height = rect ? rect.height : window.innerHeight;
     setRemoteCursor({
-      x: left + viewport.x + cursor[0] * viewport.scale,
-      y: top + viewport.y + cursor[1] * viewport.scale,
+      x: left + cursor[0] * width,
+      y: top + cursor[1] * height,
       name,
       color: colorFor(rollerId),
     });
@@ -211,6 +208,7 @@ export function useDiceArena(room: GameRoom): DiceArenaController {
         wireTransforms,
         wireCursor,
         armed.trayCenter,
+        secretModeRef.current,
       );
       motionStateRef.current.set(rollId, {
         lastSentAt: now,
@@ -224,12 +222,7 @@ export function useDiceArena(room: GameRoom): DiceArenaController {
 
   const setProjection = useCallback((projection: MapProjection) => {
     projectionRef.current = projection;
-    engineRef.current?.setMapProjection({
-      viewport: projection.viewport,
-      gridSize: projection.gridSize,
-      regionCellsW: projection.regionCellsW,
-      regionCellsH: projection.regionCellsH,
-    });
+    engineRef.current?.setMapProjection({ viewport: projection.viewport });
   }, []);
 
   useEffect(() => {
@@ -254,6 +247,7 @@ export function useDiceArena(room: GameRoom): DiceArenaController {
         const engine = await DiceEngine.create(container, {
           onMotion: (rollId, transforms, cursor) => {
             const armed = armedRef.current.get(rollId);
+            // Broadcast the live shake for everyone; secret rolls just render blank (no numbers).
             if (armed) {
               pushMotion(rollId, armed, transforms, cursor);
             }
@@ -266,7 +260,7 @@ export function useDiceArena(room: GameRoom): DiceArenaController {
                 specs: armed.specs,
                 track,
                 modifier: armed.modifier,
-                private: armed.private,
+                private: secretModeRef.current,
                 trayCenter: armed.trayCenter,
               });
             }
@@ -283,12 +277,7 @@ export function useDiceArena(room: GameRoom): DiceArenaController {
         }
         engineRef.current = engine;
         engine.setPlayArea(mapElRef.current);
-        engine.setMapProjection({
-          viewport: projectionRef.current.viewport,
-          gridSize: projectionRef.current.gridSize,
-          regionCellsW: projectionRef.current.regionCellsW,
-          regionCellsH: projectionRef.current.regionCellsH,
-        });
+        engine.setMapProjection({ viewport: projectionRef.current.viewport });
         setReady(true);
 
         unsubscribe = roomRef.current.subscribeDice((event) => {
@@ -298,8 +287,16 @@ export function useDiceArena(room: GameRoom): DiceArenaController {
           }
           if (event.type === "DICE_THROW") {
             const local = ourRollIdsRef.current.has(event.rollId);
-            const trayCenter = event.trayCenter ?? projectionRef.current.center;
-            eng.playTrack(event.rollId, event.specs, event.track, event.faceValues, local, trayCenter);
+            // No faceValues => a DM secret roll relayed to a non-DM client: render blank.
+            const blank = !event.faceValues || event.faceValues.length === 0;
+            eng.playTrack(
+              event.rollId,
+              event.specs,
+              event.track,
+              event.faceValues ?? [],
+              local,
+              blank,
+            );
             if (local) {
               ourRollIdsRef.current.delete(event.rollId);
               armedRef.current.delete(event.rollId);
@@ -316,8 +313,7 @@ export function useDiceArena(room: GameRoom): DiceArenaController {
               if (!specs) {
                 return;
               }
-              const trayCenter = event.trayCenter ?? projectionRef.current.center;
-              eng.applyRemoteMotion(event.rollId, specs, event.transforms, trayCenter);
+              eng.applyRemoteMotion(event.rollId, specs, event.transforms, event.secret === true);
               if (event.cursor) {
                 showRemoteCursor(event.cursor, event.rollerId, event.rollerName);
               }
@@ -404,7 +400,7 @@ export function useDiceArena(room: GameRoom): DiceArenaController {
   /// Places a parsed dice set on the tray after fading any prior armed roll out, then
   /// returns the new roll id (or null when the engine isn't ready).
   /// </summary>
-  const armSpecs = useCallback(async (specs: DieSpec[], modifier: number, isPrivate: boolean) => {
+  const armSpecs = useCallback(async (specs: DieSpec[], modifier: number) => {
     const engine = engineRef.current;
     if (!engine || specs.length === 0) {
       return null;
@@ -418,7 +414,7 @@ export function useDiceArena(room: GameRoom): DiceArenaController {
     }
     const rollId = uid();
     const trayCenter = projectionRef.current.center;
-    armedRef.current.set(rollId, { specs, modifier, private: isPrivate, trayCenter });
+    armedRef.current.set(rollId, { specs, modifier, trayCenter });
     ourRollIdsRef.current.add(rollId);
     currentRollIdRef.current = rollId;
     motionStateRef.current.set(rollId, {
@@ -426,23 +422,28 @@ export function useDiceArena(room: GameRoom): DiceArenaController {
       specsSent: false,
       lastTransforms: null,
     });
-    engine.arm(rollId, specs, trayCenter);
+    engine.arm(rollId, specs);
     audioRef.current?.resume();
     return rollId;
   }, []);
 
   /// <summary>Arms a single die size (d100 expands to two d10s) at screen center.</summary>
   const arm = useCallback(
-    (sides: number, options?: { modifier?: number; private?: boolean }) => {
+    (sides: number, options?: { modifier?: number }) => {
       void (async () => {
         const specs = decomposeDie(sides).map((spec) => ({ ...spec, id: uid() }));
-        if (await armSpecs(specs, options?.modifier ?? 0, options?.private ?? false)) {
+        if (await armSpecs(specs, options?.modifier ?? 0)) {
           setHasArmed(true);
         }
       })();
     },
     [armSpecs],
   );
+
+  /// <summary>DM-only: toggles secret mode (the DM's rolls hide their numbers from players).</summary>
+  const setSecretMode = useCallback((on: boolean) => {
+    secretModeRef.current = on;
+  }, []);
 
   /// <summary>Parses and physically throws an expression after fading previous dice.</summary>
   const throwExpression = useCallback(
@@ -453,7 +454,7 @@ export function useDiceArena(room: GameRoom): DiceArenaController {
           return;
         }
         const specs = parsed.specs.map((spec) => ({ ...spec, id: uid() }));
-        const rollId = await armSpecs(specs, parsed.modifier, false);
+        const rollId = await armSpecs(specs, parsed.modifier);
         if (rollId) {
           engineRef.current?.autoThrow(rollId);
         }
@@ -482,7 +483,7 @@ export function useDiceArena(room: GameRoom): DiceArenaController {
           return;
         }
         const specs = parsed.specs.map((spec) => ({ ...spec, id: uid() }));
-        const rollId = await armSpecs(specs, parsed.modifier, false);
+        const rollId = await armSpecs(specs, parsed.modifier);
         if (rollId) {
           engineRef.current?.quickThrow(rollId);
         }
@@ -518,5 +519,6 @@ export function useDiceArena(room: GameRoom): DiceArenaController {
     throwExpression,
     instantArmed,
     instantExpression,
+    setSecretMode,
   };
 }

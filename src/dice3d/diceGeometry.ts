@@ -472,6 +472,17 @@ function makeFaceDecal(die: DieGeometry, face: DieFace, label: string, color: st
 }
 
 /// <summary>
+/// Hides every number on a built die mesh, leaving a blank body — used to render a DM's
+/// secret roll for other players (they see the dice tumble but never the values).
+/// </summary>
+export function hideDieNumbers(group: THREE.Group): void {
+  const decals = group.userData.decals as THREE.Mesh[] | undefined;
+  decals?.forEach((decal) => {
+    decal.visible = false;
+  });
+}
+
+/// <summary>
 /// Changes the number shown on one face of a built die mesh (by face index, matching
 /// the geometry's `faces` order). Used to put the server's result on the landing face.
 /// </summary>
