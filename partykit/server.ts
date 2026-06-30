@@ -27,7 +27,12 @@ import {
   normalizeMapAnnotation,
   trimAnnotationPoints,
 } from "../src/lib/mapAnnotation";
-import { rollDiceExpression } from "../src/lib/dice";
+import { rollDiceExpression, secureRandInt } from "../src/lib/dice";
+import {
+  buildExpressionLabel,
+  interpretRoll,
+  rollFaceValues,
+} from "../src/dice3d/diceProtocol";
 import { loadCampaignFromDisk } from "./loadCampaign";
 
 type ClientMeta = {
@@ -40,6 +45,8 @@ type ClientMeta = {
 const ROOM_KEY = "room-key";
 const VIEWPORT_THROTTLE_MS = 66;
 const MAX_PUBLIC_DICE_LOG = 50;
+const MAX_DICE_PER_THROW = 20;
+
 export default class GameServer implements Party.Server {
   state: GameState;
   clients = new Map<string, ClientMeta>();
@@ -111,6 +118,13 @@ export default class GameServer implements Party.Server {
   /// </summary>
   sendTo(connection: Party.Connection, message: ServerMessage) {
     connection.send(JSON.stringify(message));
+  }
+
+  /// <summary>
+  /// Broadcasts a typed message to all clients, optionally excluding one connection.
+  /// </summary>
+  broadcast(message: ServerMessage, exceptId?: string) {
+    this.room.broadcast(JSON.stringify(message), exceptId ? [exceptId] : []);
   }
 
   /// <summary>
@@ -446,7 +460,7 @@ export default class GameServer implements Party.Server {
 
     if (parsed.type === "ROLL_DICE") {
       try {
-        const result = rollDiceExpression(parsed.expression);
+        const result = rollDiceExpression(parsed.expression, secureRandInt);
         const roll: DiceRoll = {
           id: `roll-${crypto.randomUUID().slice(0, 8)}`,
           rollerName: meta.displayName?.trim() || "Unknown",
@@ -474,6 +488,89 @@ export default class GameServer implements Party.Server {
         const message = error instanceof Error ? error.message : "Invalid dice expression.";
         this.sendTo(sender, { type: "ERROR", message });
       }
+      return;
+    }
+
+    if (parsed.type === "DICE_MOTION") {
+      // Pure relay of another player's live drag/shake so everyone sees it move.
+      if (!Array.isArray(parsed.transforms) || parsed.transforms.length > MAX_DICE_PER_THROW) {
+        return;
+      }
+      this.broadcast(
+        {
+          type: "DICE_MOTION",
+          rollId: parsed.rollId,
+          rollerId: meta.playerId ?? "unknown",
+          rollerName: meta.displayName?.trim() || "Unknown",
+          specs: parsed.specs,
+          transforms: parsed.transforms,
+          cursor: parsed.cursor,
+          trayCenter: parsed.trayCenter,
+        },
+        sender.id,
+      );
+      return;
+    }
+
+    if (parsed.type === "DICE_THROW_REQUEST") {
+      const specs = parsed.specs;
+      if (!Array.isArray(specs) || specs.length < 1 || specs.length > MAX_DICE_PER_THROW) {
+        this.sendTo(sender, { type: "ERROR", message: "Invalid dice throw." });
+        return;
+      }
+      const isPrivate = Boolean(parsed.private);
+      if (isPrivate && !this.isDm(sender.id)) {
+        this.sendTo(sender, { type: "ERROR", message: "Only the DM can make secret rolls." });
+        return;
+      }
+
+      // Server is authoritative: pick each face value with the CSPRNG.
+      const faceValues = rollFaceValues(specs, secureRandInt);
+      const modifier = Number.isFinite(parsed.modifier) ? Math.trunc(parsed.modifier) : 0;
+      const { rolls, total } = interpretRoll(specs, faceValues);
+      const roll: DiceRoll = {
+        id: `roll-${crypto.randomUUID().slice(0, 8)}`,
+        rollerName: meta.displayName?.trim() || "Unknown",
+        rollerId: meta.playerId ?? "unknown",
+        expression: buildExpressionLabel(specs, modifier),
+        rolls,
+        modifier,
+        total: total + modifier,
+        timestamp: Date.now(),
+      };
+
+      const throwMessage: ServerMessage = {
+        type: "DICE_THROW",
+        rollId: parsed.rollId,
+        rollerId: roll.rollerId,
+        rollerName: roll.rollerName,
+        specs,
+        track: parsed.track,
+        faceValues,
+        roll,
+        private: isPrivate,
+        trayCenter: parsed.trayCenter,
+      };
+
+      // The animation plays immediately, but the log entry only appears once the dice
+      // would have finished rolling — defer by the recorded track's duration.
+      const track = parsed.track;
+      const settleMs =
+        track && track.fps > 0 ? Math.min((track.frames / track.fps) * 1000, 12000) : 0;
+      const delayMs = settleMs + 300;
+
+      if (isPrivate) {
+        this.sendTo(sender, throwMessage);
+        setTimeout(() => this.sendTo(sender, { type: "DM_DICE_ROLL", roll }), delayMs);
+        return;
+      }
+
+      this.broadcast(throwMessage);
+      setTimeout(() => {
+        const log = this.state.publicDiceLog ?? [];
+        this.state.publicDiceLog = [...log, roll].slice(-MAX_PUBLIC_DICE_LOG);
+        void this.broadcastState();
+      }, delayMs);
       return;
     }
 

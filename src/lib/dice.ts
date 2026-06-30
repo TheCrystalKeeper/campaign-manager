@@ -10,9 +10,34 @@ export type DiceRollResult = {
 const DICE_EXPRESSION = /^(\d*)d(\d+)([+-]\d+)?$/i;
 
 /// <summary>
-/// Parses and rolls a dice expression such as 1d20+5 or 2d6.
+/// Returns a uniformly random integer in [0, maxExclusive) using the platform CSPRNG
+/// (Web Crypto, available in both the browser and Cloudflare Workers). Rejection
+/// sampling avoids the modulo bias that plain Math.random()-based rolls can have.
 /// </summary>
-export function rollDiceExpression(expression: string): DiceRollResult {
+export function secureRandInt(maxExclusive: number): number {
+  if (maxExclusive <= 1) {
+    return 0;
+  }
+  const maxUint = 0xffffffff;
+  const limit = maxUint - (maxUint % maxExclusive);
+  const buffer = new Uint32Array(1);
+  let value = 0;
+  do {
+    crypto.getRandomValues(buffer);
+    value = buffer[0];
+  } while (value >= limit);
+  return value % maxExclusive;
+}
+
+/// <summary>
+/// Parses and rolls a dice expression such as 1d20+5 or 2d6.
+/// `randInt(n)` must return an integer in [0, n); it defaults to Math.random and
+/// callers that need provable fairness (the server) pass {@link secureRandInt}.
+/// </summary>
+export function rollDiceExpression(
+  expression: string,
+  randInt: (n: number) => number = (n) => Math.floor(Math.random() * n),
+): DiceRollResult {
   const trimmed = expression.trim().replace(/\s+/g, "");
   const match = trimmed.match(DICE_EXPRESSION);
   if (!match) {
@@ -30,7 +55,7 @@ export function rollDiceExpression(expression: string): DiceRollResult {
     throw new Error("Die size must be between 2 and 1000.");
   }
 
-  const rolls = Array.from({ length: count }, () => Math.floor(Math.random() * sides) + 1);
+  const rolls = Array.from({ length: count }, () => randInt(sides) + 1);
   const total = rolls.reduce((sum, value) => sum + value, 0) + modifier;
 
   return {

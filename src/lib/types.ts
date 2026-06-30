@@ -1,6 +1,7 @@
 import type { CampaignManifest } from "./campaignManifest";
 import type { MapAnnotation } from "./mapAnnotation";
 import { normalizeMapAnnotation } from "./mapAnnotation";
+import type { CursorPoint, DiceTrack, DieSpec, DieTransform, WorldPoint } from "../dice3d/diceProtocol";
 
 export type { MapAnnotation } from "./mapAnnotation";
 export { ANNOTATION_DURATION_MS, normalizeMapAnnotation } from "./mapAnnotation";
@@ -197,13 +198,54 @@ export type ClientMessage =
   | { type: "UPDATE_PLAYER_SLOT"; slot: PlayerSlot }
   | { type: "REMOVE_PLAYER_SLOT"; slotId: string }
   | { type: "ROLL_DICE"; expression: string; private?: boolean }
-  | { type: "UPDATE_SHEET_TEMPLATE"; template: SheetTemplate };
+  | { type: "UPDATE_SHEET_TEMPLATE"; template: SheetTemplate }
+  | {
+      type: "DICE_MOTION";
+      rollId: string;
+      specs: DieSpec[];
+      transforms: DieTransform[];
+      cursor?: CursorPoint;
+      /** Map/world anchor for this roll's tray, so dice render at the same map location. */
+      trayCenter?: WorldPoint;
+    }
+  | {
+      type: "DICE_THROW_REQUEST";
+      rollId: string;
+      specs: DieSpec[];
+      track: DiceTrack;
+      modifier: number;
+      private?: boolean;
+      /** Map/world anchor for this roll's tray, so dice render at the same map location. */
+      trayCenter?: WorldPoint;
+    };
 
 export type ServerMessage =
   | { type: "STATE"; state: GameState; yourClientId: string; yourRole: Role | null }
   | { type: "ERROR"; message: string }
   | { type: "JOINED"; role: Role; playerId: string }
-  | { type: "DM_DICE_ROLL"; roll: DiceRoll };
+  | { type: "DM_DICE_ROLL"; roll: DiceRoll }
+  | {
+      type: "DICE_MOTION";
+      rollId: string;
+      rollerId: string;
+      rollerName: string;
+      specs: DieSpec[];
+      transforms: DieTransform[];
+      cursor?: CursorPoint;
+      trayCenter?: WorldPoint;
+    }
+  | {
+      type: "DICE_THROW";
+      rollId: string;
+      rollerId: string;
+      rollerName: string;
+      specs: DieSpec[];
+      track: DiceTrack;
+      faceValues: number[];
+      roll: DiceRoll;
+      private?: boolean;
+      trayCenter?: WorldPoint;
+    };
 
 export const DEFAULT_VIEWPORT: Viewport = { x: 0, y: 0, scale: 1 };
 

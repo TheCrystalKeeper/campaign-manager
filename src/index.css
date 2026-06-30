@@ -2698,3 +2698,106 @@ body.resizing-sidebar {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* ---- 3D dice arena + tray controls ---- */
+/* Full-window host for the dice canvas. The engine sets `clip-path` at runtime to the
+   map pane's rect so dice (and the felt vignette) never paint over the side panels. */
+.dice-arena {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  pointer-events: none;
+}
+
+.dice-arena canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* Subtle felt vignette so the tray reads as a rolling surface when shown. */
+.dice-arena--tray::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 50% 72%, rgba(18, 40, 28, 0.22), transparent 62%);
+  pointer-events: none;
+}
+
+.dice-arena--armed {
+  cursor: grab;
+}
+
+.dice-arena--armed:active {
+  cursor: grabbing;
+}
+
+.dice-tray-header-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.dice-icon-btn {
+  line-height: 1;
+}
+
+.dice-throw-btn {
+  font-weight: 600;
+  background: #7b2d3a;
+  color: #f5f3ec;
+  border-color: #7b2d3a;
+}
+
+.dice-throw-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.dice-instant-btn {
+  font-weight: 600;
+}
+
+.dice-instant-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.dice-hint {
+  margin: 6px 0 0;
+  font-size: 0.8em;
+  opacity: 0.8;
+}
+
+/* ---- Remote roller cursor (shown while another player rolls) ---- */
+.dice-remote-cursor {
+  position: absolute;
+  transform: translate(-2px, -2px);
+  pointer-events: none;
+  z-index: 61;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  /* Glide between the ~30/sec position updates so the cursor looks smooth. */
+  transition: left 0.07s linear, top 0.07s linear;
+}
+
+.dice-remote-cursor-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--cursor-color, #c9a227);
+  border: 2px solid rgba(0, 0, 0, 0.55);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+
+.dice-remote-cursor-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #f5f3ec;
+  background: var(--cursor-color, #c9a227);
+  padding: 1px 7px;
+  border-radius: 999px;
+  white-space: nowrap;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+}
