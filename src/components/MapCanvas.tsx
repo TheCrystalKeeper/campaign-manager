@@ -30,6 +30,7 @@ import {
   saveSessionViewport,
   type SessionViewportMode,
 } from "../lib/sessionViewportMemory";
+import { ROLL_REGION_BORDER_CELLS, rollRegionCells } from "../dice3d/diceProtocol";
 import {
   ANNOTATION_MIN_LENGTH,
   annotationOpacity,
@@ -57,6 +58,19 @@ type MapCanvasProps = {
   sceneEditMode: boolean;
   viewCommand: { type: "fit" | "reset"; id: number } | null;
   onSettingsViewportChange?: (viewport: Viewport) => void;
+  /** Receives the map pane element so the 3D dice arena can confine dice to it. */
+  onContainerEl?: (element: HTMLDivElement | null) => void;
+  /**
+   * Fires whenever the live viewport/grid changes so the 3D dice can stay anchored to the
+   * map. `center` is the current view center in map/world coords (a roll's tray anchor).
+   */
+  onViewportChange?: (info: {
+    viewport: Viewport;
+    gridSize: number;
+    center: [number, number];
+    regionCellsW: number;
+    regionCellsH: number;
+  }) => void;
 };
 
 type MapLayerImageProps = {
@@ -697,8 +711,17 @@ export function MapCanvas({
   onMoveToken,
   onAddAnnotation,
   annotationColor = "#fcd34d",
+  onContainerEl,
+  onViewportChange,
 }: MapCanvasProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const setContainerEl = useCallback(
+    (element: HTMLDivElement | null) => {
+      containerRef.current = element;
+      onContainerEl?.(element);
+    },
+    [onContainerEl],
+  );
   const [size, setSize] = useState({ width: 800, height: 600 });
   const [localViewport, setLocalViewport] = useState<Viewport>(DEFAULT_VIEWPORT);
   const [localFogDataUrl, setLocalFogDataUrl] = useState<string | null>(null);
@@ -935,6 +958,50 @@ export function MapCanvas({
     observer.observe(element);
     return () => observer.disconnect();
   }, []);
+
+  // Keep the 3D dice anchored to the map: report the live viewport, grid size, and the
+  // current (scene-bounded) view center so a roll's tray lands at the same map location
+  // on every client through pan/zoom and window-size differences.
+  useEffect(() => {
+    if (!onViewportChange) {
+      return;
+    }
+    const scale = viewport.scale > 0 ? viewport.scale : 1;
+    const centerX = (size.width / 2 - viewport.x) / scale;
+    const centerY = (size.height / 2 - viewport.y) / scale;
+    // Size the dice roll region from the shared map (map cells + a fixed border, clamped),
+    // then anchor it at the view center but keep it within map ± border. For a normal map the
+    // region covers it and this resolves to the map center; a capped huge map follows the view.
+    const gridSize = activeScene?.gridSize ?? 50;
+    const region = rollRegionCells(mapWidth / gridSize, mapHeight / gridSize);
+    const borderPx = ROLL_REGION_BORDER_CELLS * gridSize;
+    const clampAnchor = (center: number, span: number, halfPx: number) => {
+      if (span <= 0) {
+        return center;
+      }
+      const lo = halfPx - borderPx;
+      const hi = span + borderPx - halfPx;
+      return lo <= hi ? Math.max(lo, Math.min(hi, center)) : span / 2;
+    };
+    onViewportChange({
+      viewport,
+      gridSize,
+      center: [
+        clampAnchor(centerX, mapWidth, (region.w / 2) * gridSize),
+        clampAnchor(centerY, mapHeight, (region.h / 2) * gridSize),
+      ],
+      regionCellsW: region.w,
+      regionCellsH: region.h,
+    });
+  }, [
+    onViewportChange,
+    viewport,
+    size.width,
+    size.height,
+    mapWidth,
+    mapHeight,
+    activeScene?.gridSize,
+  ]);
 
   useEffect(() => {
     if (!activeScene || mapWidth <= 0 || mapHeight <= 0) {
@@ -1327,7 +1394,7 @@ export function MapCanvas({
 
   return (
     <div
-      ref={containerRef}
+      ref={setContainerEl}
       className={`map-canvas ${isDm ? "dm" : "player"} ${fogMode ? "fog-mode" : ""} ${sceneEditMode ? "scene-edit" : ""}`}
       style={{ backgroundColor: canvasBackground }}
       onContextMenu={(event) => event.preventDefault()}

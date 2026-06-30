@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useDiceArena } from "./dice3d/useDiceArena";
 import { JoinScreen } from "./components/JoinScreen";
 import { MapCanvas } from "./components/MapCanvas";
 import { DMToolbar } from "./components/DMToolbar";
@@ -38,6 +39,7 @@ export default function App() {
   const room = useGameRoom(session?.roomId ?? null);
   const dm = useDmActions(room);
   const { sheet, updateSheet, canEdit } = usePlayerSheet(room);
+  const diceArena = useDiceArena(room);
 
   useEffect(() => {
     if (!session) {
@@ -129,6 +131,8 @@ export default function App() {
               sceneEditMode={sceneEditMode}
               viewCommand={viewCommand}
               onSettingsViewportChange={setSettingsViewport}
+              onContainerEl={diceArena.mapAreaRef}
+              onViewportChange={diceArena.setProjection}
             />
             {isDm ? (
               <DMToolbar
@@ -208,6 +212,16 @@ export default function App() {
             publicRolls={state.publicDiceLog}
             privateRolls={room.privateDiceLog}
             onRoll={room.rollDice}
+            onArm={diceArena.arm}
+            onThrowArmed={diceArena.throwArmed}
+            onThrowExpression={diceArena.throwExpression}
+            onInstantExpression={diceArena.instantExpression}
+            onInstantArmed={diceArena.instantArmed}
+            hasArmed={diceArena.hasArmed}
+            trayVisible={diceArena.trayVisible}
+            onToggleTray={diceArena.setTrayVisible}
+            muted={diceArena.muted}
+            onToggleMuted={diceArena.setMuted}
           />
         );
 
@@ -307,6 +321,28 @@ export default function App() {
       ) : (
         <div className="loading">Connecting to room...</div>
       )}
+
+      <div
+        ref={diceArena.containerRef}
+        className={`dice-arena${diceArena.trayVisible ? " dice-arena--tray" : ""}${
+          diceArena.hasArmed ? " dice-arena--armed" : ""
+        }`}
+        aria-hidden
+      >
+        {diceArena.remoteCursor ? (
+          <div
+            className="dice-remote-cursor"
+            style={{
+              left: diceArena.remoteCursor.x,
+              top: diceArena.remoteCursor.y,
+              ["--cursor-color" as string]: diceArena.remoteCursor.color,
+            }}
+          >
+            <span className="dice-remote-cursor-dot" />
+            <span className="dice-remote-cursor-label">{diceArena.remoteCursor.name}</span>
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }

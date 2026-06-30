@@ -7,7 +7,23 @@ type DicePanelProps = {
   yourPlayerId: string | null;
   publicRolls: DiceRoll[];
   privateRolls: DiceRoll[];
+  /** Instant roll (no animation) — used for the Instant buttons and DM secret rolls. */
   onRoll: (expression: string, options?: { private?: boolean }) => void;
+  /** Arms a physical die set in the 3D arena (d100 becomes a percentile d10 + d10). */
+  onArm: (sides: number) => void;
+  /** Throws the currently armed dice without a manual drag. */
+  onThrowArmed: () => void;
+  /** Parses an expression and throws it physically. */
+  onThrowExpression: (expression: string) => void;
+  /** Parses an expression and resolves it with a quick spin-to-value reveal. */
+  onInstantExpression: (expression: string) => void;
+  /** Resolves the currently armed dice with a quick spin-to-value reveal. */
+  onInstantArmed: () => void;
+  hasArmed: boolean;
+  trayVisible: boolean;
+  onToggleTray: (visible: boolean) => void;
+  muted: boolean;
+  onToggleMuted: (muted: boolean) => void;
 };
 
 /// <summary>
@@ -19,29 +35,53 @@ export function DicePanel({
   publicRolls,
   privateRolls,
   onRoll,
+  onArm,
+  onThrowArmed,
+  onThrowExpression,
+  onInstantExpression,
+  onInstantArmed,
+  hasArmed,
+  trayVisible,
+  onToggleTray,
+  muted,
+  onToggleMuted,
 }: DicePanelProps) {
   const [expression, setExpression] = useState("1d20");
   const [collapsed, setCollapsed] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
 
-  const submitRoll = (nextExpression: string, isPrivate: boolean) => {
-    const trimmed = nextExpression.trim();
+  const validExpression = (): string | null => {
+    const trimmed = expression.trim();
     if (!trimmed) {
       setLocalError("Enter a dice expression.");
-      return;
+      return null;
     }
     setLocalError(null);
-    onRoll(trimmed, { private: isPrivate });
+    return trimmed;
   };
 
+  // "Roll" throws physical 3D dice; "Instant" does a quick spin-to-value reveal.
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
-    submitRoll(expression, false);
+    const trimmed = validExpression();
+    if (trimmed) {
+      onThrowExpression(trimmed);
+    }
+  };
+
+  const handleInstant = () => {
+    const trimmed = validExpression();
+    if (trimmed) {
+      onInstantExpression(trimmed);
+    }
   };
 
   const handleSecretSubmit = (event: React.FormEvent) => {
     event.preventDefault();
-    submitRoll(expression, true);
+    const trimmed = validExpression();
+    if (trimmed) {
+      onRoll(trimmed, { private: true });
+    }
   };
 
   if (collapsed) {
@@ -67,14 +107,34 @@ export function DicePanel({
     <footer className="dice-tray">
       <div className="dice-tray-header">
         <h2>Dice</h2>
-        <button
-          type="button"
-          className="btn-compact"
-          aria-expanded={true}
-          onClick={() => setCollapsed(true)}
-        >
-          Hide
-        </button>
+        <div className="dice-tray-header-actions">
+          <button
+            type="button"
+            className="btn-compact dice-icon-btn"
+            aria-pressed={!muted}
+            title={muted ? "Unmute dice sounds" : "Mute dice sounds"}
+            onClick={() => onToggleMuted(!muted)}
+          >
+            {muted ? "🔇" : "🔊"}
+          </button>
+          <button
+            type="button"
+            className="btn-compact"
+            aria-pressed={trayVisible}
+            title={trayVisible ? "Hide the 3D dice tray" : "Show the 3D dice tray"}
+            onClick={() => onToggleTray(!trayVisible)}
+          >
+            {trayVisible ? "Tray ✓" : "Tray"}
+          </button>
+          <button
+            type="button"
+            className="btn-compact"
+            aria-expanded={true}
+            onClick={() => setCollapsed(true)}
+          >
+            Hide
+          </button>
+        </div>
       </div>
 
       <div className="dice-tray-body">
@@ -89,6 +149,14 @@ export function DicePanel({
               spellCheck={false}
             />
             <button type="submit">Roll</button>
+            <button
+              type="button"
+              className="btn-compact dice-instant-btn"
+              title="Quick roll — dice spin to the result"
+              onClick={handleInstant}
+            >
+              Instant
+            </button>
           </form>
 
           <div className="dice-quick-row">
@@ -97,12 +165,36 @@ export function DicePanel({
                 key={sides}
                 type="button"
                 className="btn-compact dice-quick-btn"
-                onClick={() => setExpression(`1d${sides}`)}
+                title={`Grab a d${sides} to throw`}
+                onClick={() => onArm(sides)}
               >
                 d{sides}
               </button>
             ))}
+            <button
+              type="button"
+              className="btn-compact dice-throw-btn"
+              disabled={!hasArmed}
+              onClick={() => onThrowArmed()}
+            >
+              Throw
+            </button>
+            <button
+              type="button"
+              className="btn-compact dice-instant-btn"
+              disabled={!hasArmed}
+              title="Quick roll — dice spin to the result"
+              onClick={() => onInstantArmed()}
+            >
+              Instant
+            </button>
           </div>
+
+          {hasArmed ? (
+            <p className="dice-hint">
+              {trayVisible ? "Drag the dice and release to roll, or press Throw." : "Press Throw to roll."}
+            </p>
+          ) : null}
 
           {localError ? <p className="dice-error">{localError}</p> : null}
 
