@@ -221,6 +221,8 @@ export type ClientMessage =
       cursor?: CursorPoint;
       /** Map/world anchor for this roll's tray, so dice render at the same map location. */
       trayCenter?: WorldPoint;
+      /** DM secret roll: render the shaking dice blank (no numbers) for other players. */
+      secret?: boolean;
     }
   | {
       type: "DICE_THROW_REQUEST";
@@ -248,6 +250,8 @@ export type ServerMessage =
       transforms: DieTransform[];
       cursor?: CursorPoint;
       trayCenter?: WorldPoint;
+      /** DM secret roll: render the shaking dice blank (no numbers) for other players. */
+      secret?: boolean;
     }
   | {
       type: "DICE_THROW";
@@ -256,8 +260,10 @@ export type ServerMessage =
       rollerName: string;
       specs: DieSpec[];
       track: DiceTrack;
-      faceValues: number[];
-      roll: DiceRoll;
+      /** Omitted on a secret roll's broadcast to non-DM clients (so dice render blank). */
+      faceValues?: number[];
+      /** Omitted on a secret roll's broadcast to non-DM clients. */
+      roll?: DiceRoll;
       private?: boolean;
       trayCenter?: WorldPoint;
     };

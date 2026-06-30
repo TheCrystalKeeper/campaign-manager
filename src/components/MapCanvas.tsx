@@ -30,7 +30,7 @@ import {
   saveSessionViewport,
   type SessionViewportMode,
 } from "../lib/sessionViewportMemory";
-import { ROLL_REGION_BORDER_CELLS, rollRegionCells } from "../dice3d/diceProtocol";
+import { ROLL_REGION_BORDER_CELLS } from "../dice3d/diceProtocol";
 import {
   ANNOTATION_MIN_LENGTH,
   annotationOpacity,
@@ -66,10 +66,7 @@ type MapCanvasProps = {
    */
   onViewportChange?: (info: {
     viewport: Viewport;
-    gridSize: number;
     center: [number, number];
-    regionCellsW: number;
-    regionCellsH: number;
   }) => void;
 };
 
@@ -959,9 +956,8 @@ export function MapCanvas({
     return () => observer.disconnect();
   }, []);
 
-  // Keep the 3D dice anchored to the map: report the live viewport, grid size, and the
-  // current (scene-bounded) view center so a roll's tray lands at the same map location
-  // on every client through pan/zoom and window-size differences.
+  // Feed the 3D dice the live viewport + the (map-bounded) view center so a roll's tray
+  // lands at the same map location on every client through pan/zoom and window differences.
   useEffect(() => {
     if (!onViewportChange) {
       return;
@@ -969,29 +965,14 @@ export function MapCanvas({
     const scale = viewport.scale > 0 ? viewport.scale : 1;
     const centerX = (size.width / 2 - viewport.x) / scale;
     const centerY = (size.height / 2 - viewport.y) / scale;
-    // Size the dice roll region from the shared map (map cells + a fixed border, clamped),
-    // then anchor it at the view center but keep it within map ± border. For a normal map the
-    // region covers it and this resolves to the map center; a capped huge map follows the view.
+    // Keep the tray anchor within the map plus a small border so dice stay near the map.
     const gridSize = activeScene?.gridSize ?? 50;
-    const region = rollRegionCells(mapWidth / gridSize, mapHeight / gridSize);
     const borderPx = ROLL_REGION_BORDER_CELLS * gridSize;
-    const clampAnchor = (center: number, span: number, halfPx: number) => {
-      if (span <= 0) {
-        return center;
-      }
-      const lo = halfPx - borderPx;
-      const hi = span + borderPx - halfPx;
-      return lo <= hi ? Math.max(lo, Math.min(hi, center)) : span / 2;
-    };
+    const clampAnchor = (center: number, span: number) =>
+      span > 0 ? Math.max(-borderPx, Math.min(span + borderPx, center)) : center;
     onViewportChange({
       viewport,
-      gridSize,
-      center: [
-        clampAnchor(centerX, mapWidth, (region.w / 2) * gridSize),
-        clampAnchor(centerY, mapHeight, (region.h / 2) * gridSize),
-      ],
-      regionCellsW: region.w,
-      regionCellsH: region.h,
+      center: [clampAnchor(centerX, mapWidth), clampAnchor(centerY, mapHeight)],
     });
   }, [
     onViewportChange,

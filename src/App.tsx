@@ -211,12 +211,12 @@ export default function App() {
             yourPlayerId={room.yourPlayerId}
             publicRolls={state.publicDiceLog}
             privateRolls={room.privateDiceLog}
-            onRoll={room.rollDice}
             onArm={diceArena.arm}
             onThrowArmed={diceArena.throwArmed}
             onThrowExpression={diceArena.throwExpression}
             onInstantExpression={diceArena.instantExpression}
             onInstantArmed={diceArena.instantArmed}
+            onSetSecretMode={diceArena.setSecretMode}
             hasArmed={diceArena.hasArmed}
             trayVisible={diceArena.trayVisible}
             onToggleTray={diceArena.setTrayVisible}

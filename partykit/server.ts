@@ -511,6 +511,7 @@ export default class GameServer implements Party.Server {
           transforms: parsed.transforms,
           cursor: parsed.cursor,
           trayCenter: parsed.trayCenter,
+          secret: parsed.secret && this.isDm(sender.id) ? true : undefined,
         },
         sender.id,
       );
@@ -565,7 +566,20 @@ export default class GameServer implements Party.Server {
       const delayMs = settleMs + 300;
 
       if (isPrivate) {
+        // Secret roll: the DM (sender) gets the full result; everyone else sees the dice
+        // tumble but with faceValues + roll stripped, so they render blank and can't read it.
         this.sendTo(sender, throwMessage);
+        const blankMessage: ServerMessage = {
+          type: "DICE_THROW",
+          rollId: parsed.rollId,
+          rollerId: roll.rollerId,
+          rollerName: roll.rollerName,
+          specs,
+          track: parsed.track,
+          private: true,
+          trayCenter: parsed.trayCenter,
+        };
+        this.broadcast(blankMessage, sender.id);
         setTimeout(() => this.sendTo(sender, { type: "DM_DICE_ROLL", roll }), delayMs);
         return;
       }

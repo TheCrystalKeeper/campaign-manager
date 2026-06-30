@@ -73,6 +73,7 @@ export type GameRoom = {
     transforms: DieTransform[],
     cursor?: CursorPoint,
     trayCenter?: WorldPoint,
+    secret?: boolean,
   ) => void;
   subscribeDice: (handler: (event: DiceEvent) => void) => () => void;
 };
@@ -285,8 +286,9 @@ export function useGameRoom(roomId: string | null): GameRoom {
       transforms: DieTransform[],
       cursor?: CursorPoint,
       trayCenter?: WorldPoint,
+      secret?: boolean,
     ) => {
-      send({ type: "DICE_MOTION", rollId, specs, transforms, cursor, trayCenter });
+      send({ type: "DICE_MOTION", rollId, specs, transforms, cursor, trayCenter, secret });
     },
     [send],
   );
