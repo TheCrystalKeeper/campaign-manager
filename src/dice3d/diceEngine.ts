@@ -5,6 +5,7 @@ import {
   buildDieGeometry,
   buildDieMesh,
   hideDieNumbers,
+  relabelD4Vertex,
   relabelDieFace,
   type DieGeometry,
 } from "./diceGeometry";
@@ -691,6 +692,10 @@ export class DiceEngine {
       } else if (spec.kind === "custom") {
         // Blank during the tumble; the value is revealed (faded in) once it lands.
         die.revealLabel = String(faceValues[i]);
+      } else if (spec.kind === "d4") {
+        // A d4 reads off its topmost *vertex*, not a face — find that vertex and relabel it.
+        const upVertex = finalUpVertexIndex(die.geom, die.samples);
+        this.relabelD4Landing(die, upVertex, faceValues[i]);
       } else {
         const upIndex = finalUpFaceIndex(die.geom, die.samples);
         this.relabelLanding(die, upIndex, faceValues[i]);
@@ -755,6 +760,26 @@ export class DiceEngine {
     // Swap labels so the landing face shows the server value and numbers stay unique.
     relabelDieFace(die.mesh, upIndex, faces[vIndex].label);
     relabelDieFace(die.mesh, vIndex, faces[upIndex].label);
+  }
+
+  /// <summary>
+  /// Same idea as relabelLanding, but for a d4: the result is read off the topmost *vertex*
+  /// (its value is printed on the 3 faces meeting there), so we swap the two vertices'
+  /// values rather than two faces' labels.
+  /// </summary>
+  private relabelD4Landing(die: DieInstance, upVertexIndex: number, value: number) {
+    const vertices = die.geom.d4?.vertices;
+    if (!vertices) {
+      return;
+    }
+    const targetIndex = value - 1;
+    if (targetIndex < 0 || targetIndex >= vertices.length || upVertexIndex === targetIndex) {
+      return; // physics already landed on the right vertex
+    }
+    const upLabel = vertices[upVertexIndex].label;
+    const targetLabel = vertices[targetIndex].label;
+    relabelD4Vertex(die.mesh, upVertexIndex, targetLabel);
+    relabelD4Vertex(die.mesh, targetIndex, upLabel);
   }
 
   private applyTrackFrame(roll: RollInstance, f: number) {
@@ -874,7 +899,10 @@ export class DiceEngine {
   private needsLoop(now: number): boolean {
     for (const roll of this.rolls.values()) {
       if (roll.mode === "track" && !roll.settled) return true;
-      if (roll.fadeStart !== null && now - roll.fadeStart < FADE_MS) return true;
+      // Keep ticking through the post-roll linger and fade-out (removeAt can be in the future).
+      if (roll.settled && roll.removeAt !== null) {
+        if (roll.fadeStart === null || now - roll.fadeStart < FADE_MS) return true;
+      }
       if (roll.mode === "remote-motion") {
         for (const die of roll.dice) {
           if (!die.targetPos || !die.targetQuat) continue;
@@ -938,32 +966,32 @@ export class DiceEngine {
   }
 
   /// <summary>
-  /// Fades a settled roll out smoothly (body + number decals) before removing it.
+  /// Fades a settled roll out smoothly (opacity 1 → 0) before removing it.
   /// </summary>
   private advanceFade(roll: RollInstance, now: number) {
     const t = Math.min((now - roll.fadeStart!) / FADE_MS, 1);
-    const eased = smoothstep(t);
-    const opacity = 1 - eased;
-    const numberOpacity = Math.min(1, Math.pow(opacity, 0.75));
-    roll.group.scale.setScalar(this.k * (1 - 0.08 * eased));
-    roll.group.position.y = -0.28 * this.k * eased;
-    roll.dice.forEach((die) => {
-      die.mesh.traverse((obj) => {
-        const mesh = obj as THREE.Mesh;
-        if (mesh.material) {
-          const mat = mesh.material as THREE.Material & {
-            opacity: number;
-            transparent: boolean;
-            map?: unknown;
-          };
-          mat.transparent = true;
-          mat.opacity = mat.map ? numberOpacity : opacity;
-        }
-      });
-    });
+    const opacity = 1 - smoothstep(t);
+    this.setRollOpacity(roll, opacity);
     if (t >= 1) {
       this.clearRoll(roll.rollId);
     }
+  }
+
+  /// <summary>Applies a uniform opacity to every mesh material in a roll (body + numbers).</summary>
+  private setRollOpacity(roll: RollInstance, opacity: number) {
+    roll.group.traverse((obj) => {
+      const mesh = obj as THREE.Mesh;
+      if (!mesh.material) {
+        return;
+      }
+      const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      for (const material of materials) {
+        material.transparent = true;
+        material.opacity = opacity;
+        material.depthWrite = false;
+        material.needsUpdate = true;
+      }
+    });
   }
 
   clearRoll(rollId: string) {
@@ -1048,6 +1076,30 @@ function finalUpFaceIndex(geom: DieGeometry, samples: number[]): number {
   let index = 0;
   for (let i = 0; i < geom.faces.length; i += 1) {
     tmpNormal.copy(geom.faces[i].normal).applyQuaternion(qa);
+    if (tmpNormal.dot(upVec) > best) {
+      best = tmpNormal.dot(upVec);
+      index = i;
+    }
+  }
+  return index;
+}
+
+/// <summary>
+/// Which vertex index points highest at the track's final recorded frame — a d4 rests on a
+/// face (its normal pointing down) with the opposite corner pointing up, so the result is
+/// read off the topmost vertex rather than a face normal.
+/// </summary>
+function finalUpVertexIndex(geom: DieGeometry, samples: number[]): number {
+  const vertices = geom.d4?.vertices;
+  if (!vertices || samples.length < 7) {
+    return 0;
+  }
+  const o = samples.length - 7;
+  qa.set(samples[o + 3], samples[o + 4], samples[o + 5], samples[o + 6]);
+  let best = -Infinity;
+  let index = 0;
+  for (let i = 0; i < vertices.length; i += 1) {
+    tmpNormal.copy(vertices[i].position).normalize().applyQuaternion(qa);
     if (tmpNormal.dot(upVec) > best) {
       best = tmpNormal.dot(upVec);
       index = i;
