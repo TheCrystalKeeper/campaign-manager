@@ -397,17 +397,17 @@ export function useDiceArena(room: GameRoom): DiceArenaController {
   }, []);
 
   /// <summary>
-  /// Places a parsed dice set on the tray after fading any prior armed roll out, then
-  /// returns the new roll id (or null when the engine isn't ready).
+  /// Places a parsed dice set on the tray, clearing any prior armed roll immediately.
+  /// Returns the new roll id (or null when the engine isn't ready).
   /// </summary>
-  const armSpecs = useCallback(async (specs: DieSpec[], modifier: number) => {
+  const armSpecs = useCallback((specs: DieSpec[], modifier: number) => {
     const engine = engineRef.current;
     if (!engine || specs.length === 0) {
       return null;
     }
     const previous = currentRollIdRef.current;
     if (previous && armedRef.current.has(previous)) {
-      await engine.fadeOutAndClear(previous);
+      engine.clearRoll(previous);
       armedRef.current.delete(previous);
       ourRollIdsRef.current.delete(previous);
       motionStateRef.current.delete(previous);
@@ -430,12 +430,10 @@ export function useDiceArena(room: GameRoom): DiceArenaController {
   /// <summary>Arms a single die size (d100 expands to two d10s) at screen center.</summary>
   const arm = useCallback(
     (sides: number, options?: { modifier?: number }) => {
-      void (async () => {
-        const specs = decomposeDie(sides).map((spec) => ({ ...spec, id: uid() }));
-        if (await armSpecs(specs, options?.modifier ?? 0)) {
-          setHasArmed(true);
-        }
-      })();
+      const specs = decomposeDie(sides).map((spec) => ({ ...spec, id: uid() }));
+      if (armSpecs(specs, options?.modifier ?? 0)) {
+        setHasArmed(true);
+      }
     },
     [armSpecs],
   );
@@ -448,17 +446,15 @@ export function useDiceArena(room: GameRoom): DiceArenaController {
   /// <summary>Parses and physically throws an expression after fading previous dice.</summary>
   const throwExpression = useCallback(
     (expression: string) => {
-      void (async () => {
-        const parsed = parseDiceExpression(expression);
-        if (!parsed) {
-          return;
-        }
-        const specs = parsed.specs.map((spec) => ({ ...spec, id: uid() }));
-        const rollId = await armSpecs(specs, parsed.modifier);
-        if (rollId) {
-          engineRef.current?.autoThrow(rollId);
-        }
-      })();
+      const parsed = parseDiceExpression(expression);
+      if (!parsed) {
+        return;
+      }
+      const specs = parsed.specs.map((spec) => ({ ...spec, id: uid() }));
+      const rollId = armSpecs(specs, parsed.modifier);
+      if (rollId) {
+        engineRef.current?.autoThrow(rollId);
+      }
     },
     [armSpecs],
   );
@@ -477,17 +473,15 @@ export function useDiceArena(room: GameRoom): DiceArenaController {
   /// <summary>Parses and instantly resolves an expression after fading previous dice.</summary>
   const instantExpression = useCallback(
     (expression: string) => {
-      void (async () => {
-        const parsed = parseDiceExpression(expression);
-        if (!parsed) {
-          return;
-        }
-        const specs = parsed.specs.map((spec) => ({ ...spec, id: uid() }));
-        const rollId = await armSpecs(specs, parsed.modifier);
-        if (rollId) {
-          engineRef.current?.quickThrow(rollId);
-        }
-      })();
+      const parsed = parseDiceExpression(expression);
+      if (!parsed) {
+        return;
+      }
+      const specs = parsed.specs.map((spec) => ({ ...spec, id: uid() }));
+      const rollId = armSpecs(specs, parsed.modifier);
+      if (rollId) {
+        engineRef.current?.quickThrow(rollId);
+      }
     },
     [armSpecs],
   );

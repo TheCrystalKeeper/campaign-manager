@@ -21,6 +21,26 @@ export interface DieFace {
   centroid: THREE.Vector3;
 }
 
+/**
+ * A d4 (tetrahedron) doesn't show one number per face — each of its 4 corners gets a value,
+ * printed on the 3 faces that meet there. `faceVertices[faceIndex]` lists which vertex
+ * indices (into `vertices`) that face touches, so the renderer can paint 3 numbers per face
+ * and the engine can relabel by vertex instead of by face.
+ */
+export interface D4VertexInfo {
+  value: number;
+  label: string;
+  /** Vertex position in local space. */
+  position: THREE.Vector3;
+}
+
+export interface D4Info {
+  /** vertices[i] is the corner carrying value i+1 initially (relabeled per throw). */
+  vertices: D4VertexInfo[];
+  /** Per face (same order as `faces`), the 3 vertex indices that face touches. */
+  faceVertices: number[][];
+}
+
 export interface DieGeometry {
   kind: DieKind;
   /** Hull points (local space) handed to the physics engine for a convex collider. */
@@ -33,6 +53,8 @@ export interface DieGeometry {
   sides: number;
   /** Approximate circumscribed radius after normalization. */
   radius: number;
+  /** Vertex-numbering metadata, present only when kind === "d4". */
+  d4?: D4Info;
 }
 
 const PHI = (1 + Math.sqrt(5)) / 2;
@@ -175,6 +197,59 @@ function clusterFaces(geometry: THREE.BufferGeometry): { normal: THREE.Vector3; 
     centroid.multiplyScalar(1 / unique.length);
     return { normal: cluster.normal, centroid };
   });
+}
+
+/// <summary>
+/// Builds a regular tetrahedron (d4) with explicit faces, where face k is the triangle of
+/// the three vertices *other than* k. A d4 doesn't number its faces — it numbers its
+/// vertices, and each face shows the 3 numbers of the corners it touches — so this also
+/// returns `faceVertices` (per face, the 3 vertex indices it touches) to drive that.
+/// </summary>
+function buildD4(): {
+  geometry: THREE.BufferGeometry;
+  points: THREE.Vector3[];
+  faceData: { normal: THREE.Vector3; centroid: THREE.Vector3 }[];
+  faceVertices: number[][];
+} {
+  const points = platonicPoints("d4").map(([x, y, z]) => new THREE.Vector3(x, y, z));
+  // Face k is opposite vertex k (the triangle formed by the other three corners).
+  const faceVertices: number[][] = [
+    [1, 2, 3],
+    [0, 2, 3],
+    [0, 1, 3],
+    [0, 1, 2],
+  ];
+
+  const positions: number[] = [];
+  const faceData: { normal: THREE.Vector3; centroid: THREE.Vector3 }[] = [];
+
+  for (const idxs of faceVertices) {
+    const [a, b, c] = idxs.map((i) => points[i]);
+    const centroid = new THREE.Vector3().add(a).add(b).add(c).multiplyScalar(1 / 3);
+    let normal = new THREE.Vector3()
+      .crossVectors(new THREE.Vector3().subVectors(b, a), new THREE.Vector3().subVectors(c, a))
+      .normalize();
+    // Ensure the normal points away from the die center.
+    if (normal.dot(centroid) < 0) {
+      normal = normal.multiplyScalar(-1);
+    }
+    faceData.push({ normal, centroid });
+
+    // Triangulate so the geometry's winding matches the outward `normal`.
+    const candidate = new THREE.Vector3()
+      .crossVectors(new THREE.Vector3().subVectors(b, a), new THREE.Vector3().subVectors(c, a))
+      .normalize();
+    const ordered = candidate.dot(normal) >= 0 ? [a, b, c] : [a, c, b];
+    for (const p of ordered) {
+      positions.push(p.x, p.y, p.z);
+    }
+  }
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  geometry.computeVertexNormals();
+
+  return { geometry, points, faceData, faceVertices };
 }
 
 /// <summary>
@@ -331,12 +406,19 @@ export function buildDieGeometry(kind: DieKind, percentile = false): DieGeometry
   let geometry: THREE.BufferGeometry;
   let points: THREE.Vector3[];
   let faceData: { normal: THREE.Vector3; centroid: THREE.Vector3 }[];
+  let d4FaceVertices: number[][] | null = null;
 
   if (kind === "d10") {
     const built = buildD10();
     geometry = built.geometry;
     points = built.points;
     faceData = built.faceData;
+  } else if (kind === "d4") {
+    const built = buildD4();
+    geometry = built.geometry;
+    points = built.points;
+    faceData = built.faceData;
+    d4FaceVertices = built.faceVertices;
   } else {
     points = (kind === "custom" ? crystalPoints() : platonicPoints(kind)).map(
       ([x, y, z]) => new THREE.Vector3(x, y, z),
@@ -349,9 +431,20 @@ export function buildDieGeometry(kind: DieKind, percentile = false): DieGeometry
   geometry.computeVertexNormals();
 
   const sides = kind === "d10" ? 10 : faceData.length;
-  const faces = assignFaceValues(faceData, sides, percentile);
+  // d4 faces are built directly (not via assignFaceValues) so `faces[i]` stays aligned with
+  // `d4FaceVertices[i]` — assignFaceValues's normal-sort would scramble that correspondence.
+  const faces = d4FaceVertices
+    ? faceData.map((f, i) => ({ value: i + 1, label: String(i + 1), normal: f.normal.clone(), centroid: f.centroid.clone() }))
+    : assignFaceValues(faceData, sides, percentile);
 
-  const result: DieGeometry = { kind, points, geometry, faces, sides, radius };
+  const d4: D4Info | undefined = d4FaceVertices
+    ? {
+        vertices: points.map((p, i) => ({ value: i + 1, label: String(i + 1), position: p.clone() })),
+        faceVertices: d4FaceVertices,
+      }
+    : undefined;
+
+  const result: DieGeometry = { kind, points, geometry, faces, sides, radius, d4 };
   geometryCache.set(cacheKey, result);
   return result;
 }
@@ -430,8 +523,21 @@ export function buildDieMesh(die: DieGeometry, options: DiceMaterialOptions = {}
   const numberColor = options.numberColor ?? "#f5f3ec";
   const decals: THREE.Mesh[] = [];
 
-  // Custom crystal dice render blank — the number is revealed (faded in) after they land.
-  if (die.kind !== "custom") {
+  if (die.kind === "d4" && die.d4) {
+    // Each face shows 3 numbers (one per adjoining vertex) instead of one centered number.
+    const decalsByVertex: THREE.Mesh[][] = die.d4.vertices.map(() => []);
+    die.d4.faceVertices.forEach((vertexIdxs, faceIndex) => {
+      const face = die.faces[faceIndex];
+      for (const vi of vertexIdxs) {
+        const decal = makeD4VertexDecal(die, face, die.d4!.vertices[vi], numberColor);
+        group.add(decal);
+        decals.push(decal);
+        decalsByVertex[vi].push(decal);
+      }
+    });
+    group.userData.d4VertexDecals = decalsByVertex;
+  } else if (die.kind !== "custom") {
+    // Custom crystal dice render blank — the number is revealed (faded in) after they land.
     for (const face of die.faces) {
       const decal = makeFaceDecal(die, face, face.label, numberColor);
       group.add(decal);
@@ -439,12 +545,45 @@ export function buildDieMesh(die: DieGeometry, options: DiceMaterialOptions = {}
     }
   }
 
-  // Expose the per-face number decals (aligned with die.faces order) so a thrown die's
-  // landing face can be relabeled to the server's value before it is shown.
+  // Expose the number decals so a thrown die's landing face/vertex can be relabeled to the
+  // server's value before it is shown (faces via `relabelDieFace`, d4 via `relabelD4Vertex`).
   group.userData.decals = decals;
   group.userData.numberColor = numberColor;
 
   return group;
+}
+
+/// <summary>
+/// Builds one number decal for a d4 face, near the corner it belongs to and oriented so the
+/// glyph's "up" points inward (toward the face centroid / opposite edge) — the standard d4
+/// vertex-numbering layout, where the number near the topmost corner reads upright on all 3
+/// surrounding faces.
+/// </summary>
+function makeD4VertexDecal(die: DieGeometry, face: DieFace, vertex: D4VertexInfo, color: string): THREE.Mesh {
+  // The vertex lies in the face's plane, so centroid->vertex is already an in-plane
+  // direction: use it directly as the local "outward" basis vector (u). v completes a
+  // right-handed (u, v, normal) frame matching the decal plane's (X, Y, Z) axes.
+  const toVertex = new THREE.Vector3().subVectors(vertex.position, face.centroid);
+  const dist = toVertex.length();
+  const u = toVertex.clone().normalize();
+  const v = new THREE.Vector3().crossVectors(face.normal, u).normalize();
+  const offset = dist * 0.56;
+
+  const decalSize = die.radius * 0.6;
+  const decal = new THREE.Mesh(
+    new THREE.PlaneGeometry(decalSize, decalSize),
+    new THREE.MeshBasicMaterial({ map: numberTexture(vertex.label, color), transparent: true, depthWrite: false }),
+  );
+  decal.position
+    .copy(face.centroid)
+    .addScaledVector(u, offset)
+    .addScaledVector(face.normal, die.radius * 0.012);
+  decal.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(u, v, face.normal));
+  // The plane's local +Y (the glyph's "up") starts pointing along `v` (90° from `u`). Add a
+  // quarter turn so it instead points along -u — inward, toward the centroid — rather than
+  // outward toward the corner.
+  decal.rotateZ(Math.PI / 2);
+  return decal;
 }
 
 /// <summary>Builds a number plane sized and oriented to a die face.</summary>
@@ -496,6 +635,25 @@ export function relabelDieFace(group: THREE.Group, faceIndex: number, label: str
   const material = decal.material as THREE.MeshBasicMaterial;
   material.map = numberTexture(label, color);
   material.needsUpdate = true;
+}
+
+/// <summary>
+/// Changes the number shown for one vertex of a built d4 mesh (by vertex index, matching the
+/// geometry's `d4.vertices` order) — updates all 3 face decals that vertex appears on. Used
+/// to put the server's value on the corner that landed face-up.
+/// </summary>
+export function relabelD4Vertex(group: THREE.Group, vertexIndex: number, label: string): void {
+  const decalsByVertex = group.userData.d4VertexDecals as THREE.Mesh[][] | undefined;
+  const decals = decalsByVertex?.[vertexIndex];
+  if (!decals) {
+    return;
+  }
+  const color = (group.userData.numberColor as string | undefined) ?? "#f5f3ec";
+  decals.forEach((decal) => {
+    const material = decal.material as THREE.MeshBasicMaterial;
+    material.map = numberTexture(label, color);
+    material.needsUpdate = true;
+  });
 }
 
 /// <summary>
