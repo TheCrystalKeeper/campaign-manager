@@ -54,6 +54,9 @@ export type RollOptions = {
 /** The transient 3D-throw broadcast, dispatched to dice-overlay subscribers. */
 export type DiceThrowEvent = Extract<ServerMessage, { type: "DICE_THROW" }>;
 
+/** Another client's live ruler (transient relay), dispatched to map subscribers. */
+export type MeasureEvent = Extract<ServerMessage, { type: "MEASURE" }>;
+
 export type GameRoom = {
   status: ConnectionStatus;
   error: string | null;
@@ -66,6 +69,8 @@ export type GameRoom = {
   rollDice: (expression: string, options?: RollOptions) => void;
   /** Listen for 3D dice throws; returns an unsubscribe function. */
   subscribeDice: (listener: (event: DiceThrowEvent) => void) => () => void;
+  /** Listen for other clients' live rulers; returns an unsubscribe function. */
+  subscribeMeasure: (listener: (event: MeasureEvent) => void) => () => void;
   clearError: () => void;
 };
 
@@ -240,6 +245,7 @@ export function useGameRoom(roomId: string | null): GameRoom {
   const pendingJoinRef = useRef<JoinMessage | null>(null);
   const everJoinedRef = useRef(false);
   const diceListenersRef = useRef<Set<(event: DiceThrowEvent) => void>>(new Set());
+  const measureListenersRef = useRef<Set<(event: MeasureEvent) => void>>(new Set());
 
   const send = useCallback((message: ClientMessage) => {
     const socket = socketRef.current;
@@ -334,6 +340,10 @@ export function useGameRoom(roomId: string | null): GameRoom {
         for (const listener of diceListenersRef.current) {
           listener(message);
         }
+      } else if (message.type === "MEASURE") {
+        for (const listener of measureListenersRef.current) {
+          listener(message);
+        }
       } else if (message.type === "JOINED") {
         setYourRole(message.role);
         setYourPlayerId(message.playerId);
@@ -386,6 +396,13 @@ export function useGameRoom(roomId: string | null): GameRoom {
     };
   }, []);
 
+  const subscribeMeasure = useCallback((listener: (event: MeasureEvent) => void) => {
+    measureListenersRef.current.add(listener);
+    return () => {
+      measureListenersRef.current.delete(listener);
+    };
+  }, []);
+
   return {
     status,
     error,
@@ -397,6 +414,7 @@ export function useGameRoom(roomId: string | null): GameRoom {
     join,
     rollDice,
     subscribeDice,
+    subscribeMeasure,
     clearError,
   };
 }
@@ -449,6 +467,10 @@ export function useDmActions(room: GameRoom) {
       createItem: (itemId: string, name: string) => send({ type: "CREATE_ITEM", itemId, name }),
       updateItem: (item: ItemRecord) => send({ type: "UPDATE_ITEM", item }),
       deleteItem: (itemId: string) => send({ type: "DELETE_ITEM", itemId }),
+      clearAnnotations: (sceneId: string) => send({ type: "CLEAR_ANNOTATIONS", sceneId }),
+      setFogEnabled: (sceneId: string, enabled: boolean) =>
+        send({ type: "FOG_SET", sceneId, enabled }),
+      resetFog: (sceneId: string) => send({ type: "FOG_RESET", sceneId }),
     }),
     [send, yourRole],
   );

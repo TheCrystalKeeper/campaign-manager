@@ -127,6 +127,17 @@ export function TokenEditor({ token, state, dm, openSheet, onClose }: TokenEdito
           </div>
         ) : null}
 
+        <div className="row" style={{ justifyContent: "space-between" }}>
+          <label style={{ margin: 0 }}>Hidden from players</label>
+          <button
+            className={token.hidden ? "btn-active" : ""}
+            title="Hidden tokens never reach player clients — you see them ghosted"
+            onClick={() => dm.updateToken({ ...token, hidden: !token.hidden })}
+          >
+            {token.hidden ? "👁 Hidden" : "Visible"}
+          </button>
+        </div>
+
         <div className="field">
           <label>Conditions</label>
           <div className="cond-grid">

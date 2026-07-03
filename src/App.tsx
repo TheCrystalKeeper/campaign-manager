@@ -44,6 +44,27 @@ export default function App() {
   useEffect(() => {
     setDiceProjection(viewport);
   }, [viewport, setDiceProjection]);
+
+  // Thrown dice stay inside the visible map: window edges (with breathing room) minus
+  // the dock column and the open tray drawer. Measured fresh at each throw, so dock
+  // open/close and the tray drawer need no state wiring here.
+  const setDiceSafeArea = dice.setSafeAreaProvider;
+  useEffect(() => {
+    const margin = 24;
+    setDiceSafeArea(() => {
+      const insets = { top: margin, right: margin, bottom: margin, left: margin };
+      const dock = document.querySelector(".dock")?.getBoundingClientRect();
+      if (dock) {
+        insets.right = Math.max(insets.right, window.innerWidth - dock.left + 8);
+      }
+      const tray = document.querySelector(".dice-tray--open")?.getBoundingClientRect();
+      if (tray) {
+        insets.bottom = Math.max(insets.bottom, window.innerHeight - tray.top + 8);
+      }
+      return insets;
+    });
+    return () => setDiceSafeArea(null);
+  }, [setDiceSafeArea]);
   const setDiceSecret = dice.setSecret;
   useEffect(() => {
     setDiceSecret(isDm && secretRolls);
@@ -241,6 +262,8 @@ export default function App() {
         onMoveToken={(tokenId, x, y) => room.send({ type: "MOVE_TOKEN", tokenId, x, y })}
         onSelectToken={selectToken}
         selectedTokenId={selectedTokenId}
+        send={room.send}
+        subscribeMeasure={room.subscribeMeasure}
       />
 
       {/* 3D dice canvas: above the map, below all UI, never takes pointer events. */}

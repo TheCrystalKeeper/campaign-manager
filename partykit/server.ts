@@ -6,12 +6,20 @@ import {
   createPcSheetRecord,
   createPlayerSlot,
   DEFAULT_ABILITY_SCORE,
+  EPHEMERAL_ANNOTATION_TTL_MS,
+  MAX_FOG_REVEALS,
   MAX_LOG_ENTRIES,
+  MAX_MEASURE_NUMBERS,
+  MAX_POINTER_ARROWS_PER_AUTHOR,
+  MAX_SCENE_ANNOTATIONS,
   normalizeCharacterSheet,
   normalizeGameState,
   normalizeItem,
   normalizeScene,
   normalizeToken,
+  playerTokenColorForSlot,
+  sanitizeAnnotation,
+  sanitizeFogReveal,
   SHEET_SECTIONS,
   syncPlayerTokenFromState,
   type ClientMessage,
@@ -45,6 +53,9 @@ const ROOM_KEY = "room-key";
 const VIEWPORT_THROTTLE_MS = 66;
 const VIEWPORT_PERSIST_DEBOUNCE_MS = 2000;
 const MAX_CHAT_LENGTH = 2000;
+const MEASURE_THROTTLE_MS = 40;
+/** DM ruler color (players use their slot color). */
+const DM_MEASURE_COLOR = "#e9c176";
 
 export default class GameServer implements Party.Server {
   state: GameState;
@@ -53,6 +64,11 @@ export default class GameServer implements Party.Server {
   pendingViewport: GameState["viewport"] | null = null;
   viewportTimer: ReturnType<typeof setTimeout> | null = null;
   viewportPersistTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Per-sender ruler coalescing (same pattern as the viewport hot path). */
+  measureRelay = new Map<
+    string,
+    { last: number; timer: ReturnType<typeof setTimeout> | null; pending: ServerMessage | null }
+  >();
 
   constructor(readonly room: Party.Room) {
     this.state = createInitialState(room.id);
@@ -320,6 +336,59 @@ export default class GameServer implements Party.Server {
     }
   }
 
+  /// <summary>
+  /// Relays one client's live ruler to every other joined client, coalesced per sender
+  /// at MEASURE_THROTTLE_MS (the viewport hot-path pattern — never rides GameState).
+  /// Ruler clears (points = null) flush immediately.
+  /// </summary>
+  relayMeasure(senderId: string, frame: Extract<ServerMessage, { type: "MEASURE" }>) {
+    const send = (message: ServerMessage) => {
+      const encoded = JSON.stringify(message);
+      for (const connection of this.room.getConnections()) {
+        if (connection.id === senderId) {
+          continue;
+        }
+        if (this.clients.get(connection.id)?.joined) {
+          connection.send(encoded);
+        }
+      }
+    };
+    let entry = this.measureRelay.get(senderId);
+    if (!entry) {
+      entry = { last: 0, timer: null, pending: null };
+      this.measureRelay.set(senderId, entry);
+    }
+    if (frame.points === null) {
+      if (entry.timer) {
+        clearTimeout(entry.timer);
+        entry.timer = null;
+      }
+      entry.pending = null;
+      entry.last = Date.now();
+      send(frame);
+      return;
+    }
+    const now = Date.now();
+    if (!entry.timer && now - entry.last >= MEASURE_THROTTLE_MS) {
+      entry.last = now;
+      send(frame);
+      return;
+    }
+    entry.pending = frame;
+    if (!entry.timer) {
+      const wait = Math.max(MEASURE_THROTTLE_MS - (now - entry.last), 1);
+      entry.timer = setTimeout(() => {
+        entry.timer = null;
+        const pending = entry.pending;
+        entry.pending = null;
+        if (pending) {
+          entry.last = Date.now();
+          send(pending);
+        }
+      }, wait);
+    }
+  }
+
   onConnect(connection: Party.Connection) {
     this.clients.set(connection.id, {
       role: null,
@@ -334,6 +403,11 @@ export default class GameServer implements Party.Server {
   onClose(connection: Party.Connection) {
     const meta = this.clients.get(connection.id);
     this.clients.delete(connection.id);
+    const relay = this.measureRelay.get(connection.id);
+    if (relay?.timer) {
+      clearTimeout(relay.timer);
+    }
+    this.measureRelay.delete(connection.id);
 
     if (this.state.dmClientId === connection.id) {
       this.state.dmClientId = null;
@@ -645,6 +719,10 @@ export default class GameServer implements Party.Server {
         Number.isFinite(parsed.trayCenter?.[0]) ? parsed.trayCenter[0] : 0,
         Number.isFinite(parsed.trayCenter?.[1]) ? parsed.trayCenter[1] : 0,
       ];
+      const worldScale =
+        typeof parsed.worldScale === "number" && Number.isFinite(parsed.worldScale)
+          ? Math.min(Math.max(parsed.worldScale, 0.1), 5000)
+          : undefined;
 
       // Everyone replays the same track now; values stripped for non-DM on secret throws.
       for (const connection of this.room.getConnections()) {
@@ -660,6 +738,7 @@ export default class GameServer implements Party.Server {
           specs,
           track,
           trayCenter,
+          ...(worldScale ? { worldScale } : {}),
           ...(withValues ? { faceValues } : {}),
           ...(secret ? { secret: true } : {}),
         });
@@ -711,6 +790,131 @@ export default class GameServer implements Party.Server {
         text,
         ...(whisperTo ? { whisperTo } : {}),
       });
+      void this.broadcastState();
+      return;
+    }
+
+    if (parsed.type === "MEASURE") {
+      if (!this.state.scenes.some((scene) => scene.id === parsed.sceneId)) {
+        return;
+      }
+      let points: number[] | null = null;
+      if (Array.isArray(parsed.points)) {
+        const valid =
+          parsed.points.length >= 4 &&
+          parsed.points.length <= MAX_MEASURE_NUMBERS &&
+          parsed.points.length % 2 === 0 &&
+          parsed.points.every((value) => Number.isFinite(value));
+        if (!valid) {
+          return;
+        }
+        points = parsed.points;
+      }
+      const color =
+        meta.role === "dm"
+          ? DM_MEASURE_COLOR
+          : playerTokenColorForSlot(meta.playerId ?? "", this.state.playerSlots);
+      this.relayMeasure(sender.id, {
+        type: "MEASURE",
+        clientId: sender.id,
+        name: meta.displayName?.trim() || "?",
+        color,
+        sceneId: parsed.sceneId,
+        points,
+      });
+      return;
+    }
+
+    if (parsed.type === "ADD_ANNOTATION") {
+      const scene = this.state.scenes.find((item) => item.id === parsed.sceneId);
+      const sanitized = sanitizeAnnotation(parsed.annotation);
+      if (!scene || !sanitized) {
+        this.sendTo(sender, { type: "ERROR", message: "Invalid annotation." });
+        return;
+      }
+      if (scene.annotations.some((annotation) => annotation.id === sanitized.id)) {
+        return;
+      }
+      const isArrow = sanitized.kind === "arrow";
+      // The shift-drag pointer arrow is always allowed; the Draw tool (strokes etc.) is
+      // gated for players behind the DM's playersCanDraw switch.
+      if (!isArrow && !this.isDm(sender.id) && !this.state.playersCanDraw) {
+        this.sendTo(sender, {
+          type: "ERROR",
+          message: "The DM hasn't enabled drawing for players.",
+        });
+        return;
+      }
+      const annotation = {
+        ...sanitized,
+        authorId: meta.playerId ?? "unknown",
+        createdAt: Date.now(),
+        // Arrows always fade; Draw-tool strokes persist only for the DM.
+        ephemeral: isArrow ? true : this.isDm(sender.id) ? sanitized.ephemeral : true,
+      };
+      scene.annotations.push(annotation);
+      // Cap live pointer arrows per author. Past the limit, the author's oldest still-solid
+      // arrow is aged into its fade-out window (the client opacity ramp begins at 70% of the
+      // TTL) and removed once faded — so extra arrows fade away instead of vanishing at once.
+      // Already-fading arrows are excluded from the count so the fade never cascades.
+      if (isArrow) {
+        const now = Date.now();
+        const fadeStartMs = EPHEMERAL_ANNOTATION_TTL_MS * 0.7;
+        const active = scene.annotations.filter(
+          (item) =>
+            item.kind === "arrow" &&
+            item.authorId === annotation.authorId &&
+            now - item.createdAt < fadeStartMs,
+        );
+        if (active.length > MAX_POINTER_ARROWS_PER_AUTHOR) {
+          const excess = [...active]
+            .sort((a, b) => a.createdAt - b.createdAt)
+            .slice(0, active.length - MAX_POINTER_ARROWS_PER_AUTHOR);
+          for (const old of excess) {
+            old.createdAt = now - fadeStartMs; // begin the fade now
+            const oldId = old.id;
+            setTimeout(() => {
+              const target = this.state.scenes.find((item) => item.id === parsed.sceneId);
+              if (target?.annotations.some((item) => item.id === oldId)) {
+                target.annotations = target.annotations.filter((item) => item.id !== oldId);
+                void this.broadcastState();
+              }
+            }, EPHEMERAL_ANNOTATION_TTL_MS - fadeStartMs);
+          }
+        }
+      }
+      // Cap persistent objects per scene by dropping the oldest.
+      const persistent = scene.annotations.filter((item) => !item.ephemeral);
+      if (persistent.length > MAX_SCENE_ANNOTATIONS) {
+        const dropIds = new Set(
+          persistent.slice(0, persistent.length - MAX_SCENE_ANNOTATIONS).map((item) => item.id),
+        );
+        scene.annotations = scene.annotations.filter((item) => !dropIds.has(item.id));
+      }
+      if (annotation.ephemeral) {
+        setTimeout(() => {
+          const target = this.state.scenes.find((item) => item.id === parsed.sceneId);
+          if (target?.annotations.some((item) => item.id === annotation.id)) {
+            target.annotations = target.annotations.filter((item) => item.id !== annotation.id);
+            void this.broadcastState();
+          }
+        }, EPHEMERAL_ANNOTATION_TTL_MS);
+      }
+      void this.broadcastState();
+      return;
+    }
+
+    if (parsed.type === "REMOVE_ANNOTATION") {
+      const scene = this.state.scenes.find((item) => item.id === parsed.sceneId);
+      const target = scene?.annotations.find((item) => item.id === parsed.annotationId);
+      if (!scene || !target) {
+        return;
+      }
+      if (!this.isDm(sender.id) && target.authorId !== meta.playerId) {
+        this.sendTo(sender, { type: "ERROR", message: "You can only erase your own drawings." });
+        return;
+      }
+      scene.annotations = scene.annotations.filter((item) => item.id !== parsed.annotationId);
       void this.broadcastState();
       return;
     }
@@ -835,6 +1039,8 @@ export default class GameServer implements Party.Server {
             initiative,
             dexScore,
             hasRolled: initiative !== null,
+            // Hidden tokens keep their slot in the order but players see "???".
+            ...(token.hidden ? { hidden: true } : {}),
           };
         });
         this.state.combat = { round: 1, turnIndex: 0, entries };
@@ -969,6 +1175,58 @@ export default class GameServer implements Party.Server {
       case "UPDATE_DM_NOTES": {
         this.state.dmNotes = String(parsed.notes ?? "").slice(0, 20_000);
         void this.broadcastState();
+        break;
+      }
+      case "CLEAR_ANNOTATIONS": {
+        const scene = this.state.scenes.find((item) => item.id === parsed.sceneId);
+        if (scene && scene.annotations.length > 0) {
+          scene.annotations = [];
+          void this.broadcastState();
+        }
+        break;
+      }
+      case "FOG_SET": {
+        const scene = this.state.scenes.find((item) => item.id === parsed.sceneId);
+        if (!scene) {
+          break;
+        }
+        scene.fog.enabled = Boolean(parsed.enabled);
+        this.logEvent(
+          `Fog of war ${scene.fog.enabled ? "enabled" : "disabled"} on “${scene.name}”.`,
+          true,
+        );
+        void this.broadcastState();
+        break;
+      }
+      case "FOG_REVEAL": {
+        const scene = this.state.scenes.find((item) => item.id === parsed.sceneId);
+        const shape = sanitizeFogReveal(parsed.shape);
+        if (!scene || !shape) {
+          this.sendTo(sender, { type: "ERROR", message: "Invalid fog reveal." });
+          return;
+        }
+        scene.fog.reveals.push(shape);
+        if (scene.fog.reveals.length > MAX_FOG_REVEALS) {
+          scene.fog.reveals = scene.fog.reveals.slice(-MAX_FOG_REVEALS);
+        }
+        void this.broadcastState();
+        break;
+      }
+      case "FOG_RESET": {
+        const scene = this.state.scenes.find((item) => item.id === parsed.sceneId);
+        if (scene && scene.fog.reveals.length > 0) {
+          scene.fog.reveals = [];
+          void this.broadcastState();
+        }
+        break;
+      }
+      case "SET_PLAYERS_CAN_DRAW": {
+        const enabled = Boolean(parsed.enabled);
+        if (this.state.playersCanDraw !== enabled) {
+          this.state.playersCanDraw = enabled;
+          this.logEvent(`Player drawing ${enabled ? "enabled" : "disabled"} by the DM.`);
+          void this.broadcastState();
+        }
         break;
       }
       case "SET_SHEET_FOLDER": {

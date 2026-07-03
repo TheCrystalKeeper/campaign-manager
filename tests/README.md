@@ -11,7 +11,7 @@ authorization, caps), never trusting the UI.
 
 ```sh
 npm run partykit:dev          # terminal 1 (port 1999)
-node tests/smoke-phase0.mjs   # terminal 2 — repeat for phase1..4 + ux2
+node tests/smoke-phase0.mjs   # terminal 2 — repeat for phase1..5 + ux2
 ```
 
 Each script prints PASS/FAIL per check and exits non-zero on failure. Requires Node ≥ 22
@@ -24,6 +24,7 @@ teardown artifact.
 - `smoke-phase3.mjs` — initiative (NPC auto-roll, CTA, DEX tiebreak, turn wrap), HP-display redaction exception
 - `smoke-ux2.mjs` — masked secret rolls, folders/items CRUD + DM-only redaction, inventory reveal gating
 - `smoke-phase4.mjs` — 3D dice protocol: authoritative faceValues, secret stripping, deferred masked log, track validation
+- `smoke-phase5.mjs` — map tools: hidden-token redaction, MEASURE relay, annotations (forced-ephemeral + TTL, authz, 200 cap), fog authz/reset, grid fields, hidden combatants (takes ~15s — waits out the ephemeral TTL)
 
 ## Unit tests (`unit-*.test.ts`)
 

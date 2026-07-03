@@ -1,5 +1,5 @@
 import type { Scene, Viewport } from "./types";
-import { DEFAULT_SCENE_BACKGROUND, DEFAULT_VIEWPORT } from "./types";
+import { normalizeScene } from "./types";
 
 const DEFAULT_SCENE_WIDTH = 800;
 const DEFAULT_SCENE_HEIGHT = 600;
@@ -107,17 +107,13 @@ export function scenesEqual(a: Scene, b: Scene): boolean {
 /// Creates an empty scene with default dimensions and no map image.
 /// </summary>
 export function createEmptyScene(name: string): Scene {
-  return {
+  return normalizeScene({
     id: `scene-${crypto.randomUUID().slice(0, 8)}`,
     name: name.trim() || "Scene",
     mapUrl: null,
     width: DEFAULT_SCENE_WIDTH,
     height: DEFAULT_SCENE_HEIGHT,
-    gridSize: 50,
-    showGrid: true,
-    backgroundColor: DEFAULT_SCENE_BACKGROUND,
-    defaultViewport: { ...DEFAULT_VIEWPORT },
-  };
+  });
 }
 
 /// <summary>

@@ -9,7 +9,7 @@ import {
   type WorldPoint,
 } from "../lib/dice3d";
 import type { DiceAudio } from "./audio";
-import type { DiceEngine } from "./engine";
+import type { DiceEngine, SafeInsets } from "./engine";
 import type { DiceTrayScene } from "./trayScene";
 
 const ENABLED_KEY = "dice-3d-enabled";
@@ -41,6 +41,11 @@ export interface DiceOverlayController {
   trayMountRef: (node: HTMLDivElement | null) => void;
   /** Feed this client's live viewport so dice stay world-anchored and screen-sized. */
   setProjection: (viewport: Viewport) => void;
+  /**
+   * Provides the screen area dice must stay inside (window minus UI overlays), sampled
+   * fresh at each throw. Without one, a uniform window margin is used.
+   */
+  setSafeAreaProvider: (provider: (() => SafeInsets) | null) => void;
   /** DM secret mode, read live at throw time. */
   setSecret: (on: boolean) => void;
   /** 3D animation preference (persisted). When off, callers fall back to text rolls. */
@@ -93,6 +98,7 @@ export function useDiceOverlay(room: GameRoom): DiceOverlayController {
   const armedRef = useRef<Map<string, ArmedRoll>>(new Map());
   const ourRollIdsRef = useRef<Set<string>>(new Set());
   const secretRef = useRef(false);
+  const safeAreaRef = useRef<(() => SafeInsets) | null>(null);
 
   const [enabled, setEnabledState] = useState(readEnabled);
   const enabledRef = useRef(enabled);
@@ -121,7 +127,7 @@ export function useDiceOverlay(room: GameRoom): DiceOverlayController {
           audioRef.current = audio;
           setMutedState(audio.isMuted());
           const engine = await DiceEngine.create(container, {
-            onRelease: (rollId, track, trayCenter) => {
+            onRelease: (rollId, track, trayCenter, worldScale) => {
               const armed = armedRef.current.get(rollId);
               if (armed) {
                 roomRef.current.send({
@@ -131,11 +137,13 @@ export function useDiceOverlay(room: GameRoom): DiceOverlayController {
                   track,
                   modifier: armed.modifier,
                   trayCenter,
+                  worldScale,
                   private: secretRef.current || undefined,
                 });
               }
             },
             onImpact: (strength) => audioRef.current?.impact(strength),
+            getSafeInsets: () => safeAreaRef.current?.() ?? { top: 24, right: 24, bottom: 24, left: 24 },
           });
           engine.setMapProjection(viewportRef.current);
           engineRef.current = engine;
@@ -172,6 +180,7 @@ export function useDiceOverlay(room: GameRoom): DiceOverlayController {
           local,
           blank,
           event.trayCenter,
+          event.worldScale,
         );
       });
     });
@@ -222,6 +231,10 @@ export function useDiceOverlay(room: GameRoom): DiceOverlayController {
 
   const setSecret = useCallback((on: boolean) => {
     secretRef.current = on;
+  }, []);
+
+  const setSafeAreaProvider = useCallback((provider: (() => SafeInsets) | null) => {
+    safeAreaRef.current = provider;
   }, []);
 
   const setEnabled = useCallback(
@@ -383,6 +396,7 @@ export function useDiceOverlay(room: GameRoom): DiceOverlayController {
     containerRef,
     trayMountRef,
     setProjection,
+    setSafeAreaProvider,
     setSecret,
     enabled,
     setEnabled,

@@ -36,12 +36,12 @@ import {
 /// </summary>
 
 const DIE_SCALE = 0.95; // physics radius of a die (physics units)
-// Fixed physics box half-extents (physics units) — identical on every client so the
-// recorded track replays the same everywhere.
-const AREA_HALF_W = 9;
-const AREA_HALF_H = 6.5;
 /** On-screen die diameter in CSS px — constant regardless of map zoom. */
 export const DIE_SCREEN_PX = 77;
+// Fallback window margin when no safe-area provider is wired.
+const EDGE_MARGIN_PX = 24;
+/** Every wall keeps at least this distance from the anchor (degenerate-box floor). */
+const MIN_WALL_DIST = DIE_SCALE + 1;
 /** A die's diameter in physics units (radius 1 geometry × DIE_SCALE mesh scale). */
 const DIE_WIDTH_UNITS = 2 * DIE_SCALE;
 // Multi-die grabs: dice within KEEP keep their relative offset from the cursor; dice
@@ -84,12 +84,33 @@ interface DieInstance {
 
 type RollMode = "armed" | "thrown" | "track";
 
+/**
+ * The invisible walls containing one roll, in physics units relative to its anchor.
+ * Derived from the roller's own window/safe area at throw time; the walls only exist in
+ * the roller's pre-simulation, so the box is baked into the recorded track and never
+ * needs to be shared.
+ */
+interface PhysBox {
+  minX: number;
+  maxX: number;
+  minZ: number;
+  maxZ: number;
+}
+
 interface RollInstance {
   rollId: string;
   dice: DieInstance[];
-  /** Wrapper placed at the throw's map/world trayCenter, scaled to screen-constant size. */
+  /** Wrapper at the roll's map/world trayCenter, scaled by the FROZEN k0. */
   group: THREE.Group;
   trayCenter: WorldPoint;
+  box: PhysBox;
+  /**
+   * World units per physics unit, frozen when the roll was created (the roller's zoom
+   * at throw time — shared via `worldScale` so every client places dice at the same
+   * world footprint). Dice positions are map-glued through this; only each die's mesh
+   * scale is compensated live for constant on-screen size.
+   */
+  k0: number;
   mode: RollMode;
   local: boolean;
   track: DiceTrack | null;
@@ -102,12 +123,28 @@ interface RollInstance {
   removeAt: number | null;
 }
 
+/** Screen-edge distances (CSS px) dice should stay clear of, e.g. dock/tray overlays. */
+export interface SafeInsets {
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
+}
+
 export interface DiceEngineCallbacks {
   /**
    * Local throw released; send this recorded track to the server. `trayCenter` is the
-   * final world anchor (the release point for drags), which every client centers on.
+   * final world anchor (the release point for drags), which every client centers on;
+   * `worldScale` is the roll's frozen k0 so every client uses the same world footprint.
    */
-  onRelease?: (rollId: string, track: DiceTrack, trayCenter: WorldPoint) => void;
+  onRelease?: (
+    rollId: string,
+    track: DiceTrack,
+    trayCenter: WorldPoint,
+    worldScale: number,
+  ) => void;
+  /** The screen area dice must stay inside, sampled fresh at each throw. */
+  getSafeInsets?: () => SafeInsets;
   /** A die-on-surface impact, strength ~ relative speed, for sound effects. */
   onImpact?: (strength: number) => void;
   /** A roll finished playing back its track. */
@@ -175,17 +212,16 @@ export class DiceEngine {
   }
 
   /// <summary>
-  /// Updates this client's live map viewport. Dice stay anchored in world space (they
-  /// sit on the board), but each roll's group rescales so dice keep a constant on-screen
-  /// size at any zoom.
+  /// Updates this client's live map viewport. Dice are map-glued (their world positions
+  /// never change after the throw — pan/zoom moves them 1:1 with the board); each die's
+  /// mesh rescales around its own spot so it keeps a constant on-screen size at any zoom.
   /// </summary>
   setMapProjection(viewport: { x: number; y: number; scale: number }) {
     const scale = viewport.scale > 0 ? viewport.scale : 1;
     this.mapViewport = { x: viewport.x, y: viewport.y, scale };
     this.updateCamera();
-    const k = this.worldK();
     for (const roll of this.rolls.values()) {
-      roll.group.scale.setScalar(k);
+      this.applyDieScales(roll);
     }
     this.requestRender();
   }
@@ -193,6 +229,14 @@ export class DiceEngine {
   /** World units per physics unit so a die renders DIE_SCREEN_PX wide at current zoom. */
   private worldK(): number {
     return DIE_SCREEN_PX / (DIE_WIDTH_UNITS * this.mapViewport.scale);
+  }
+
+  /** Compensates each die's mesh scale for the current zoom (constant screen size). */
+  private applyDieScales(roll: RollInstance) {
+    const s = DIE_SCALE * (this.worldK() / roll.k0);
+    roll.dice.forEach((die) => {
+      die.mesh.scale.setScalar(s);
+    });
   }
 
   /** Window pixel → map/world coordinates through this client's viewport. */
@@ -243,22 +287,48 @@ export class DiceEngine {
     }
   };
 
-  /// <summary>Maps a window pointer to a roll's physics-floor coords via its anchor + scale.</summary>
+  /// <summary>Maps a window pointer to a roll's physics-floor coords via its anchor + k0.</summary>
   private pointerToPhysics(
     clientX: number,
     clientY: number,
     trayCenter: WorldPoint,
+    k0: number,
   ): { x: number; z: number } {
     const [worldX, worldY] = this.screenToWorld(clientX, clientY);
-    const k = this.worldK();
-    return { x: (worldX - trayCenter[0]) / k, z: (worldY - trayCenter[1]) / k };
+    return { x: (worldX - trayCenter[0]) / k0, z: (worldY - trayCenter[1]) / k0 };
   }
 
-  private areaClamp(x: number, z: number): { x: number; z: number } {
+  /// <summary>
+  /// The physics box for a roll anchored at `anchor`: this client's window minus the
+  /// safe-area insets (dock/tray overlays plus an edge margin), converted to physics
+  /// units. Dice are screen-size-constant, so px→physics is a fixed ratio regardless of
+  /// zoom. Each wall keeps a minimum distance from the anchor so an edge release or a
+  /// tiny window never produces a degenerate box.
+  /// </summary>
+  private computeBox(anchor: WorldPoint, k0: number): PhysBox {
+    const insets = this.callbacks.getSafeInsets?.() ?? {
+      top: EDGE_MARGIN_PX,
+      right: EDGE_MARGIN_PX,
+      bottom: EDGE_MARGIN_PX,
+      left: EDGE_MARGIN_PX,
+    };
+    const scale = this.mapViewport.scale > 0 ? this.mapViewport.scale : 1;
+    const pxPerUnit = k0 * scale;
+    const ax = anchor[0] * scale + this.mapViewport.x; // anchor in window px
+    const az = anchor[1] * scale + this.mapViewport.y;
+    return {
+      minX: Math.min((insets.left - ax) / pxPerUnit, -MIN_WALL_DIST),
+      maxX: Math.max((window.innerWidth - insets.right - ax) / pxPerUnit, MIN_WALL_DIST),
+      minZ: Math.min((insets.top - az) / pxPerUnit, -MIN_WALL_DIST),
+      maxZ: Math.max((window.innerHeight - insets.bottom - az) / pxPerUnit, MIN_WALL_DIST),
+    };
+  }
+
+  private areaClamp(box: PhysBox, x: number, z: number): { x: number; z: number } {
     const m = DIE_SCALE + 0.2;
     return {
-      x: clamp(x, -AREA_HALF_W + m, AREA_HALF_W - m),
-      z: clamp(z, -AREA_HALF_H + m, AREA_HALF_H - m),
+      x: clamp(x, box.minX + m, box.maxX - m),
+      z: clamp(z, box.minZ + m, box.maxZ - m),
     };
   }
 
@@ -269,11 +339,11 @@ export class DiceEngine {
     return { spec, geom, mesh };
   }
 
-  /// <summary>Wraps a roll's dice in a group anchored at its world trayCenter.</summary>
-  private makeGroup(dice: DieInstance[], trayCenter: WorldPoint): THREE.Group {
+  /// <summary>Wraps a roll's dice in a group anchored at its world trayCenter, frozen at k0.</summary>
+  private makeGroup(dice: DieInstance[], trayCenter: WorldPoint, k0: number): THREE.Group {
     const group = new THREE.Group();
     group.position.set(trayCenter[0], 0, trayCenter[1]);
-    group.scale.setScalar(this.worldK());
+    group.scale.setScalar(k0);
     dice.forEach((die) => group.add(die.mesh));
     this.scene.add(group);
     return group;
@@ -284,16 +354,18 @@ export class DiceEngine {
   /// <summary>Places a roll's dice at the throw anchor, ready to be grabbed or thrown.</summary>
   arm(rollId: string, specs: DieSpec[], trayCenter: WorldPoint) {
     this.clearRoll(rollId);
+    const k0 = this.worldK();
+    const box = this.computeBox(trayCenter, k0);
     const dice = specs.map((spec) => this.createDie(spec));
     const spread = DIE_SCALE * 2.4;
     const startX = -((dice.length - 1) * spread) / 2;
     dice.forEach((die, i) => {
-      const pos = this.areaClamp(startX + i * spread, 0);
+      const pos = this.areaClamp(box, startX + i * spread, 0);
       die.mesh.position.set(pos.x, DIE_SCALE * 1.6, pos.z);
       die.mesh.quaternion.copy(randomQuat());
     });
-    const group = this.makeGroup(dice, trayCenter);
-    this.rolls.set(rollId, this.newRoll(rollId, dice, "armed", true, group, trayCenter));
+    const group = this.makeGroup(dice, trayCenter, k0);
+    this.rolls.set(rollId, this.newRoll(rollId, dice, "armed", true, group, trayCenter, box, k0));
     this.requestRender();
   }
 
@@ -310,12 +382,13 @@ export class DiceEngine {
     clientY: number,
   ) {
     this.clearRoll(rollId);
+    const k0 = this.worldK();
     const trayCenter = this.screenToWorld(clientX, clientY);
     const dice = specs.map((spec) => this.createDie(spec));
     dice.forEach((die, i) => {
       const pose = poses[i];
       const p = pose
-        ? this.pointerToPhysics(pose.screen[0], pose.screen[1], trayCenter)
+        ? this.pointerToPhysics(pose.screen[0], pose.screen[1], trayCenter, k0)
         : { x: 0, z: 0 };
       die.mesh.position.set(p.x, DIE_SCALE * 2.2, p.z);
       if (pose) {
@@ -324,8 +397,20 @@ export class DiceEngine {
         die.mesh.quaternion.copy(randomQuat());
       }
     });
-    const group = this.makeGroup(dice, trayCenter);
-    this.rolls.set(rollId, this.newRoll(rollId, dice, "armed", true, group, trayCenter));
+    const group = this.makeGroup(dice, trayCenter, k0);
+    this.rolls.set(
+      rollId,
+      this.newRoll(
+        rollId,
+        dice,
+        "armed",
+        true,
+        group,
+        trayCenter,
+        this.computeBox(trayCenter, k0),
+        k0,
+      ),
+    );
     this.beginDrag(rollId, clientX, clientY);
   }
 
@@ -338,7 +423,7 @@ export class DiceEngine {
     if (!roll || roll.mode !== "armed") {
       return;
     }
-    const world = this.pointerToPhysics(clientX, clientY, roll.trayCenter);
+    const world = this.pointerToPhysics(clientX, clientY, roll.trayCenter, roll.k0);
     // Dice near the cursor ride along at their current offset; dice farther than
     // GATHER_KEEP_DIST glide onto a compact ring around the grabbed one, so a scattered
     // multi-die pickup collects itself in your hand.
@@ -380,7 +465,7 @@ export class DiceEngine {
     if (!roll) {
       return;
     }
-    const world = this.pointerToPhysics(clientX, clientY, roll.trayCenter);
+    const world = this.pointerToPhysics(clientX, clientY, roll.trayCenter, roll.k0);
     const now = performance.now();
     this.drag.samples.push({ t: now, x: world.x, z: world.z });
     if (this.drag.samples.length > 6) {
@@ -399,7 +484,12 @@ export class DiceEngine {
     if (!roll) {
       return;
     }
-    const world = this.pointerToPhysics(this.drag.lastClient.x, this.drag.lastClient.y, roll.trayCenter);
+    const world = this.pointerToPhysics(
+      this.drag.lastClient.x,
+      this.drag.lastClient.y,
+      roll.trayCenter,
+      roll.k0,
+    );
     const wobble = Math.sin(now / 40) * 0.15;
     roll.dice.forEach((d) => {
       const off = this.drag!.offsets.get(d.spec.id);
@@ -417,7 +507,9 @@ export class DiceEngine {
       return;
     }
     const roll = this.rolls.get(this.drag.rollId);
-    const world = roll ? this.pointerToPhysics(clientX, clientY, roll.trayCenter) : { x: 0, z: 0 };
+    const world = roll
+      ? this.pointerToPhysics(clientX, clientY, roll.trayCenter, roll.k0)
+      : { x: 0, z: 0 };
     this.drag.samples.push({ t: performance.now(), x: world.x, z: world.z });
     const vel = this.releaseVelocity(this.drag.samples);
     this.drag = null;
@@ -430,13 +522,17 @@ export class DiceEngine {
     this.release(roll, vel.vx, vel.vz);
   }
 
-  /// <summary>Moves a roll's world anchor, keeping every die at the same world position.</summary>
+  /// <summary>
+  /// Moves a roll's world anchor, keeping every die at the same world position (clamped
+  /// into the box). The box is recomputed for the new anchor so it reflects the screen
+  /// at the moment of the throw.
+  /// </summary>
   private reanchor(roll: RollInstance, next: WorldPoint) {
-    const k = this.worldK();
-    const dx = (roll.trayCenter[0] - next[0]) / k;
-    const dz = (roll.trayCenter[1] - next[1]) / k;
+    const dx = (roll.trayCenter[0] - next[0]) / roll.k0;
+    const dz = (roll.trayCenter[1] - next[1]) / roll.k0;
+    roll.box = this.computeBox(next, roll.k0);
     roll.dice.forEach((d) => {
-      const p = this.areaClamp(d.mesh.position.x + dx, d.mesh.position.z + dz);
+      const p = this.areaClamp(roll.box, d.mesh.position.x + dx, d.mesh.position.z + dz);
       d.mesh.position.set(p.x, d.mesh.position.y, p.z);
     });
     roll.trayCenter = next;
@@ -456,7 +552,7 @@ export class DiceEngine {
     const spread = DIE_SCALE * 2.4;
     const startX = -((roll.dice.length - 1) * spread) / 2;
     roll.dice.forEach((die, i) => {
-      const pos = this.areaClamp(startX + i * spread, 0);
+      const pos = this.areaClamp(roll.box, startX + i * spread, 0);
       die.mesh.position.set(pos.x, DIE_SCALE * 2.6, pos.z);
     });
     const angle = Math.random() * Math.PI * 2;
@@ -464,32 +560,16 @@ export class DiceEngine {
     this.release(roll, Math.cos(angle) * speed, Math.sin(angle) * speed);
   }
 
-  /// <summary>Pre-simulates the throw, records the exact track, and emits it.</summary>
+  /// <summary>
+  /// Pre-simulates the throw, records the exact track, and emits it. The walls are this
+  /// roll's window-derived box, so the runway in the throw direction is the real screen
+  /// space ahead of the release point.
+  /// </summary>
   private release(roll: RollInstance, vx: number, vz: number) {
-    this.biasAnchorForward(roll, vx, vz);
     const states = this.buildReleaseStates(roll, vx, vz);
     roll.mode = "thrown"; // freeze armed dice until the authoritative DICE_THROW arrives
-    const track = this.presimulate(roll.dice.map((d) => d.spec), states);
-    this.callbacks.onRelease?.(roll.rollId, track, roll.trayCenter);
-  }
-
-  /// <summary>
-  /// Slides the physics box forward along the throw direction (dice end up near the
-  /// trailing wall) so a thrown die has runway to land and roll out instead of slamming
-  /// into the invisible wall just ahead and bouncing straight back — the #1 "feels
-  /// wrong" artifact. World positions are unchanged; only the anchor moves.
-  /// </summary>
-  private biasAnchorForward(roll: RollInstance, vx: number, vz: number) {
-    const speed = Math.hypot(vx, vz);
-    if (speed < 0.01) {
-      return;
-    }
-    const m = DIE_SCALE + 0.6;
-    const d = Math.min(speed * 0.32, AREA_HALF_W - m);
-    const ox = clamp((vx / speed) * d, -(AREA_HALF_W - m), AREA_HALF_W - m);
-    const oz = clamp((vz / speed) * d, -(AREA_HALF_H - m), AREA_HALF_H - m);
-    const k = this.worldK();
-    this.reanchor(roll, [roll.trayCenter[0] + ox * k, roll.trayCenter[1] + oz * k]);
+    const track = this.presimulate(roll.dice.map((d) => d.spec), states, roll.box);
+    this.callbacks.onRelease?.(roll.rollId, track, roll.trayCenter, roll.k0);
   }
 
   private buildReleaseStates(roll: RollInstance, vx: number, vz: number): DieThrowState[] {
@@ -543,7 +623,7 @@ export class DiceEngine {
 
   // ---- Hidden pre-simulation (records the exact motion track) ----
 
-  private presimulate(specs: DieSpec[], states: DieThrowState[]): DiceTrack {
+  private presimulate(specs: DieSpec[], states: DieThrowState[], box: PhysBox): DiceTrack {
     const world = new RAPIER.World({ x: 0, y: GRAVITY, z: 0 });
     const eventQueue = new RAPIER.EventQueue(true);
 
@@ -556,21 +636,24 @@ export class DiceEngine {
       floorBody,
     );
 
+    // Walls at the roll's window-derived box (asymmetric around the anchor). Dead
+    // restitution: a wall contact should absorb the die, not ping-pong it back across
+    // the table.
     const wallBody = world.createRigidBody(RAPIER.RigidBodyDesc.fixed());
     const t = 0.5;
-    const hw = AREA_HALF_W;
-    const hh = AREA_HALF_H;
-    // Dead walls: a rare wall contact should absorb the die, not ping-pong it back
-    // across the table.
+    const cx = (box.minX + box.maxX) / 2;
+    const cz = (box.minZ + box.maxZ) / 2;
+    const hw = (box.maxX - box.minX) / 2;
+    const hh = (box.maxZ - box.minZ) / 2;
     const wall = (hx: number, hy: number, hz: number, x: number, z: number) =>
       world.createCollider(
         RAPIER.ColliderDesc.cuboid(hx, hy, hz).setTranslation(x, WALL_HEIGHT, z).setRestitution(0.18),
         wallBody,
       );
-    wall(t, WALL_HEIGHT, hh + 2 * t, -hw - t, 0);
-    wall(t, WALL_HEIGHT, hh + 2 * t, hw + t, 0);
-    wall(hw + 2 * t, WALL_HEIGHT, t, 0, -hh - t);
-    wall(hw + 2 * t, WALL_HEIGHT, t, 0, hh + t);
+    wall(t, WALL_HEIGHT, hh + 2 * t, cx - hw - t, cz);
+    wall(t, WALL_HEIGHT, hh + 2 * t, cx + hw + t, cz);
+    wall(hw + 2 * t, WALL_HEIGHT, t, cx, cz - hh - t);
+    wall(hw + 2 * t, WALL_HEIGHT, t, cx, cz + hh + t);
 
     const bodies: RAPIER.RigidBody[] = [];
     const colliderToIndex = new Map<number, number>();
@@ -664,8 +747,12 @@ export class DiceEngine {
     local: boolean,
     blank: boolean,
     trayCenter: WorldPoint,
+    worldScale?: number,
   ) {
     this.clearRoll(rollId);
+    const k0 = worldScale && Number.isFinite(worldScale) && worldScale > 0
+      ? worldScale
+      : this.worldK();
     const byId = new Map(track.dice.map((d) => [d.id, d.samples]));
     const dice = specs.map((spec, i) => {
       const die = this.createDie(spec);
@@ -686,11 +773,21 @@ export class DiceEngine {
       }
       return die;
     });
-    const group = this.makeGroup(dice, trayCenter);
-    const roll = this.newRoll(rollId, dice, "track", local, group, trayCenter);
+    const group = this.makeGroup(dice, trayCenter, k0);
+    const roll = this.newRoll(
+      rollId,
+      dice,
+      "track",
+      local,
+      group,
+      trayCenter,
+      this.computeBox(trayCenter, k0),
+      k0,
+    );
     roll.track = track;
     roll.trackStart = performance.now();
     this.rolls.set(rollId, roll);
+    this.applyDieScales(roll);
     this.applyTrackFrame(roll, 0);
     this.requestRender();
   }
@@ -754,12 +851,16 @@ export class DiceEngine {
     local: boolean,
     group: THREE.Group,
     trayCenter: WorldPoint,
+    box: PhysBox,
+    k0: number,
   ): RollInstance {
     return {
       rollId,
       dice,
       group,
       trayCenter,
+      box,
+      k0,
       mode,
       local,
       track: null,

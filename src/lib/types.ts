@@ -9,9 +9,51 @@ export type Viewport = {
   scale: number;
 };
 
+/**
+ * A drawn map annotation. The Draw tool creates "stroke" (DM-persistent / player-fading);
+ * the shift-drag pointer gesture creates "arrow" (always ephemeral, dashed, arrowhead).
+ * rect/circle/text render but have no tool yet.
+ */
+export type Annotation = {
+  id: string;
+  /** playerId or "dm" — authors (and the DM) may remove their own. */
+  authorId: string;
+  kind: "stroke" | "arrow" | "rect" | "circle" | "text";
+  /** Flat [x0,y0,x1,y1,…] world coords for strokes/arrows. */
+  points?: number[];
+  x?: number;
+  y?: number;
+  w?: number;
+  h?: number;
+  text?: string;
+  color: string;
+  width: number;
+  createdAt: number;
+  /** Auto-removed by the server ~10s after creation. Forced true for players. */
+  ephemeral: boolean;
+};
+
+/** A fog-of-war reveal shape (world coords). Fog = black layer minus these. */
+export type FogReveal =
+  | { kind: "rect"; x: number; y: number; w: number; h: number }
+  | { kind: "circle"; x: number; y: number; r: number };
+
+export type SceneFog = {
+  enabled: boolean;
+  reveals: FogReveal[];
+};
+
+export const MAX_SCENE_ANNOTATIONS = 200;
+export const MAX_ANNOTATION_POINTS = 240; // flat x,y numbers → 120 sampled points
+export const EPHEMERAL_ANNOTATION_TTL_MS = 10_000;
+/** Live pointer arrows one author may have at once — older ones fade first. */
+export const MAX_POINTER_ARROWS_PER_AUTHOR = 5;
+export const MAX_FOG_REVEALS = 300;
+export const MAX_MEASURE_NUMBERS = 48; // flat x,y numbers → 24 ruler points
+
 /// <summary>
-/// A scene is a single background map image (drawn at world origin) plus a grid.
-/// Bare-bones: one image per scene, no layers/fog.
+/// A scene is a single background map image (drawn at world origin) plus a grid,
+/// annotations, and manual fog-of-war.
 /// </summary>
 export type Scene = {
   id: string;
@@ -20,9 +62,19 @@ export type Scene = {
   width: number;
   height: number;
   gridSize: number;
+  /** Grid origin offset (world px) so the grid can align to commercial maps. */
+  gridOffsetX: number;
+  gridOffsetY: number;
+  /** Real-world feet per grid square (5e default 5). */
+  feetPerSquare: number;
+  gridColor: string;
+  gridOpacity: number;
   showGrid: boolean;
   backgroundColor: string;
   defaultViewport: Viewport;
+  /** DM strokes persist; player strokes are ephemeral. Capped server-side. */
+  annotations: Annotation[];
+  fog: SceneFog;
 };
 
 export type TokenKind = "player" | "enemy";
@@ -45,6 +97,8 @@ export type Token = {
   /** Active condition ids from CONDITIONS. */
   conditions: string[];
   showHp: TokenHpDisplay;
+  /** DM-hidden: stripped from player frames entirely; DM sees it ghosted. */
+  hidden?: boolean;
 };
 
 export const CONDITIONS = [
@@ -406,6 +460,11 @@ export type GameState = {
   folders: Folder[];
   /** Item catalog (DM-only; sheets copy item names into their inventories). */
   items: Record<string, ItemRecord>;
+  /**
+   * Whether players may use the Draw tool (persistent/scribble annotations). Off by
+   * default; the shift-drag pointer arrow is always allowed regardless of this.
+   */
+  playersCanDraw: boolean;
 };
 
 export const MAX_LOG_ENTRIES = 100;
@@ -466,6 +525,9 @@ export type ClientMessage =
       track: DiceTrack;
       modifier: number;
       trayCenter: WorldPoint;
+      /** Roller's world-units-per-physics-unit — shared so every client places the
+       *  dice at the same world footprint (dice are map-glued after landing). */
+      worldScale?: number;
       context?: { sheetId?: string; label?: string };
       private?: boolean;
     }
@@ -474,7 +536,16 @@ export type ClientMessage =
   | { type: "COMBAT_SET_INITIATIVE"; entryId: string; value: number }
   | { type: "COMBAT_NEXT" }
   | { type: "COMBAT_PREV" }
-  | { type: "COMBAT_END" };
+  | { type: "COMBAT_END" }
+  /** Live ruler points (world coords, flat x,y) — transient relay, null = cleared. */
+  | { type: "MEASURE"; sceneId: string; points: number[] | null }
+  | { type: "ADD_ANNOTATION"; sceneId: string; annotation: Annotation }
+  | { type: "REMOVE_ANNOTATION"; sceneId: string; annotationId: string }
+  | { type: "CLEAR_ANNOTATIONS"; sceneId: string }
+  | { type: "FOG_SET"; sceneId: string; enabled: boolean }
+  | { type: "FOG_REVEAL"; sceneId: string; shape: FogReveal }
+  | { type: "FOG_RESET"; sceneId: string }
+  | { type: "SET_PLAYERS_CAN_DRAW"; enabled: boolean };
 
 export type ServerMessage =
   | { type: "STATE"; state: GameState; yourClientId: string; yourRole: Role | null }
@@ -492,8 +563,18 @@ export type ServerMessage =
       specs: DieSpec[];
       track: DiceTrack;
       trayCenter: WorldPoint;
+      worldScale?: number;
       faceValues?: number[];
       secret?: boolean;
+    }
+  /** Another client's live ruler (transient; null points = ruler cleared). */
+  | {
+      type: "MEASURE";
+      clientId: string;
+      name: string;
+      color: string;
+      sceneId: string;
+      points: number[] | null;
     }
   | { type: "ERROR"; message: string }
   | { type: "JOINED"; role: Role; playerId: string }
@@ -572,6 +653,7 @@ export function normalizeToken(token: Token): Token {
       : [],
     showHp: token.showHp === "bar" || token.showHp === "values" ? token.showHp : "none",
     color: token.color || (kind === "enemy" ? TOKEN_ENEMY_COLOR : TOKEN_PLAYER_COLOR),
+    ...(token.hidden ? { hidden: true } : { hidden: undefined }),
   };
 }
 
@@ -911,8 +993,92 @@ export function normalizePlayerSlot(slot: PlayerSlot): PlayerSlot {
 }
 
 /// <summary>
+/// Validates a client-supplied annotation. Returns null when malformed. Shared by the
+/// server handler and scene normalization so persisted and inbound data obey one shape.
+/// </summary>
+export function sanitizeAnnotation(annotation: unknown): Annotation | null {
+  const a = annotation as Partial<Annotation> | null;
+  if (!a || typeof a !== "object" || typeof a.id !== "string") {
+    return null;
+  }
+  const kind =
+    a.kind === "stroke" ||
+    a.kind === "arrow" ||
+    a.kind === "rect" ||
+    a.kind === "circle" ||
+    a.kind === "text"
+      ? a.kind
+      : null;
+  if (!kind) {
+    return null;
+  }
+  let points: number[] | undefined;
+  if (kind === "stroke" || kind === "arrow") {
+    if (!Array.isArray(a.points) || a.points.length < 4 || a.points.length % 2 !== 0) {
+      return null;
+    }
+    points = a.points.slice(0, MAX_ANNOTATION_POINTS).map((v) => numberOr(v, 0));
+  }
+  return {
+    id: a.id.slice(0, 40),
+    authorId: typeof a.authorId === "string" ? a.authorId.slice(0, 40) : "dm",
+    kind,
+    ...(points ? { points } : {}),
+    ...(typeof a.x === "number" && Number.isFinite(a.x) ? { x: a.x } : {}),
+    ...(typeof a.y === "number" && Number.isFinite(a.y) ? { y: a.y } : {}),
+    ...(typeof a.w === "number" && Number.isFinite(a.w) ? { w: a.w } : {}),
+    ...(typeof a.h === "number" && Number.isFinite(a.h) ? { h: a.h } : {}),
+    ...(typeof a.text === "string" ? { text: a.text.slice(0, 200) } : {}),
+    color: typeof a.color === "string" ? a.color.slice(0, 32) : "#ffd166",
+    width: Math.min(Math.max(numberOr(a.width, 3), 1), 12),
+    createdAt: numberOr(a.createdAt, Date.now()),
+    ephemeral: Boolean(a.ephemeral),
+  };
+}
+
+/// <summary>Validates a fog reveal shape (rect or circle in world coords).</summary>
+export function sanitizeFogReveal(shape: unknown): FogReveal | null {
+  const s = shape as Partial<FogReveal & { w: number; h: number; r: number }> | null;
+  if (!s || typeof s !== "object") {
+    return null;
+  }
+  const x = numberOr(s.x, NaN);
+  const y = numberOr(s.y, NaN);
+  if (!Number.isFinite(x) || !Number.isFinite(y)) {
+    return null;
+  }
+  if (s.kind === "rect") {
+    const w = numberOr(s.w, NaN);
+    const h = numberOr(s.h, NaN);
+    if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) {
+      return null;
+    }
+    return { kind: "rect", x, y, w, h };
+  }
+  if (s.kind === "circle") {
+    const r = numberOr(s.r, NaN);
+    if (!Number.isFinite(r) || r <= 0) {
+      return null;
+    }
+    return { kind: "circle", x, y, r };
+  }
+  return null;
+}
+
+function sanitizeFog(fog: unknown): SceneFog {
+  const f = fog as Partial<SceneFog> | null;
+  const reveals = Array.isArray(f?.reveals)
+    ? f.reveals
+        .map((shape) => sanitizeFogReveal(shape))
+        .filter((shape): shape is FogReveal => shape !== null)
+        .slice(-MAX_FOG_REVEALS)
+    : [];
+  return { enabled: Boolean(f?.enabled), reveals };
+}
+
+/// <summary>
 /// Normalizes a persisted scene into the single-image schema, migrating legacy
-/// multi-layer / single-mapUrl scenes.
+/// multi-layer / single-mapUrl scenes and filling grid/annotation/fog defaults.
 /// </summary>
 export function normalizeScene(scene: Partial<Scene> & Record<string, unknown>): Scene {
   const legacyLayers = Array.isArray(scene.layers)
@@ -923,6 +1089,12 @@ export function normalizeScene(scene: Partial<Scene> & Record<string, unknown>):
     (typeof scene.mapUrl === "string" ? scene.mapUrl : null) ?? firstLayer?.url ?? null;
   const width = numberOr(scene.width, numberOr(firstLayer?.width, 800));
   const height = numberOr(scene.height, numberOr(firstLayer?.height, 600));
+  const annotations = Array.isArray(scene.annotations)
+    ? scene.annotations
+        .map((annotation) => sanitizeAnnotation(annotation))
+        .filter((annotation): annotation is Annotation => annotation !== null)
+        .slice(-MAX_SCENE_ANNOTATIONS)
+    : [];
   return {
     id: typeof scene.id === "string" ? scene.id : `scene-${crypto.randomUUID().slice(0, 8)}`,
     name: typeof scene.name === "string" ? scene.name : "Scene",
@@ -930,6 +1102,11 @@ export function normalizeScene(scene: Partial<Scene> & Record<string, unknown>):
     width,
     height,
     gridSize: numberOr(scene.gridSize, 50),
+    gridOffsetX: numberOr(scene.gridOffsetX, 0),
+    gridOffsetY: numberOr(scene.gridOffsetY, 0),
+    feetPerSquare: Math.max(numberOr(scene.feetPerSquare, 5), 1),
+    gridColor: typeof scene.gridColor === "string" ? scene.gridColor.slice(0, 32) : "#ffffff",
+    gridOpacity: Math.min(Math.max(numberOr(scene.gridOpacity, 0.09), 0), 1),
     showGrid: scene.showGrid ?? true,
     backgroundColor:
       typeof scene.backgroundColor === "string" ? scene.backgroundColor : DEFAULT_SCENE_BACKGROUND,
@@ -937,6 +1114,8 @@ export function normalizeScene(scene: Partial<Scene> & Record<string, unknown>):
       scene.defaultViewport && typeof scene.defaultViewport === "object"
         ? (scene.defaultViewport as Viewport)
         : { ...DEFAULT_VIEWPORT },
+    annotations,
+    fog: sanitizeFog(scene.fog),
   };
 }
 
@@ -1023,6 +1202,7 @@ export function normalizeGameState(state: GameState & LegacyGameStateFields): Ga
     combat: normalizeCombat(state.combat),
     folders,
     items,
+    playersCanDraw: Boolean(state.playersCanDraw),
     tokens: [],
   };
   base.tokens = (state.tokens ?? []).map((token) => {
@@ -1035,28 +1215,20 @@ export function normalizeGameState(state: GameState & LegacyGameStateFields): Ga
 
 export function createDefaultScenes(): Scene[] {
   return [
-    {
+    normalizeScene({
       id: "scene-1",
       name: "Dungeon",
       mapUrl: "/maps/sample-dungeon.svg",
       width: 800,
       height: 600,
-      gridSize: 50,
-      showGrid: true,
-      backgroundColor: DEFAULT_SCENE_BACKGROUND,
-      defaultViewport: { ...DEFAULT_VIEWPORT },
-    },
-    {
+    }),
+    normalizeScene({
       id: "scene-2",
       name: "Tavern",
       mapUrl: "/maps/sample-tavern.svg",
       width: 800,
       height: 600,
-      gridSize: 50,
-      showGrid: true,
-      backgroundColor: DEFAULT_SCENE_BACKGROUND,
-      defaultViewport: { ...DEFAULT_VIEWPORT },
-    },
+    }),
   ];
 }
 
@@ -1077,5 +1249,6 @@ export function createInitialState(roomId: string): GameState {
     combat: null,
     folders: [],
     items: {},
+    playersCanDraw: false,
   };
 }

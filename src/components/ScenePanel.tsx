@@ -105,6 +105,91 @@ export function ScenePanel({ state, dm }: ScenePanelProps) {
               </button>
             </div>
 
+            <div className="section-title">Grid calibration</div>
+            <span className="muted" style={{ fontSize: "0.75rem" }}>
+              Tip: the 🎯 map tool (G) sets size + offset by dragging a box over one square.
+            </span>
+            <div className="row">
+              <div className="field" style={{ flex: 1 }}>
+                <label>Cell size</label>
+                <input
+                  type="number"
+                  min={10}
+                  value={active.gridSize}
+                  onChange={(e) =>
+                    patchActive({ gridSize: Math.max(Number(e.target.value) || 10, 10) })
+                  }
+                />
+              </div>
+              <div className="field" style={{ flex: 1 }}>
+                <label>Feet / square</label>
+                <input
+                  type="number"
+                  min={1}
+                  value={active.feetPerSquare}
+                  onChange={(e) =>
+                    patchActive({ feetPerSquare: Math.max(Number(e.target.value) || 5, 1) })
+                  }
+                />
+              </div>
+            </div>
+            <div className="row">
+              <div className="field" style={{ flex: 1 }}>
+                <label>Offset X</label>
+                <input
+                  type="number"
+                  value={active.gridOffsetX}
+                  onChange={(e) => patchActive({ gridOffsetX: Number(e.target.value) || 0 })}
+                />
+              </div>
+              <div className="field" style={{ flex: 1 }}>
+                <label>Offset Y</label>
+                <input
+                  type="number"
+                  value={active.gridOffsetY}
+                  onChange={(e) => patchActive({ gridOffsetY: Number(e.target.value) || 0 })}
+                />
+              </div>
+            </div>
+            <div className="row">
+              <div className="field" style={{ flex: 1 }}>
+                <label>Grid color</label>
+                <input
+                  type="color"
+                  value={active.gridColor}
+                  onChange={(e) => patchActive({ gridColor: e.target.value })}
+                />
+              </div>
+              <div className="field" style={{ flex: 2 }}>
+                <label>Grid opacity ({Math.round(active.gridOpacity * 100)}%)</label>
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  value={Math.round(active.gridOpacity * 100)}
+                  onChange={(e) => patchActive({ gridOpacity: Number(e.target.value) / 100 })}
+                />
+              </div>
+            </div>
+
+            <div className="section-title">Fog of war</div>
+            <div className="row" style={{ justifyContent: "space-between" }}>
+              <label style={{ margin: 0 }}>Fog enabled</label>
+              <button
+                className={active.fog.enabled ? "btn-active" : ""}
+                onClick={() => dm.setFogEnabled(active.id, !active.fog.enabled)}
+              >
+                {active.fog.enabled ? "On" : "Off"}
+              </button>
+            </div>
+            <div className="row" style={{ justifyContent: "space-between" }}>
+              <span className="muted" style={{ fontSize: "0.75rem" }}>
+                Reveal areas with the 🌫 map tool (F). {active.fog.reveals.length} reveal
+                {active.fog.reveals.length === 1 ? "" : "s"}.
+              </span>
+              <button onClick={() => dm.resetFog(active.id)}>Re-cover all</button>
+            </div>
+
             <div className="field">
               <label>Background</label>
               <div className="dice-quick">
