@@ -30,7 +30,13 @@ type CharacterSheetProps = {
   isDm?: boolean;
   dm?: ReturnType<typeof useDmActions>;
   showSlotManagement?: boolean;
+  /** Read-only party grid for non-DM views (e.g. player "Players" tab). */
+  showPartySheets?: boolean;
+  /** Renders body only (no outer side-panel shell) for tabbed SheetDicePanel. */
+  embedded?: boolean;
 };
+
+export type { CharacterSheetProps };
 
 type CharacterSheetFormProps = {
   sheet: CharacterSheet;
@@ -155,7 +161,7 @@ function CharacterSheetForm({
   const [iconError, setIconError] = useState<string | null>(null);
   const [draft, setDraft] = useState(serverSheet);
   const lastSentRef = useRef(serverSheet);
-  const textRows = compact ? 3 : 5;
+  const storyRows = compact ? 8 : 6;
 
   const { debounced: debouncedSave, flush } = useDebouncedCallback((next: CharacterSheet) => {
     lastSentRef.current = next;
@@ -477,7 +483,8 @@ function CharacterSheetForm({
       <SheetSection title="Story">
         <SheetField label="Backstory / personality / flaws, etc.">
           <textarea
-            rows={textRows}
+            className="sheet-textarea-large"
+            rows={storyRows}
             value={sheet.backstoryPersonality}
             disabled={!canEdit}
             onChange={(event) => update({ backstoryPersonality: event.target.value })}
@@ -485,7 +492,8 @@ function CharacterSheetForm({
         </SheetField>
         <SheetField label="Notes">
           <textarea
-            rows={textRows}
+            className="sheet-textarea-large"
+            rows={storyRows}
             value={sheet.notes}
             disabled={!canEdit}
             onChange={(event) => update({ notes: event.target.value })}
@@ -511,123 +519,168 @@ export function CharacterSheetPanel({
   isDm,
   dm,
   showSlotManagement = true,
+  showPartySheets = false,
+  embedded = false,
 }: CharacterSheetProps) {
   const [confirmRemoveId, setConfirmRemoveId] = useState<string | null>(null);
 
-  if (isDm && playerSlots && dm) {
+  const partySheetMode =
+    (isDm && playerSlots && dm) || (showPartySheets && playerSlots && allSheets);
+
+  if (partySheetMode) {
     const connectedBySlot = new Map(
       (connectedPlayers ?? []).map((player) => [player.playerId, player]),
     );
 
+    const visibleSlots = showPartySheets
+      ? playerSlots!.filter((slot) => slot.id !== slotId)
+      : playerSlots!;
+
+    const partyBody =
+      visibleSlots.length === 0 ? (
+        <p className="muted">
+          {showSlotManagement
+            ? "Create player slots so your party can join without duplicates."
+            : showPartySheets
+              ? "No other players have joined yet."
+              : "Add player slots in the Players tab to view character sheets here."}
+        </p>
+      ) : (
+        <div className="party-list party-grid">
+          {visibleSlots.map((slot) => {
+            const connected = connectedBySlot.get(slot.id);
+            const playerSheet = allSheets?.[slot.id];
+            return (
+              <div key={slot.id} className="party-card party-card-sheet">
+                {showSlotManagement && isDm && dm ? (
+                  <div className="party-card-meta">
+                    <input
+                      className="slot-name-input"
+                      value={slot.name}
+                      onChange={(event) =>
+                        dm.updatePlayerSlot({ ...slot, name: event.target.value })
+                      }
+                    />
+                    <span className={`slot-connection${connected ? " online" : ""}`}>
+                      {connected ? "Connected" : "Waiting"}
+                    </span>
+                    {confirmRemoveId === slot.id ? (
+                      <div className="party-remove-confirm">
+                        <button
+                          type="button"
+                          className="btn-compact"
+                          onClick={() => setConfirmRemoveId(null)}
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          className="btn-compact danger"
+                          onClick={() => {
+                            dm.removePlayerSlot(slot.id);
+                            setConfirmRemoveId(null);
+                          }}
+                        >
+                          Confirm remove
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        className="btn-compact danger"
+                        disabled={Boolean(connected)}
+                        onClick={() => setConfirmRemoveId(slot.id)}
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="party-card-heading">
+                    <h3>{slot.name}</h3>
+                    <span className={`slot-connection${connected ? " online" : ""}`}>
+                      {connected ? "Connected" : "Waiting"}
+                    </span>
+                  </div>
+                )}
+                {playerSheet ? (
+                  <CharacterSheetForm
+                    sheet={playerSheet}
+                    canEdit={false}
+                    template={template}
+                    slotId={slot.id}
+                    compact
+                  />
+                ) : (
+                  <p className="muted party-sheet-empty">
+                    No sheet yet — the player fills this in after joining.
+                  </p>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      );
+
+    if (embedded) {
+      return (
+        <div
+          className={`character-sheet-embedded party-panel${showSlotManagement ? "" : " party-panel-sheets-only"}`}
+        >
+          {showSlotManagement && isDm && dm ? (
+            <div className="embedded-panel-toolbar">
+              <button type="button" className="btn-compact" onClick={() => dm.addPlayerSlot("New player")}>
+                + Slot
+              </button>
+            </div>
+          ) : null}
+          {partyBody}
+        </div>
+      );
+    }
+
     return (
       <div className={`side-panel party-panel${showSlotManagement ? "" : " party-panel-sheets-only"}`}>
         <header className="side-panel-header">
-          <h2>{showSlotManagement ? "Players" : "Character sheets"}</h2>
-          {showSlotManagement ? (
+          <h2>{showSlotManagement && isDm ? "Players" : "Character sheets"}</h2>
+          {showSlotManagement && isDm && dm ? (
             <button type="button" className="btn-compact" onClick={() => dm.addPlayerSlot("New player")}>
               + Slot
             </button>
           ) : null}
         </header>
-        <div className="side-panel-body">
-          {playerSlots.length === 0 ? (
-            <p className="muted">
-              {showSlotManagement
-                ? "Create player slots so your party can join without duplicates."
-                : "Add player slots in the Players tab to view character sheets here."}
-            </p>
-          ) : (
-            <div className="party-list party-grid">
-              {playerSlots.map((slot) => {
-                const connected = connectedBySlot.get(slot.id);
-                const playerSheet = allSheets?.[slot.id];
-                return (
-                  <div key={slot.id} className="party-card party-card-sheet">
-                    {showSlotManagement ? (
-                      <div className="party-card-meta">
-                        <input
-                          className="slot-name-input"
-                          value={slot.name}
-                          onChange={(event) =>
-                            dm.updatePlayerSlot({ ...slot, name: event.target.value })
-                          }
-                        />
-                        <span className={`slot-connection${connected ? " online" : ""}`}>
-                          {connected ? "Connected" : "Waiting"}
-                        </span>
-                        {confirmRemoveId === slot.id ? (
-                          <div className="party-remove-confirm">
-                            <button
-                              type="button"
-                              className="btn-compact"
-                              onClick={() => setConfirmRemoveId(null)}
-                            >
-                              Cancel
-                            </button>
-                            <button
-                              type="button"
-                              className="btn-compact danger"
-                              onClick={() => {
-                                dm.removePlayerSlot(slot.id);
-                                setConfirmRemoveId(null);
-                              }}
-                            >
-                              Confirm remove
-                            </button>
-                          </div>
-                        ) : (
-                          <button
-                            type="button"
-                            className="btn-compact danger"
-                            disabled={Boolean(connected)}
-                            onClick={() => setConfirmRemoveId(slot.id)}
-                          >
-                            Remove
-                          </button>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="party-card-heading">
-                        <h3>{slot.name}</h3>
-                        <span className={`slot-connection${connected ? " online" : ""}`}>
-                          {connected ? "Connected" : "Waiting"}
-                        </span>
-                      </div>
-                    )}
-                    {playerSheet ? (
-                      <CharacterSheetForm
-                        sheet={playerSheet}
-                        canEdit={false}
-                        template={template}
-                        slotId={slot.id}
-                        compact
-                      />
-                    ) : (
-                      <p className="muted party-sheet-empty">
-                        No sheet yet — the player fills this in after joining.
-                      </p>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
+        <div className="side-panel-body">{partyBody}</div>
       </div>
     );
   }
 
   if (!sheet) {
+    const empty = <p className="muted">Join as a player to edit your sheet.</p>;
+    if (embedded) {
+      return <div className="character-sheet-embedded">{empty}</div>;
+    }
     return (
       <div className="side-panel">
         <header className="side-panel-header">
           <h2>Character sheet</h2>
         </header>
-        <div className="side-panel-body">
-          <p className="muted">Join as a player to edit your sheet.</p>
-        </div>
+        <div className="side-panel-body">{empty}</div>
       </div>
     );
+  }
+
+  const form = (
+    <CharacterSheetForm
+      sheet={sheet}
+      canEdit={canEdit}
+      template={template}
+      onChange={onChange}
+      slotId={slotId}
+    />
+  );
+
+  if (embedded) {
+    return <div className="character-sheet-embedded">{form}</div>;
   }
 
   return (
@@ -635,15 +688,7 @@ export function CharacterSheetPanel({
       <header className="side-panel-header">
         <h2>Character sheet</h2>
       </header>
-      <div className="side-panel-body">
-        <CharacterSheetForm
-          sheet={sheet}
-          canEdit={canEdit}
-          template={template}
-          onChange={onChange}
-          slotId={slotId}
-        />
-      </div>
+      <div className="side-panel-body">{form}</div>
     </div>
   );
 }

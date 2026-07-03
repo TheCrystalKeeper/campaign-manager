@@ -159,6 +159,8 @@ export type DiceRoll = {
   modifier: number;
   total: number;
   timestamp: number;
+  /** Links a log entry to the 3D throw id for synced fade-out. */
+  physicsRollId?: string;
 };
 
 export type GameState = {

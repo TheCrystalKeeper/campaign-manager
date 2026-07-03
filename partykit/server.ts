@@ -29,6 +29,7 @@ import {
   trimAnnotationPoints,
 } from "../src/lib/mapAnnotation";
 import { rollDiceExpression, secureRandInt } from "../src/lib/dice";
+import { diceLogDelayMs, trackDurationMs } from "../src/dice3d/diceTiming";
 import {
   buildExpressionLabel,
   interpretRoll,
@@ -542,6 +543,7 @@ export default class GameServer implements Party.Server {
         modifier,
         total: total + modifier,
         timestamp: Date.now(),
+        physicsRollId: parsed.rollId,
       };
 
       const throwMessage: ServerMessage = {
@@ -557,12 +559,8 @@ export default class GameServer implements Party.Server {
         trayCenter: parsed.trayCenter,
       };
 
-      // The animation plays immediately, but the log entry only appears once the dice
-      // would have finished rolling — defer by the recorded track's duration.
       const track = parsed.track;
-      const settleMs =
-        track && track.fps > 0 ? Math.min((track.frames / track.fps) * 1000, 12000) : 0;
-      const delayMs = settleMs + 300;
+      const delayMs = diceLogDelayMs(trackDurationMs(track));
 
       if (isPrivate) {
         this.sendTo(sender, throwMessage);

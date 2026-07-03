@@ -24,7 +24,11 @@ type DicePanelProps = {
   onToggleTray: (visible: boolean) => void;
   muted: boolean;
   onToggleMuted: (muted: boolean) => void;
+  /** Renders body only (no header/collapse) for tabbed SheetDicePanel. */
+  embedded?: boolean;
 };
+
+export type { DicePanelProps };
 
 /// <summary>
 /// Shared dice tray with a public log for everyone and a secret log visible only to the DM.
@@ -45,6 +49,7 @@ export function DicePanel({
   onToggleTray,
   muted,
   onToggleMuted,
+  embedded = false,
 }: DicePanelProps) {
   const [expression, setExpression] = useState("1d20");
   const [collapsed, setCollapsed] = useState(false);
@@ -84,7 +89,7 @@ export function DicePanel({
     }
   };
 
-  if (collapsed) {
+  if (collapsed && !embedded) {
     return (
       <footer className="dice-tray dice-tray-collapsed">
         <button
@@ -101,6 +106,133 @@ export function DicePanel({
         </button>
       </footer>
     );
+  }
+
+  const body = (
+    <div className="dice-tray-body">
+      <div className="dice-tray-controls">
+        <form className="dice-roll-form" onSubmit={handleSubmit}>
+          <input
+            type="text"
+            value={expression}
+            onChange={(event) => setExpression(event.target.value)}
+            placeholder="1d20+5"
+            aria-label="Dice expression"
+            spellCheck={false}
+          />
+          <div className="dice-roll-actions">
+            {hasArmed ? (
+              <>
+                <button
+                  type="button"
+                  className="dice-roll-btn dice-throw-btn"
+                  onClick={() => onThrowArmed()}
+                >
+                  Throw
+                </button>
+                <button
+                  type="button"
+                  className="btn-compact dice-instant-btn dice-roll-btn"
+                  title="Quick roll — armed dice spin to the result"
+                  onClick={() => onInstantArmed()}
+                >
+                  Instant
+                </button>
+              </>
+            ) : (
+              <>
+                <button type="submit" className="dice-roll-btn">
+                  Roll
+                </button>
+                <button
+                  type="button"
+                  className="btn-compact dice-instant-btn dice-roll-btn"
+                  title="Quick roll — dice spin to the result"
+                  onClick={handleInstant}
+                >
+                  Instant
+                </button>
+              </>
+            )}
+          </div>
+        </form>
+
+        <div className="dice-quick-block">
+          <div className="dice-quick-dice">
+            {DICE_QUICK_SIDES.map((sides) => (
+              <button
+                key={sides}
+                type="button"
+                className="btn-compact dice-quick-btn"
+                title={`Grab a d${sides} to throw`}
+                onClick={() => onArm(sides)}
+              >
+                d{sides}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {hasArmed ? (
+          <p className="dice-hint">
+            {trayVisible
+              ? "Armed — drag the dice and release, or press Throw."
+              : "Armed — press Throw to roll."}
+          </p>
+        ) : null}
+
+        {localError ? <p className="dice-error">{localError}</p> : null}
+
+        {isDm ? (
+          <section className="dice-secret-section" aria-label="Secret DM rolls">
+            <div className="dice-secret-header">
+              <h3>Secret rolls</h3>
+              <span className="dice-secret-note">Only you can see these</span>
+            </div>
+            <form className="dice-roll-form dice-secret-form" onSubmit={handleSecretSubmit}>
+              <input
+                type="text"
+                value={expression}
+                onChange={(event) => setExpression(event.target.value)}
+                placeholder="1d20"
+                aria-label="Secret dice expression"
+                spellCheck={false}
+              />
+              <button type="submit" className="dice-secret-button btn-compact dice-roll-btn" title="Secret roll">
+                Secret
+              </button>
+            </form>
+          </section>
+        ) : null}
+      </div>
+
+      <div className="dice-tray-logs">
+        <section className="dice-public-section" aria-label="Shared dice log">
+          <h3>{isDm ? "Player rolls" : "Table log"}</h3>
+          <DiceLog
+            rolls={publicRolls}
+            yourPlayerId={yourPlayerId}
+            emptyMessage="No rolls yet. Everyone in the room can see rolls here."
+          />
+        </section>
+
+        {isDm ? (
+          <section className="dice-secret-log-section" aria-label="Secret roll log">
+            <h3>Secret log</h3>
+            <DiceLog
+              rolls={privateRolls}
+              yourPlayerId={yourPlayerId}
+              emptyMessage="No secret rolls yet."
+              secret
+            />
+          </section>
+        ) : null}
+      </div>
+    </div>
+  );
+
+  if (embedded) {
+    return <div className="dice-tray dice-tray-embedded">{body}</div>;
   }
 
   return (
@@ -136,114 +268,7 @@ export function DicePanel({
           </button>
         </div>
       </div>
-
-      <div className="dice-tray-body">
-        <div className="dice-tray-controls">
-          <form className="dice-roll-form" onSubmit={handleSubmit}>
-            <input
-              type="text"
-              value={expression}
-              onChange={(event) => setExpression(event.target.value)}
-              placeholder="1d20+5"
-              aria-label="Dice expression"
-              spellCheck={false}
-            />
-            <button type="submit">Roll</button>
-            <button
-              type="button"
-              className="btn-compact dice-instant-btn"
-              title="Quick roll — dice spin to the result"
-              onClick={handleInstant}
-            >
-              Instant
-            </button>
-          </form>
-
-          <div className="dice-quick-row">
-            {DICE_QUICK_SIDES.map((sides) => (
-              <button
-                key={sides}
-                type="button"
-                className="btn-compact dice-quick-btn"
-                title={`Grab a d${sides} to throw`}
-                onClick={() => onArm(sides)}
-              >
-                d{sides}
-              </button>
-            ))}
-            <button
-              type="button"
-              className="btn-compact dice-throw-btn"
-              disabled={!hasArmed}
-              onClick={() => onThrowArmed()}
-            >
-              Throw
-            </button>
-            <button
-              type="button"
-              className="btn-compact dice-instant-btn"
-              disabled={!hasArmed}
-              title="Quick roll — dice spin to the result"
-              onClick={() => onInstantArmed()}
-            >
-              Instant
-            </button>
-          </div>
-
-          {hasArmed ? (
-            <p className="dice-hint">
-              {trayVisible ? "Drag the dice and release to roll, or press Throw." : "Press Throw to roll."}
-            </p>
-          ) : null}
-
-          {localError ? <p className="dice-error">{localError}</p> : null}
-
-          {isDm ? (
-            <section className="dice-secret-section" aria-label="Secret DM rolls">
-              <div className="dice-secret-header">
-                <h3>Secret rolls</h3>
-                <span className="dice-secret-note">Only you can see these</span>
-              </div>
-              <form className="dice-roll-form dice-secret-form" onSubmit={handleSecretSubmit}>
-                <input
-                  type="text"
-                  value={expression}
-                  onChange={(event) => setExpression(event.target.value)}
-                  placeholder="1d20"
-                  aria-label="Secret dice expression"
-                  spellCheck={false}
-                />
-                <button type="submit" className="dice-secret-button btn-compact" title="Secret roll">
-                  Secret
-                </button>
-              </form>
-            </section>
-          ) : null}
-        </div>
-
-        <div className="dice-tray-logs">
-          <section className="dice-public-section" aria-label="Shared dice log">
-            <h3>{isDm ? "Player rolls" : "Table log"}</h3>
-            <DiceLog
-              rolls={publicRolls}
-              yourPlayerId={yourPlayerId}
-              emptyMessage="No rolls yet. Everyone in the room can see rolls here."
-            />
-          </section>
-
-          {isDm ? (
-            <section className="dice-secret-log-section" aria-label="Secret roll log">
-              <h3>Secret log</h3>
-              <DiceLog
-                rolls={privateRolls}
-                yourPlayerId={yourPlayerId}
-                emptyMessage="No secret rolls yet."
-                secret
-              />
-            </section>
-          ) : null}
-        </div>
-      </div>
+      {body}
     </footer>
   );
 }

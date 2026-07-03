@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { GameRoom } from "../hooks/useGameRoom";
-import { TOKEN_COLORS, type Viewport } from "../lib/types";
+import { TOKEN_COLORS } from "../lib/types";
 import { DiceAudio } from "./diceAudio";
+import { DICE_ROLL_LINGER_MS } from "./diceTiming";
 import {
   decomposeDie,
   parseDiceExpression,
@@ -11,42 +12,24 @@ import {
 } from "./diceProtocol";
 import type { DiceEngine } from "./diceEngine";
 
-/** Live map projection the dice arena needs to anchor + draw dice on the shared map. */
-export interface MapProjection {
-  viewport: Viewport;
-  gridSize: number;
-  /** Current view center in map/world coords; used as a roll's tray anchor. */
-  center: WorldPoint;
-  /** Roll region size in grid cells (sized from the shared map), for the physics box. */
-  regionCellsW: number;
-  regionCellsH: number;
-}
-
-const DEFAULT_PROJECTION: MapProjection = {
-  viewport: { x: 0, y: 0, scale: 1 },
-  gridSize: 50,
-  center: [0, 0],
-  regionCellsW: 12,
-  regionCellsH: 12,
-};
-
 /// <summary>
 /// Owns the 3D dice arena lifecycle: lazily loads the Three.js + Rapier engine, wires
-/// it to the multiplayer room (recorded-track throws, live drag motion + roller cursor,
-/// authoritative results), confines dice to the map pane, and exposes arm/throw controls.
+/// it to the multiplayer room (recorded-track throws, live drag motion + roller cursor),
+/// and exposes arm/throw controls. Dice render in fixed screen space over the full UI.
 /// </summary>
 
 const TRAY_KEY = "dice-tray-visible";
 const CURSOR_HIDE_MS = 1400;
 const MOTION_KEEPALIVE_MS = 140;
 const MOTION_EPS = 0.01;
-const CURSOR_EPS = 0.35;
+const CURSOR_EPS = 0.003;
+/** Screen-space tray anchor (legacy wire field; always viewport center). */
+const TRAY_CENTER: WorldPoint = [0, 0];
 
 interface ArmedRoll {
   specs: DieSpec[];
   modifier: number;
   private: boolean;
-  /** Map/world anchor captured when the roll was armed. */
   trayCenter: WorldPoint;
 }
 
@@ -67,10 +50,6 @@ export interface RemoteCursor {
 export interface DiceArenaController {
   /** Callback ref for the arena element; engine boots when the node mounts. */
   containerRef: (node: HTMLDivElement | null) => void;
-  /** Callback ref for the map pane element; dice are confined to it. */
-  mapAreaRef: (node: HTMLDivElement | null) => void;
-  /** Feeds the live map viewport/grid so dice stay anchored to the map. */
-  setProjection: (projection: MapProjection) => void;
   ready: boolean;
   hasArmed: boolean;
   trayVisible: boolean;
@@ -89,6 +68,8 @@ export interface DiceArenaController {
   instantArmed: () => void;
   /** Parses an expression and resolves it with a quick spin-to-value reveal. */
   instantExpression: (expression: string) => void;
+  /** Fades 3D dice out after the roll notification linger period. */
+  scheduleRollFade: (physicsRollId: string) => void;
 }
 
 function uid(): string {
@@ -114,16 +95,15 @@ function colorFor(id: string): string {
 
 export function useDiceArena(room: GameRoom): DiceArenaController {
   const [container, setContainer] = useState<HTMLDivElement | null>(null);
-  const containerRef = useCallback((node: HTMLDivElement | null) => setContainer(node), []);
-  const [mapEl, setMapEl] = useState<HTMLDivElement | null>(null);
-  const mapAreaRef = useCallback((node: HTMLDivElement | null) => setMapEl(node), []);
-  const mapElRef = useRef<HTMLDivElement | null>(null);
-  mapElRef.current = mapEl;
+  const containerElRef = useRef<HTMLDivElement | null>(null);
+  const containerRef = useCallback((node: HTMLDivElement | null) => {
+    containerElRef.current = node;
+    setContainer(node);
+  }, []);
 
   const engineRef = useRef<DiceEngine | null>(null);
   const audioRef = useRef<DiceAudio | null>(null);
   const roomRef = useRef(room);
-  const projectionRef = useRef<MapProjection>(DEFAULT_PROJECTION);
   const armedRef = useRef<Map<string, ArmedRoll>>(new Map());
   const ourRollIdsRef = useRef<Set<string>>(new Set());
   const currentRollIdRef = useRef<string | null>(null);
@@ -131,6 +111,7 @@ export function useDiceArena(room: GameRoom): DiceArenaController {
   const cursorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const motionStateRef = useRef<Map<string, MotionSendState>>(new Map());
   const remoteSpecsRef = useRef<Map<string, DieSpec[]>>(new Map());
+  const rollFadeTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
   const [ready, setReady] = useState(false);
   const [hasArmed, setHasArmed] = useState(false);
@@ -141,15 +122,13 @@ export function useDiceArena(room: GameRoom): DiceArenaController {
   roomRef.current = room;
 
   const showRemoteCursor = useCallback((cursor: WorldPoint, rollerId: string, name: string) => {
-    // The cursor is in shared map/world coords; project it through our own viewport so it
-    // lands at the same map location regardless of our window size or zoom.
-    const rect = mapElRef.current?.getBoundingClientRect();
-    const left = rect ? rect.left : 0;
-    const top = rect ? rect.top : 0;
-    const { viewport } = projectionRef.current;
+    const rect = containerElRef.current?.getBoundingClientRect();
+    if (!rect) {
+      return;
+    }
     setRemoteCursor({
-      x: left + viewport.x + cursor[0] * viewport.scale,
-      y: top + viewport.y + cursor[1] * viewport.scale,
+      x: rect.left + cursor[0] * rect.width,
+      y: rect.top + cursor[1] * rect.height,
       name,
       color: colorFor(rollerId),
     });
@@ -174,8 +153,8 @@ export function useDiceArena(room: GameRoom): DiceArenaController {
         q: transform.q.map((value: number) => Math.round(value * 1000) / 1000) as DieTransform["q"],
       }));
       const wireCursor: WorldPoint = [
-        Math.round(cursor[0] * 100) / 100,
-        Math.round(cursor[1] * 100) / 100,
+        Math.round(cursor[0] * 1000) / 1000,
+        Math.round(cursor[1] * 1000) / 1000,
       ];
       const moved =
         !state.lastTransforms ||
@@ -221,16 +200,6 @@ export function useDiceArena(room: GameRoom): DiceArenaController {
     },
     [],
   );
-
-  const setProjection = useCallback((projection: MapProjection) => {
-    projectionRef.current = projection;
-    engineRef.current?.setMapProjection({
-      viewport: projection.viewport,
-      gridSize: projection.gridSize,
-      regionCellsW: projection.regionCellsW,
-      regionCellsH: projection.regionCellsH,
-    });
-  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -282,13 +251,6 @@ export function useDiceArena(room: GameRoom): DiceArenaController {
           return;
         }
         engineRef.current = engine;
-        engine.setPlayArea(mapElRef.current);
-        engine.setMapProjection({
-          viewport: projectionRef.current.viewport,
-          gridSize: projectionRef.current.gridSize,
-          regionCellsW: projectionRef.current.regionCellsW,
-          regionCellsH: projectionRef.current.regionCellsH,
-        });
         setReady(true);
 
         unsubscribe = roomRef.current.subscribeDice((event) => {
@@ -298,8 +260,7 @@ export function useDiceArena(room: GameRoom): DiceArenaController {
           }
           if (event.type === "DICE_THROW") {
             const local = ourRollIdsRef.current.has(event.rollId);
-            const trayCenter = event.trayCenter ?? projectionRef.current.center;
-            eng.playTrack(event.rollId, event.specs, event.track, event.faceValues, local, trayCenter);
+            eng.playTrack(event.rollId, event.specs, event.track, event.faceValues, local, TRAY_CENTER);
             if (local) {
               ourRollIdsRef.current.delete(event.rollId);
               armedRef.current.delete(event.rollId);
@@ -316,8 +277,7 @@ export function useDiceArena(room: GameRoom): DiceArenaController {
               if (!specs) {
                 return;
               }
-              const trayCenter = event.trayCenter ?? projectionRef.current.center;
-              eng.applyRemoteMotion(event.rollId, specs, event.transforms, trayCenter);
+              eng.applyRemoteMotion(event.rollId, specs, event.transforms, TRAY_CENTER);
               if (event.cursor) {
                 showRemoteCursor(event.cursor, event.rollerId, event.rollerName);
               }
@@ -370,6 +330,10 @@ export function useDiceArena(room: GameRoom): DiceArenaController {
       if (cursorTimerRef.current) {
         clearTimeout(cursorTimerRef.current);
       }
+      for (const timer of rollFadeTimersRef.current.values()) {
+        clearTimeout(timer);
+      }
+      rollFadeTimersRef.current.clear();
       motionStateRef.current.clear();
       remoteSpecsRef.current.clear();
       engineRef.current?.dispose();
@@ -380,11 +344,6 @@ export function useDiceArena(room: GameRoom): DiceArenaController {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [container]);
-
-  // Keep the engine's play area pointed at the current map pane.
-  useEffect(() => {
-    engineRef.current?.setPlayArea(mapEl);
-  }, [mapEl, ready]);
 
   const setTrayVisible = useCallback((visible: boolean) => {
     setTrayVisibleState(visible);
@@ -417,8 +376,7 @@ export function useDiceArena(room: GameRoom): DiceArenaController {
       motionStateRef.current.delete(previous);
     }
     const rollId = uid();
-    const trayCenter = projectionRef.current.center;
-    armedRef.current.set(rollId, { specs, modifier, private: isPrivate, trayCenter });
+    armedRef.current.set(rollId, { specs, modifier, private: isPrivate, trayCenter: TRAY_CENTER });
     ourRollIdsRef.current.add(rollId);
     currentRollIdRef.current = rollId;
     motionStateRef.current.set(rollId, {
@@ -426,7 +384,7 @@ export function useDiceArena(room: GameRoom): DiceArenaController {
       specsSent: false,
       lastTransforms: null,
     });
-    engine.arm(rollId, specs, trayCenter);
+    engine.arm(rollId, specs, TRAY_CENTER);
     audioRef.current?.resume();
     return rollId;
   }, []);
@@ -502,10 +460,20 @@ export function useDiceArena(room: GameRoom): DiceArenaController {
     engine.autoThrow(rollId);
   }, []);
 
+  const scheduleRollFade = useCallback((physicsRollId: string) => {
+    const existing = rollFadeTimersRef.current.get(physicsRollId);
+    if (existing) {
+      clearTimeout(existing);
+    }
+    const timer = setTimeout(() => {
+      rollFadeTimersRef.current.delete(physicsRollId);
+      engineRef.current?.triggerFade(physicsRollId);
+    }, DICE_ROLL_LINGER_MS);
+    rollFadeTimersRef.current.set(physicsRollId, timer);
+  }, []);
+
   return {
     containerRef,
-    mapAreaRef,
-    setProjection,
     ready,
     hasArmed,
     trayVisible,
@@ -518,5 +486,6 @@ export function useDiceArena(room: GameRoom): DiceArenaController {
     throwExpression,
     instantArmed,
     instantExpression,
+    scheduleRollFade,
   };
 }

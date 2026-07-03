@@ -117,7 +117,7 @@ export function TokenLibraryPanel({ state, dm }: TokenLibraryPanelProps) {
   };
 
   return (
-    <div className="side-panel party-panel token-library-panel">
+    <div className="side-panel token-library-panel">
       <header className="side-panel-header">
         <h2>Tokens</h2>
         <button type="button" className="btn-compact" onClick={startNew}>
@@ -125,35 +125,38 @@ export function TokenLibraryPanel({ state, dm }: TokenLibraryPanelProps) {
         </button>
       </header>
 
-      <div className="side-panel-body">
-        <p className="settings-hint">
+      <div className="side-panel-body token-library-body">
+        <p className="settings-hint token-library-intro">
           Save enemies, objects, and items here, then place them on the active scene (
           <strong>{activeScene?.name ?? "none"}</strong>).
         </p>
 
-        <label className="settings-field">
-          Filter
-          <select
-            value={filter}
-            onChange={(event) => setFilter(event.target.value as typeof filter)}
-          >
-            <option value="all">All types</option>
-            {TOKEN_TEMPLATE_CATEGORIES.map((category) => (
-              <option key={category.value} value={category.value}>
-                {category.label}
-              </option>
-            ))}
-          </select>
-        </label>
+        <div className="token-library-toolbar">
+          <label className="token-library-filter">
+            <span className="token-library-filter-label">Filter</span>
+            <select
+              value={filter}
+              onChange={(event) => setFilter(event.target.value as typeof filter)}
+            >
+              <option value="all">All types</option>
+              {TOKEN_TEMPLATE_CATEGORIES.map((category) => (
+                <option key={category.value} value={category.value}>
+                  {category.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
 
-        {filtered.length === 0 ? (
-          <p className="muted">No saved tokens yet. Create one to reuse across scenes.</p>
-        ) : (
-          <div className="party-list party-grid token-library-grid">
-            {filtered.map((template) => (
+        <div className="token-library-content">
+          {filtered.length === 0 ? (
+            <p className="muted">No saved tokens yet. Create one to reuse across scenes.</p>
+          ) : (
+            <div className="token-library-grid">
+              {filtered.map((template) => (
               <div
                 key={template.id}
-                className={`party-card token-library-card${selectedId === template.id ? " selected" : ""}`}
+                className={`token-library-card${selectedId === template.id ? " selected" : ""}`}
               >
                 <button
                   type="button"
@@ -191,11 +194,11 @@ export function TokenLibraryPanel({ state, dm }: TokenLibraryPanelProps) {
                 </div>
               </div>
             ))}
-          </div>
-        )}
+            </div>
+          )}
 
-        {draft ? (
-          <section className="settings-section token-library-editor">
+          {draft ? (
+            <section className="settings-section token-library-editor">
             <h3>{templates.some((item) => item.id === draft.id) ? "Edit token" : "New token"}</h3>
             <label className="settings-field">
               Library name
@@ -294,8 +297,9 @@ export function TokenLibraryPanel({ state, dm }: TokenLibraryPanelProps) {
                 Cancel
               </button>
             </div>
-          </section>
-        ) : null}
+            </section>
+          ) : null}
+        </div>
       </div>
     </div>
   );

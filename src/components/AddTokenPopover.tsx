@@ -1,6 +1,7 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { GameState, Token, TokenKind, TokenTemplate } from "../lib/types";
-import { playerTokenColorForSlot, TOKEN_ENEMY_COLOR } from "../lib/types";
+import { playerTokenColorForSlot, TOKEN_ENEMY_COLOR, tokenFromTemplate } from "../lib/types";
 import { uploadTokenImage } from "../lib/uploadAsset";
 import type { useDmActions } from "../hooks/useGameRoom";
 
@@ -20,6 +21,7 @@ export function AddTokenPopover({ state, dm, anchorRef, onClose }: AddTokenPopov
   const formId = useId();
   const activeScene = state.scenes.find((scene) => scene.id === state.activeSceneId);
   const tokenIdRef = useRef(`token-${crypto.randomUUID().slice(0, 8)}`);
+  const templates = state.tokenTemplates ?? [];
 
   const [kind, setKind] = useState<TokenKind>("player");
   const [label, setLabel] = useState("");
@@ -31,6 +33,29 @@ export function AddTokenPopover({ state, dm, anchorRef, onClose }: AddTokenPopov
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [position, setPosition] = useState<{ left: number; bottom: number } | null>(null);
+
+  const updatePosition = () => {
+    const anchor = anchorRef.current;
+    if (!anchor) {
+      return;
+    }
+    const rect = anchor.getBoundingClientRect();
+    setPosition({
+      left: rect.left,
+      bottom: window.innerHeight - rect.top + 8,
+    });
+  };
+
+  useLayoutEffect(() => {
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+    return () => {
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+    };
+  }, [anchorRef]);
 
   useEffect(() => {
     const handlePointerDown = (event: MouseEvent) => {
@@ -80,6 +105,15 @@ export function AddTokenPopover({ state, dm, anchorRef, onClose }: AddTokenPopov
     setImageUrl(template.imageUrl);
     setEnemyColor(template.color);
     setError(null);
+  };
+
+  const placeFromLibrary = (template: TokenTemplate) => {
+    if (!activeScene) {
+      setError("No active scene.");
+      return;
+    }
+    dm.addToken(tokenFromTemplate(template, activeScene));
+    onClose();
   };
 
   const handleImageFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -140,12 +174,17 @@ export function AddTokenPopover({ state, dm, anchorRef, onClose }: AddTokenPopov
     onClose();
   };
 
-  return (
+  if (!position) {
+    return null;
+  }
+
+  return createPortal(
     <div
       ref={popoverRef}
       className="token-add-popover"
       role="dialog"
       aria-labelledby={`${formId}-title`}
+      style={{ left: position.left, bottom: position.bottom }}
       onMouseDown={(event) => event.stopPropagation()}
     >
       <header className="token-add-popover-header">
@@ -156,8 +195,36 @@ export function AddTokenPopover({ state, dm, anchorRef, onClose }: AddTokenPopov
       </header>
 
       <form className="token-add-form" onSubmit={handleSubmit}>
+        {templates.length > 0 ? (
+          <section className="token-add-library" aria-label="Token library">
+            <span className="token-add-field-label">From library</span>
+            <ul className="token-add-library-list">
+              {templates.map((template) => (
+                <li key={template.id}>
+                  <button
+                    type="button"
+                    className="token-add-library-item"
+                    onClick={() => placeFromLibrary(template)}
+                  >
+                    {template.imageUrl ? (
+                      <img className="token-add-library-thumb" src={template.imageUrl} alt="" />
+                    ) : (
+                      <span
+                        className="token-add-library-thumb token-add-library-thumb-empty"
+                        style={{ borderColor: template.color }}
+                      />
+                    )}
+                    <span className="token-add-library-name">{template.name}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+            <p className="muted token-add-hint">Click a library token to place it on the map.</p>
+          </section>
+        ) : null}
+
         <fieldset className="token-kind-picker">
-          <legend>Token type</legend>
+          <legend>Or create custom</legend>
           <label className="token-kind-option">
             <input
               type="radio"
@@ -178,23 +245,21 @@ export function AddTokenPopover({ state, dm, anchorRef, onClose }: AddTokenPopov
           </label>
         </fieldset>
 
-        {kind === "enemy" && (state.tokenTemplates?.length ?? 0) > 0 ? (
+        {kind === "enemy" && templates.length > 0 ? (
           <label className="token-add-field">
-            From library
+            Prefill from library
             <select
               defaultValue=""
               onChange={(event) => {
-                const template = state.tokenTemplates?.find(
-                  (item) => item.id === event.target.value,
-                );
+                const template = templates.find((item) => item.id === event.target.value);
                 if (template) {
                   applyTemplate(template);
                 }
                 event.target.value = "";
               }}
             >
-              <option value="">Choose a saved token…</option>
-              {state.tokenTemplates?.map((template) => (
+              <option value="">Choose to edit before placing…</option>
+              {templates.map((template) => (
                 <option key={template.id} value={template.id}>
                   {template.name}
                 </option>
@@ -278,14 +343,12 @@ export function AddTokenPopover({ state, dm, anchorRef, onClose }: AddTokenPopov
           <button type="button" className="btn-compact" onClick={onClose}>
             Cancel
           </button>
-          <button
-            type="submit"
-            disabled={kind === "player" && state.playerSlots.length === 0}
-          >
+          <button type="submit" disabled={kind === "player" && state.playerSlots.length === 0}>
             Place token
           </button>
         </div>
       </form>
-    </div>
+    </div>,
+    document.body,
   );
 }

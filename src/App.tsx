@@ -4,10 +4,11 @@ import { JoinScreen } from "./components/JoinScreen";
 import { MapCanvas } from "./components/MapCanvas";
 import { DMToolbar } from "./components/DMToolbar";
 import { SceneSettingsPanel } from "./components/SceneSettingsModal";
-import { SceneAccessPanel } from "./components/SceneAccessPanel";
 import { PlayerSceneToolbar } from "./components/PlayerSceneToolbar";
-import { DicePanel } from "./components/DicePanel";
 import { CharacterSheetPanel } from "./components/CharacterSheet";
+import { SheetDicePanel } from "./components/SheetDicePanel";
+import { DmPlaySidebarPanel } from "./components/DmPlaySidebarPanel";
+import { DiceRollToasts } from "./components/DiceRollToasts";
 import { TokenLibraryPanel } from "./components/TokenLibraryPanel";
 import { ResizableSplit } from "./components/ResizableSplit";
 import { useDmActions, useGameRoom, usePlayerSheet, type JoinParams } from "./hooks/useGameRoom";
@@ -20,6 +21,7 @@ type SessionParams = JoinParams & {
 };
 
 export type DmView = "main" | "players" | "scenes" | "tokens";
+export type PlayerView = "maps" | "players";
 
 /// <summary>
 /// Root application shell: join flow, game room layout, and role-specific panels.
@@ -36,6 +38,7 @@ export default function App() {
   );
   const [viewCommandId, setViewCommandId] = useState(0);
   const [playerViewingSceneId, setPlayerViewingSceneId] = useState<string | null>(null);
+  const [playerView, setPlayerView] = useState<PlayerView>("maps");
   const room = useGameRoom(session?.roomId ?? null);
   const dm = useDmActions(room);
   const { sheet, updateSheet, canEdit } = usePlayerSheet(room);
@@ -96,7 +99,9 @@ export default function App() {
   const sceneEditMode = isDm && dmView === "scenes";
   const toolbarMode = dmView === "main" ? "play" : "main";
   const playControls = isDm && dmView === "main";
-  const showMap = !isDm || (dmView !== "players" && dmView !== "tokens");
+  const showMap = isDm
+    ? dmView !== "players" && dmView !== "tokens"
+    : playerView === "maps";
 
   const displayName =
     session.role === "dm"
@@ -131,8 +136,6 @@ export default function App() {
               sceneEditMode={sceneEditMode}
               viewCommand={viewCommand}
               onSettingsViewportChange={setSettingsViewport}
-              onContainerEl={diceArena.mapAreaRef}
-              onViewportChange={diceArena.setProjection}
             />
             {isDm ? (
               <DMToolbar
@@ -146,39 +149,75 @@ export default function App() {
                 fogBrushMode={fogBrushMode}
                 onFogBrushModeChange={setFogBrushMode}
               />
+            ) : state && room.yourPlayerId ? (
+              <PlayerSceneToolbar
+                state={state}
+                playerSlotId={room.yourPlayerId}
+                viewingSceneId={playerViewingSceneId}
+                onViewingSceneChange={setPlayerViewingSceneId}
+              />
             ) : null}
           </section>
         );
 
-        const sidebarPanel = isDm ? (
-          dmView === "main" ? (
-            <div className="dm-main-sidebar">
-              <SceneAccessPanel state={state} dm={dm} />
+        const sheetDiceProps = {
+          sheet: isDm && dmView === "main" ? null : sheet,
+          canEdit: !(isDm && dmView === "main") && canEdit,
+          onChange: updateSheet,
+          template: state.sheetTemplate,
+          slotId: room.yourPlayerId,
+          playerSlots: state.playerSlots,
+          connectedPlayers: state.connectedPlayers,
+          allSheets: state.characterSheets,
+          isDm,
+          dm,
+          showSlotManagement: isDm && dmView === "players",
+          yourPlayerId: room.yourPlayerId,
+          publicRolls: state.publicDiceLog,
+          privateRolls: room.privateDiceLog,
+          onRoll: room.rollDice,
+          onArm: diceArena.arm,
+          onThrowArmed: diceArena.throwArmed,
+          onThrowExpression: diceArena.throwExpression,
+          onInstantExpression: diceArena.instantExpression,
+          onInstantArmed: diceArena.instantArmed,
+          hasArmed: diceArena.hasArmed,
+          trayVisible: diceArena.trayVisible,
+          onToggleTray: diceArena.setTrayVisible,
+          muted: diceArena.muted,
+          onToggleMuted: diceArena.setMuted,
+        };
+
+        const sheetDicePanel = <SheetDicePanel {...sheetDiceProps} />;
+
+        const playerPartyPanel = (
+          <div className="side-panel player-party-panel">
+            <header className="side-panel-header">
+              <h2>Party sheets</h2>
+            </header>
+            <div className="side-panel-body player-party-body">
               <CharacterSheetPanel
+                embedded
                 sheet={null}
                 canEdit={false}
-                onChange={() => {}}
+                onChange={updateSheet}
                 template={state.sheetTemplate}
+                slotId={room.yourPlayerId}
                 playerSlots={state.playerSlots}
                 connectedPlayers={state.connectedPlayers}
                 allSheets={state.characterSheets}
-                isDm={isDm}
-                dm={dm}
+                showPartySheets
                 showSlotManagement={false}
               />
             </div>
+          </div>
+        );
+
+        const sidebarPanel = isDm ? (
+          dmView === "main" ? (
+            <DmPlaySidebarPanel {...sheetDiceProps} state={state} dm={dm} />
           ) : dmView === "players" ? (
-            <CharacterSheetPanel
-              sheet={sheet}
-              canEdit={canEdit}
-              onChange={updateSheet}
-              template={state.sheetTemplate}
-              playerSlots={state.playerSlots}
-              connectedPlayers={state.connectedPlayers}
-              allSheets={state.characterSheets}
-              isDm={isDm}
-              dm={dm}
-            />
+            sheetDicePanel
           ) : dmView === "tokens" ? (
             <TokenLibraryPanel state={state} dm={dm} />
           ) : (
@@ -190,39 +229,10 @@ export default function App() {
               onResetView={() => handleViewCommand("reset")}
             />
           )
+        ) : playerView === "players" ? (
+          playerPartyPanel
         ) : (
-          <CharacterSheetPanel
-            sheet={sheet}
-            canEdit={canEdit}
-            onChange={updateSheet}
-            template={state.sheetTemplate}
-            slotId={room.yourPlayerId}
-            playerSlots={state.playerSlots}
-            connectedPlayers={state.connectedPlayers}
-            allSheets={state.characterSheets}
-            isDm={isDm}
-            dm={dm}
-          />
-        );
-
-        const dicePanel = (
-          <DicePanel
-            isDm={isDm}
-            yourPlayerId={room.yourPlayerId}
-            publicRolls={state.publicDiceLog}
-            privateRolls={room.privateDiceLog}
-            onRoll={room.rollDice}
-            onArm={diceArena.arm}
-            onThrowArmed={diceArena.throwArmed}
-            onThrowExpression={diceArena.throwExpression}
-            onInstantExpression={diceArena.instantExpression}
-            onInstantArmed={diceArena.instantArmed}
-            hasArmed={diceArena.hasArmed}
-            trayVisible={diceArena.trayVisible}
-            onToggleTray={diceArena.setTrayVisible}
-            muted={diceArena.muted}
-            onToggleMuted={diceArena.setMuted}
-          />
+          sheetDicePanel
         );
 
         return (
@@ -230,16 +240,21 @@ export default function App() {
             className={`game-layout${
               isDm && (dmView === "players" || dmView === "tokens")
                 ? ` ${dmView === "players" ? "players" : "tokens"}-layout`
-                : ""
+                : !isDm && playerView === "players"
+                  ? " players-layout"
+                  : ""
             }`}
           >
             {showMap ? (
-              <ResizableSplit main={mapSection} middle={dicePanel} sidebar={sidebarPanel} />
+              <ResizableSplit
+                main={mapSection}
+                sidebar={sidebarPanel}
+                storageKey={isDm ? "cm-sidebar-width-dm" : "cm-sidebar-width-player"}
+                maxWidthRatio={isDm ? 0.45 : 0.5}
+                maxWidth={isDm ? 560 : undefined}
+              />
             ) : (
-              <div className="layout-with-dice-rail">
-                <aside className="dice-rail">{dicePanel}</aside>
-                {sidebarPanel}
-              </div>
+              <div className="management-shell">{sidebarPanel}</div>
             )}
           </main>
         );
@@ -280,13 +295,23 @@ export default function App() {
               Tokens
             </button>
           </nav>
-        ) : state && status === "joined" && room.yourPlayerId ? (
-          <PlayerSceneToolbar
-            state={state}
-            playerSlotId={room.yourPlayerId}
-            viewingSceneId={playerViewingSceneId}
-            onViewingSceneChange={setPlayerViewingSceneId}
-          />
+        ) : state && status === "joined" ? (
+          <nav className="view-tabs" aria-label="Player views">
+            <button
+              type="button"
+              className={playerView === "maps" ? "active" : ""}
+              onClick={() => setPlayerView("maps")}
+            >
+              Maps
+            </button>
+            <button
+              type="button"
+              className={playerView === "players" ? "active" : ""}
+              onClick={() => setPlayerView("players")}
+            >
+              Players
+            </button>
+          </nav>
         ) : null}
 
         <div className="header-right">
@@ -321,6 +346,15 @@ export default function App() {
       ) : (
         <div className="loading">Connecting to room...</div>
       )}
+
+      {state && status === "joined" ? (
+        <DiceRollToasts
+          publicRolls={state.publicDiceLog}
+          privateRolls={room.privateDiceLog}
+          isDm={isDm}
+          onPhysicalRollNotified={diceArena.scheduleRollFade}
+        />
+      ) : null}
 
       <div
         ref={diceArena.containerRef}

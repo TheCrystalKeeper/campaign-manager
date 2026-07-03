@@ -1545,14 +1545,6 @@ export function MapCanvas({
         </Layer>
       </Stage>
       )}
-      {!isDm && !sceneHidden ? (
-        <div className="player-badge">
-          Drag to pan · scroll to zoom · drag your token · Shift+drag to annotate
-        </div>
-      ) : null}
-      {isDm && canAnnotate ? (
-        <div className="player-badge">Shift+drag to annotate · right-click to ping</div>
-      ) : null}
       {isDm && fogPreview && !sceneEditMode && activeScene?.fogEnabled ? (
         <div className="fog-badge">Fog preview on — semi-transparent for you; players see full fog</div>
       ) : null}
