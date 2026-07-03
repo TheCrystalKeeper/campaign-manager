@@ -27,6 +27,16 @@ export type ToolRuntime = {
   setDraft: (draft: unknown) => void;
   drawColor: string;
   drawWidth: number;
+  /** Per-client snap-to-grid (walls snap endpoints to grid intersections when on). */
+  snap: boolean;
+  /** Fog brush: paint direction (reveal cuts fog, cover paints it back). */
+  fogMode: "reveal" | "cover";
+  /** Fog brush radius in world px (already grid-scaled by MapCanvas). */
+  fogBrushR: number;
+  /** Walls tool: what a plain drag draws (Shift always forces the other kind). */
+  wallKind: "wall" | "door";
+  /** Lights tool: radii (feet) a freshly placed light gets, from the chosen preset. */
+  lightRadii: { brightR: number; dimR: number };
 };
 
 export type MapTool = {

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { JoinScreen } from "./components/JoinScreen";
 import { MapCanvas } from "./components/MapCanvas";
 import { FloatingCluster } from "./components/FloatingCluster";
@@ -13,6 +13,8 @@ import { NpcsPage } from "./pages/NpcsPage";
 import { ScenesPage } from "./pages/ScenesPage";
 import { useDiceOverlay } from "./dice/useDiceOverlay";
 import { useDmActions, useGameRoom, type JoinParams } from "./hooks/useGameRoom";
+import { buildInverse, useHistory } from "./lib/history";
+import { readLocalFlag, writeLocalFlag } from "./lib/localFlags";
 import { fitViewportToScene } from "./lib/sceneUtils";
 import { DEFAULT_VIEWPORT, TOKEN_ENEMY_COLOR, type Viewport } from "./lib/types";
 
@@ -31,21 +33,14 @@ const DM_PAGES: Array<{ id: PageId; label: string }> = [
 const SNAP_KEY = "cm-map-snap";
 const TOASTS_KEY = "cm-log-toasts";
 
-function readLocalFlag(key: string, fallback: boolean): boolean {
-  try {
-    const raw = localStorage.getItem(key);
-    return raw === null ? fallback : raw === "1";
-  } catch {
-    return fallback;
-  }
-}
-
-function writeLocalFlag(key: string, on: boolean) {
-  try {
-    localStorage.setItem(key, on ? "1" : "0");
-  } catch {
-    // preference just won't persist
-  }
+/** True when a keyboard event targets an editable field (so shortcuts stand down). */
+function isTypingTarget(target: EventTarget | null): boolean {
+  return (
+    target instanceof HTMLInputElement ||
+    target instanceof HTMLTextAreaElement ||
+    target instanceof HTMLSelectElement ||
+    (target instanceof HTMLElement && target.isContentEditable)
+  );
 }
 
 /// <summary>
@@ -74,10 +69,36 @@ export default function App() {
   const lastSceneRef = useRef<string | null>(null);
 
   const room = useGameRoom(session?.roomId ?? null);
-  const dm = useDmActions(room);
   const dice = useDiceOverlay(room);
   const { state, yourRole, status, error } = room;
   const isDm = yourRole === "dm";
+
+  // Players have no pages — the Board (with maximizable sheet windows) covers them.
+  const activePage: PageId = isDm ? page : "board";
+  const onBoard = activePage === "board";
+
+  // DM undo/redo for map edits + tokens. `historySend` wraps room.send: it records the
+  // inverse of each tracked mutation, then forwards. All DM mutations that should be
+  // undoable (dm actions, board map edits, token moves) go through it.
+  const history = useHistory();
+  const stateRef = useRef<typeof state>(state);
+  stateRef.current = state;
+  const roomSend = room.send;
+  const recordEdit = history.record;
+  const historySend = useCallback(
+    (message: Parameters<typeof roomSend>[0]) => {
+      if (stateRef.current) {
+        const inverse = buildInverse(stateRef.current, message);
+        if (inverse) {
+          recordEdit({ send: roomSend, undo: inverse.undo, redo: inverse.redo });
+        }
+      }
+      roomSend(message);
+    },
+    [roomSend, recordEdit],
+  );
+  const dmRoom = useMemo(() => ({ ...room, send: historySend }), [room, historySend]);
+  const dm = useDmActions(dmRoom);
 
   // Feed the dice overlay this client's live viewport and the DM secret toggle.
   const setDiceProjection = dice.setProjection;
@@ -162,6 +183,8 @@ export default function App() {
       return;
     }
     lastSceneRef.current = scene.id;
+    // Undo history is scene-scoped — switching the active scene starts fresh.
+    history.reset();
     const fitted = fitViewportToScene(scene, window.innerWidth, window.innerHeight);
     setViewport(fitted);
     if (isDm) {
@@ -169,6 +192,39 @@ export default function App() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state?.activeSceneId, status]);
+
+  // DM undo/redo shortcuts (board only; ignored while typing).
+  const historyUndo = history.undo;
+  const historyRedo = history.redo;
+  useEffect(() => {
+    if (!isDm || !onBoard) {
+      return;
+    }
+    const onKey = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== "z") {
+        // Ctrl+Y is an alternate redo.
+        if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "y") {
+          if (!isTypingTarget(event.target)) {
+            event.preventDefault();
+            historyRedo();
+          }
+        }
+        return;
+      }
+      if (isTypingTarget(event.target)) {
+        return;
+      }
+      event.preventDefault();
+      if (event.shiftKey) {
+        historyRedo();
+      } else {
+        historyUndo();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isDm, onBoard, historyUndo, historyRedo]);
 
   const leave = () => {
     setSession(null);
@@ -181,6 +237,7 @@ export default function App() {
     setDockTab("log");
     setDockOpen(true);
     setPage("board");
+    history.reset();
     lastSceneRef.current = null;
   };
 
@@ -312,10 +369,6 @@ export default function App() {
   const sheetPanel = PANELS.find((panel) => panel.id === "sheet")!;
   const settingsPanel = PANELS.find((panel) => panel.id === "settings")!;
 
-  // Players have no pages — the Board (with maximizable sheet windows) covers them.
-  const activePage: PageId = isDm ? page : "board";
-  const onBoard = activePage === "board";
-
   const toggleSheet = () => {
     if (sheetOpen) {
       setSheetOpen(false);
@@ -378,13 +431,17 @@ export default function App() {
         yourPlayerId={room.yourPlayerId}
         viewport={viewport}
         onViewportChange={handleViewportChange}
-        onMoveToken={(tokenId, x, y) => room.send({ type: "MOVE_TOKEN", tokenId, x, y })}
+        onMoveToken={(tokenId, x, y) =>
+          (isDm ? historySend : room.send)({ type: "MOVE_TOKEN", tokenId, x, y })
+        }
         onSelectToken={selectToken}
         selectedTokenId={selectedTokenId}
-        send={room.send}
+        send={isDm ? historySend : room.send}
         subscribeMeasure={room.subscribeMeasure}
         snap={snap}
         onToggleSnap={toggleSnap}
+        hotkeysEnabled={onBoard}
+        history={isDm ? history : undefined}
       />
 
       {/* 3D dice canvas: above the map, below all UI, never takes pointer events. */}
@@ -489,7 +546,7 @@ export default function App() {
               <NpcsPage ctx={panelContext} />
             </div>
             <div className={`page${activePage === "scenes" ? " page--active" : ""}`}>
-              <ScenesPage ctx={panelContext} />
+              <ScenesPage ctx={panelContext} active={activePage === "scenes"} />
             </div>
           </>
         ) : null}

@@ -73,9 +73,13 @@ export function redactStateFor(state: GameState, view: StateView): GameState {
   }
 
   // Joined players: hide the DM's notes, hidden tokens, unrevealed NPC sheet
-  // sections, secret rolls/events, and whispers addressed to someone else.
-  // Hidden tokens are stripped entirely — UI hiding is never enough.
-  const tokens = state.tokens.filter((token) => !token.hidden);
+  // sections, secret rolls/events, whispers addressed to someone else — and every
+  // NON-ACTIVE scene (prep must be invisible until "Set Live", not merely unrendered;
+  // Phase 6.5). Hidden tokens are stripped entirely — UI hiding is never enough.
+  const scenes = state.scenes.filter((scene) => scene.id === state.activeSceneId);
+  const tokens = state.tokens.filter(
+    (token) => !token.hidden && token.sceneId === state.activeSceneId,
+  );
   const hpVisibleSheetIds = new Set(
     tokens
       .filter((token) => token.showHp !== "none" && token.sheetId)
@@ -134,5 +138,5 @@ export function redactStateFor(state: GameState, view: StateView): GameState {
       }
     : null;
   // Directories are DM-side tools; sheets carry item-name copies for players.
-  return { ...state, tokens, sheets, log, dmNotes: "", combat, folders: [], items: {} };
+  return { ...state, scenes, tokens, sheets, log, dmNotes: "", combat, folders: [], items: {} };
 }

@@ -7,6 +7,7 @@ import type {
   GameState,
   ItemRecord,
   JoinMessage,
+  Light,
   PlayerSlot,
   Role,
   Scene,
@@ -14,6 +15,7 @@ import type {
   SheetSectionId,
   Token,
   Viewport,
+  Wall,
 } from "../lib/types";
 import { normalizeGameState } from "../lib/types";
 import type { CampaignManifest } from "../lib/campaignManifest";
@@ -468,9 +470,17 @@ export function useDmActions(room: GameRoom) {
       updateItem: (item: ItemRecord) => send({ type: "UPDATE_ITEM", item }),
       deleteItem: (itemId: string) => send({ type: "DELETE_ITEM", itemId }),
       clearAnnotations: (sceneId: string) => send({ type: "CLEAR_ANNOTATIONS", sceneId }),
-      setFogEnabled: (sceneId: string, enabled: boolean) =>
-        send({ type: "FOG_SET", sceneId, enabled }),
+      setFogEnabled: (sceneId: string, enabled: boolean, inverted?: boolean) =>
+        send({ type: "FOG_SET", sceneId, enabled, inverted }),
       resetFog: (sceneId: string) => send({ type: "FOG_RESET", sceneId }),
+      setWalls: (sceneId: string, walls: Wall[]) => send({ type: "SET_WALLS", sceneId, walls }),
+      toggleDoor: (sceneId: string, wallId: string) =>
+        send({ type: "TOGGLE_DOOR", sceneId, wallId }),
+      addLight: (sceneId: string, light: Light) => send({ type: "ADD_LIGHT", sceneId, light }),
+      updateLight: (sceneId: string, light: Light) =>
+        send({ type: "UPDATE_LIGHT", sceneId, light }),
+      removeLight: (sceneId: string, lightId: string) =>
+        send({ type: "REMOVE_LIGHT", sceneId, lightId }),
     }),
     [send, yourRole],
   );

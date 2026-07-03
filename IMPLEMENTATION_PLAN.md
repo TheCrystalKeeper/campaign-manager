@@ -7,35 +7,47 @@ architecture reference — **historical**, describes the codebase before Phases 
 
 ## STATUS (2026-07-02) — read this first in a fresh session
 
-**Phases 0–5.5 are SHIPPED and machine-verified** (plus two UX-feedback rounds and a
-3D-dice feedback round). **Phase 6 (walls, lights, dynamic vision) is next.** The
-roadmap was restructured 2026-07-02 (user):
-5.5 = shell/layout fixes ✅, 6 = vision, 7 = game-content depth, 8 = full aesthetic revamp
+**Phases 0–6.5 are SHIPPED and machine-verified** (plus two UX-feedback rounds and a
+3D-dice feedback round). **Phase 7 (game-content depth: the tabbed character-sheet
+redesign, items, rolls, token facing, DM tools) is next.** The roadmap was restructured
+2026-07-02 (user): 5.5 = shell/layout fixes ✅, 6 = vision ✅ (v1), 6.5 = scene-editor
+round ✅ (pulled the fog brush + scenes-editor depth forward from 7; also Players tab bar
++ active-scene-only player redaction), 7 = game-content depth, 8 = full aesthetic revamp
 (+ sound design), 9 = optional extras (soundboard/themes/asset library — the old
-Phase 7). Each shipped phase below carries an "as built" note where reality diverged
-from the original spec — trust those notes over the older prose.
+Phase 7). Each shipped phase below carries an "as built" note where reality diverged from
+the original spec — trust those notes over the older prose. Phase 6 shipped a focused v1;
+its "as built" note lists the deferred stretches (server-side LOS redaction, dim/bright
+shading, light shadows, directional cones, low-spec mode).
 
 - **Verification:** `tests/` holds the WS smoke suites + unit tests with a README on how
   to run them (partykit dev server + `node tests/smoke-*.mjs`). All pass as of this date
-  (phase0–5 + ux2 + both unit suites; re-run after 5.5 — shell-only, no protocol change).
+  (phase0–6 + scenes + ux2 + all five unit suites, all green as of 2026-07-03).
   Re-run the full set after any server/redaction/protocol change.
 - **Shipped file map (orientation):** shared logic `src/lib/{types,redact,dice,dice3d,
-  pointerDrag,sceneUtils,clampToViewport}.ts`; server `partykit/server.ts`; shell
-  `src/App.tsx` + `src/panels/registry.tsx` (dock tabs + pop-out windows) +
-  `src/components/{Dock,FloatingWindow,FloatingCluster,Directory,ActorsPanel,ItemsPanel,
-  PartyPanel,ScenePanel,CharacterSheet,TokenEditor,InitiativeTracker,LogPanel,LogToasts,
-  NotesPanel,DiceTray,SettingsPanel,MapCanvas,MapToolbar,JoinScreen}.tsx`; DM prep pages
-  `src/pages/{PageShell,PlayersPage,NpcsPage,ScenesPage}.tsx`; 3D dice
+  pointerDrag,sceneUtils,clampToViewport,visibility,sceneMessages,localFlags,history}.ts`;
+  server `partykit/server.ts`; shell `src/App.tsx` + `src/panels/registry.tsx` (dock tabs +
+  pop-out windows) + `src/components/{Dock,FloatingWindow,FloatingCluster,Directory,
+  ActorsPanel,ItemsPanel,PartyPanel,ScenePanel,SceneSettings,CharacterSheet,TokenEditor,
+  InitiativeTracker,LogPanel,LogToasts,NotesPanel,DiceTray,SettingsPanel,MapCanvas,
+  MapToolbar,MapFog,MapVision,JoinScreen}.tsx`; DM prep pages
+  `src/pages/{PageShell,PlayersPage,NpcsPage,ScenesPage,SheetCards}.tsx`; 3D dice
   `src/dice/{engine,geometry,audio,trayScene,useDiceOverlay}.ts`; map tools
-  `src/map/tools/{types,registry,select,measure,draw,calibrate,fog}`.
+  `src/map/tools/{types,registry,select,measure,draw,calibrate,fog,walls,lights}`.
 - **Working state is uncommitted on the revamp branch** (the whole revamp, Phases 0–5.5).
 - **Manual checks still owed by the user:** (a) 3D dice feel in two browser windows —
   tray ready/gather/throw, constant size across zoom, window-aware walls; (b) Phase 5
   visuals — grid calibration gesture on a real map image, fog render (black for players /
   50% for DM), ruler + drawing feel, snap-to-grid; (c) Phase 5.5 shell feel — window
   resize/maximize from every edge, drag-to-every-edge recoverability, toast lift over the
-  tray, page switcher flow, wide-sheet two-column layout. Everything protocol-level is
-  already machine-verified.
+  tray, page switcher flow, wide-sheet two-column layout; (d) Phase 6 vision *feel* in two
+  windows — draw walls/doors, place lights, turn global illumination off, give a player
+  token vision, and confirm the player sees only their LOS (walls occlude, doors open/close,
+  lights reveal, tokens in the dark are hidden) while the DM's 👁 Preview matches;
+  (e) Phase 6.5 — fog brush feel (reveal/cover/sizes/invert/reset; player opaque, DM 50%),
+  Scenes editor (pan/zoom independence from the board, Live-ON instant vs Live-OFF staged
+  edits + Apply/Discard/Set-Live, hotkeys on the Scenes page don't switch the board tool),
+  Players tab bar (toggle/multi-open/rename/remove/add).
+  Everything protocol-level + the LOS geometry is already machine-verified.
 
 **Locked decisions**
 - **Layout:** one full-bleed board; FoundryVTT-style **docked right sidebar** of panel tabs,
@@ -77,7 +89,7 @@ from the original spec — trust those notes over the older prose.
 | DM grid size change | 5 ✅ — calibration gesture + numeric inputs |
 | Measure distance | 5 ✅ — synced ruler, Chebyshev feet |
 | Annotations | 5 ✅ — freehand draw; DM persists, players fade |
-| Walls, lights, vision (+directional) | 6 (fog-lite shipped in 5 ✅) |
+| Walls, lights, vision (+directional) | 6 ✅ (v1: walls/doors/lights + LOS mask; directional cones deferred to 7 with token facing) |
 | Soundboard (idea) | 9 |
 | Custom CSS themes (idea) | 9 (enabled by 0; themed after 8) |
 | Actors/Items directories, folders, inventory *(added via UX feedback)* | 1–2 (shipped: `Directory`, folders, `sortOrder`, sheet inventory) |
@@ -85,6 +97,7 @@ from the original spec — trust those notes over the older prose.
 | Shell/layout fixes: toasts vs tray, settings panel, rail reorg, page switcher *(user 2026-07-02)* | 5.5 ✅ |
 | Sheets/items depth, roll breakdown colors, fog brush, HP quick-adjust, templates, coin flip *(user 2026-07-02)* | 7 |
 | Tabbed character-sheet redesign (reference layout) + token facing/rotation *(user 2026-07-02)* | 7 (structure; final skin in 8) |
+| Fog brush + invert, Scenes page = full editor (live toggle + Set Live), Players tab bar, prep secrecy *(user 2026-07-03)* | 6.5 ✅ |
 | Full aesthetic revamp — tactile/paper/wood + sound design *(user 2026-07-02)* | 8 |
 
 ---
@@ -738,7 +751,55 @@ every edge/corner, maximize/restore, and a wide sheet window goes multi-column;
 
 ---
 
-## Phase 6 — Walls, lights, dynamic vision (the big one) — ⏭ NEXT
+## Phase 6 — Walls, lights, dynamic vision (the big one) — ✅ SHIPPED (v1)
+
+> **As built (2026-07-03):** a coherent v1 shipped and machine-verified
+> (`smoke-phase6.mjs` + `unit-visibility.test.ts`, all green; full suite re-run clean;
+> `npm run build` passes). Deltas from the spec below, and what was deferred:
+> - **Data model:** `Scene.walls: Wall[]`, `Scene.lights: Light[]`,
+>   `Scene.globalIllumination` (**default true** — existing scenes stay fully lit until the
+>   DM opts in), `Token.vision {enabled, rangeFt}`. Light radii are in **feet** (converted
+>   to world px via `gridSize / feetPerSquare`) to match darkvision units. All go through
+>   `normalizeScene`/`normalizeToken` with `sanitizeWall`/`sanitizeLight`/
+>   `sanitizeTokenVision`; degenerate (zero-length) walls dropped; caps **600 walls / 50
+>   lights** enforced server-side.
+> - **Messages:** `SET_WALLS` (replace-set, batched per edit), `TOGGLE_DOOR`,
+>   `ADD/UPDATE/REMOVE_LIGHT` — all DM-only (behind the existing "only the DM can control
+>   the map" gate). `globalIllumination` + token `vision` ride the existing
+>   `UPDATE_SCENE`/`UPDATE_TOKEN`. No new hot-path message.
+> - **`src/lib/visibility.ts`** (pure, unit-tested): classic angular sweep — rays at every
+>   endpoint ±ε, bounded by a box; `wallsToSegments` drops open doors; `pointInPolygon` for
+>   the LOS test. Key fix: the segment-parameter tolerance must be ≪ the angular-ε
+>   displacement or the "past the corner" rays graze the endpoint (that was the one subtle
+>   bug; covered by the corner-peek + gap unit checks).
+> - **Rendering (`src/components/MapVision.tsx`):** `VisionMaskLayer` — a darkness sheet
+>   **above the tokens** (so it also hides tokens standing in the dark), erased
+>   (`destination-out`) inside each viewer token's LOS polygon (a Konva `clipFunc`) where
+>   its darkvision circle or any enabled light's reach lands. **Simplification:** lights
+>   are radius circles gated by the *viewer's* LOS — walls block the viewer's sight, but
+>   lights don't yet cast their own shadows (a lamp around a corner from the viewer is
+>   correctly hidden by viewer-LOS; a wall between lamp and lit area is not). Dim-vs-bright
+>   gradation is not split yet (single darkness level; `dimR` is the outer reach). Vision
+>   recomputes on state change (token drag-**end**), memoized on a token-position/walls
+>   signature so the arrow/ruler fade-clock re-renders don't re-sweep.
+> - **DM UX:** walls render as lines / doors as (green when open) dashed lines, lights as
+>   gold markers with faint reach rings (`WallsLightsEditor` layer), interactive only with
+>   the matching tool. **Walls tool (🧱 W):** drag = wall, **Shift-drag = door**, endpoints
+>   snap to grid **intersections** when snap is on; click a door to open/close, right-click
+>   a segment to delete. **Lights tool (💡 L):** click to place (default 20/40 ft), drag to
+>   move, right-click to delete. Toolbar options for both expose **Lighting on/off**
+>   (toggles `globalIllumination`) and **👁 Preview** (DM sees the mask as a player would).
+>   `TokenEditor` gained a vision on/off + darkvision-range field; `ScenePanel` has the
+>   global-illumination toggle + wall/light counts. `ToolRuntime` gained `snap`.
+> - **Deferred (documented leaks / stretches, per the spec):** walls/lights are broadcast
+>   to players (the client computes vision), so wall geometry is a **documented devtools
+>   leak** — server-side LOS redaction (dropping unseen tokens/walls in `redactStateFor`)
+>   is NOT done; token hiding in darkness is visual (the mask covers them). Also deferred:
+>   dim/bright two-level shading, lights casting their own shadows, live vision during a
+>   drag (updates on drag-end), "View as [specific player]", low-spec 0.25× canvas,
+>   explored-area memory, and directional cones (`Token.facing` lands with the Phase 7
+>   token-rotation work and will clip the LOS to a wedge then). Door toggle is DM-only for
+>   now (players opening doors is a later nicety).
 
 **Data model:**
 ```ts
@@ -788,6 +849,167 @@ Phase 5 tool plumbing.
 endpoints); player sees only lit LOS area and others' tokens vanish behind walls; door toggle
 propagates <100ms; 600-wall scene >30fps on integrated graphics; darkvision sees unlit rooms
 within range only; (if built) LOS redaction verified at WS-frame level.
+
+---
+
+## Phase 6.5 — Scene editor, fog brush + invert, Players tab bar, prep secrecy — ✅ SHIPPED
+
+> **As built (2026-07-03):** shipped per the spec below and machine-verified —
+> `smoke-scenes.mjs` (9/9) + `unit-scene-editor.test.ts` (32/32), full suite re-run green
+> (9 smoke + 4 unit; mandatory since redaction changed), `npm run build` passes.
+> Implementation notes beyond the spec:
+> - New files: `src/lib/{sceneMessages,localFlags}.ts`, `src/components/SceneSettings.tsx`
+>   (extracted from ScenePanel — the dock tab keeps the scene list + live active-scene
+>   settings); ScenesPage/PlayersPage rewritten; `PageShell` now serves the NPCs page only.
+> - `MapCanvas` sizing moved from `useWindowSize` to a ResizeObserver on `.map-root`
+>   (single code path; identical on the board where the root is fixed/inset-0), plus the
+>   `hotkeysEnabled` / `embedded` props. Fog compositing is painter's-order in ONE Konva
+>   layer (`FOG_COLOR` shared by base + cover shapes; DM 50% opacity applies at layer
+>   compositing, after the ops — never split the fog across layers).
+> - The editor's staging (`editorSend`) folds scene-shape messages into a per-scene draft
+>   via `applySceneMessage`; ephemeral/arrow annotations and MEASURE always pass through
+>   live; drafts strip ephemeral annotations at baseline AND apply. Toggling Live back ON
+>   auto-applies every dirty draft (nothing silently lost).
+> - Gotcha found by the smoke test: fresh rooms start with TWO default scenes
+>   (`createDefaultScenes`) — tests must count, not assume one.
+> - The fog tool no longer has rect/circle gestures (brush + click-dab only); previously
+>   stored rect/circle shapes still render, now with optional cover mode.
+>
+> **Fog/tools polish round (2026-07-03, user feedback):**
+> - **Fog opacity is now uniform for the DM regardless of overlap.** The bug: Konva applies
+>   a Layer's `opacity` per child (`getAbsoluteOpacity`), so the old `opacity={0.5}` fog
+>   layer dimmed each shape independently and overlaps compounded (0.5-over-0.5 = 0.75).
+>   Fix: fog renders at full layer opacity (overlaps flatten to a single opaque mask), then
+>   a **single trailing full-scene `destination-out` rect at opacity 0.5** (DM only) halves
+>   the whole flattened alpha in one pass — uniform everywhere. Lives in the new memoized
+>   `src/components/MapFog.tsx` (`FogLayer`). Never split fog across layers or wrap it in a
+>   cached group.
+> - **Brush lag fixed by memoization.** A brush stroke only mutates the tool's `draft`
+>   (rendered in the topmost overlay layer), never `scene.fog`. `FogLayer` is `React.memo`,
+>   and `VisionMaskLayer`/`WallsLightsEditor` are now memoized with `useCallback`-stabilized
+>   wall/light handlers, so a stroke no longer re-diffs the committed fog/wall/light nodes
+>   (previously every pointer-move re-created and re-diffed up to 300 fog shapes).
+> - **Tool option popups redesigned** (`MapToolbar`): uniform equal-width/height buttons in
+>   labeled rows (`.map-opt-label`/`.map-opt-row`/`.map-opt-btn`, 12rem panel). New
+>   functionality, still zero new message types: **walls** get a Wall/Door mode toggle
+>   (Shift still flips) + Clear-walls (`SET_WALLS []`); **lights** get Candle/Torch/Lantern
+>   size presets (`ToolRuntime.lightRadii`, `LIGHT_PRESETS`) + Clear-lights
+>   (`UPDATE_SCENE {lights:[]}`); both keep the Lighting on/off + 👁 Preview row. Fog
+>   options regrouped (Fog/Invert, Reveal/Cover, size, Reset). `ToolRuntime` gained
+>   `wallKind` + `lightRadii`.
+>
+> **Lights/fog/undo round (2026-07-03, user feedback):**
+> - **Lights stay LOS-gated for players** (user's explicit choice): a light only reveals
+>   area inside a vision token's line of sight — a player with no vision token sees darkness
+>   (`VisionMaskLayer`, LOS-gated). What was "broken" was the DM's ability to *see* lights
+>   working. Fix: a **DM lighting overview** — when a scene has dynamic lighting on and the
+>   DM is NOT previewing, `DmLightingOverlay` dims the map (~62%) and cuts every light's
+>   **wall-clipped pool** (LOS ∩ dim radius, `useLightCoverage`) + any vision token's
+>   darkvision **fully bright**: the omniscient "here's my lighting" view, no token needed.
+>   The 👁 preview stays the honest LOS-gated player view (hint when no token has vision).
+>   The earlier faint always-on coverage glow was removed (too subtle; superseded). The
+>   lighting toggle now reads its state — **☀ Fully lit** ↔ **🌙 Dynamic**.
+>   **Key setup gotcha:** lights do nothing until global illumination is off (🌙 Dynamic) —
+>   with it on (default), the whole scene is already lit. Order: Lights tool → 🌙 Dynamic →
+>   place lights (dimmed pools appear immediately for the DM); add a player token with
+>   vision + 👁 Preview to check the LOS-gated player view.
+> - **Player tokens default to vision** (`normalizeToken`: `ownerPlayerId` set + no explicit
+>   vision → `{enabled:true, rangeFt:0}`) so a player isn't stranded in black the instant the
+>   DM turns on dynamic lighting — they see lit areas within their token's line of sight
+>   automatically; the DM still overrides (off / add darkvision) per token. Enemies default
+>   to no vision. Applied client-side on every STATE receive, so existing player tokens gain
+>   it too. (Was the root cause of "player view is completely black" — the player's token had
+>   no vision.)
+> - **Clicking an existing light/wall no longer places a new one** — markers are tagged
+>   `name="map-handle"` and the stage `onPointerDown` skips the active tool when the target
+>   is a handle, so a click drags the light / toggles the door instead.
+> - **Fog brush is smooth** — the tool keeps a **live endpoint** that tracks the cursor
+>   every move (the preview no longer jumps in decimation-sized chunks) and samples denser
+>   (`max(fogBrushR/3, gridSize/6)`). Fog **brush size is a slider** (`fogBrushScale`,
+>   0.15–3 grid cells) replacing S/M/L.
+> - **Undo/redo (DM, client-side)** for scene edits (annotations/fog/walls/lights) **and**
+>   tokens (add/move/update/delete). New `src/lib/history.ts` (`useHistory` +
+>   `buildInverse`): each mutation records a command/inverse pair built from existing
+>   messages (scene edits → `UPDATE_SCENE(preScene)`; token ops → per-kind inverse), so
+>   **zero new message types**. `App` wraps `room.send` as `historySend` (used by
+>   `useDmActions`, the board `MapCanvas` send, `onMoveToken`, and drop-actor) and resets
+>   the stack on scene switch/leave; ↶/↷ rail buttons (`MapToolbar`) + `Ctrl/⌘+Z` /
+>   `Ctrl+Shift+Z` (or `Ctrl+Y`). **Scope: board (live) edits.** The scene editor's staged
+>   changes aren't in this history — its **Discard** reverts the whole draft; fine-grained
+>   staged undo is a follow-up. Covered by `tests/unit-history.test.ts`.
+
+User feedback round (2026-07-03) that pulled **Fog brush** and **Scenes-page map editor
+depth** forward from Phase 7 and reworked two pages. Decisions locked with the user:
+Players tabs are **toggle chips** (side-by-side multi-sheet stays); map tools live on
+**both** the board toolbar and the Scenes editor; players **stop receiving** non-active
+scenes. **Zero new message types** — only `FOG_SET` gains `inverted?` and the `FogReveal`
+union gains a `brush` variant.
+
+**Fog brush + invert.**
+- `FogReveal` union: rect/circle gain `mode?: "reveal" | "cover"`; new
+  `{ kind:"brush"; points:number[]; r:number; mode? }` (flat world coords, stroke width
+  2r). Absent mode = "reveal" (back-compat — sanitizers only ever *emit* `mode:"cover"`).
+  `SceneFog.inverted: boolean` (false = starts covered, reveals cut; true = starts clear,
+  cover paints fog in). `MAX_FOG_BRUSH_POINTS = 120` flat numbers; `sanitizeFogReveal`
+  brush branch (≥4, even, finite, sliced; r clamped [4, 2000]); worst case ~290KB state
+  accepted (decimation keeps real strokes ~10–30 points).
+- Fog tool (F) becomes a **brush**: paint to reveal/cover, decimated `max(r/2, gridSize/4)`
+  (draw-tool idiom), click-dab → circle shape, commit via existing `FOG_REVEAL` (300-shape
+  oldest-dropped cap unchanged). Toolbar fog options: Reveal/Cover mode, 3 brush sizes
+  (gridSize × 0.35/0.75/1.5), **Invert** (FOG_SET with flipped `inverted`), on/off, Reset.
+- Rendering: painter's-order compositing in ONE Konva layer — base black rect only when
+  not inverted, then shapes in array order (cover = source-over dark, reveal =
+  destination-out; brush = round-cap Line at 2r). DM 50% opacity unchanged (applies after
+  layer compositing — never split the fog across layers).
+
+**Scenes page → full scene editor.**
+- **`src/lib/sceneMessages.ts`** (pure): `sceneMessageSceneId(msg)` +
+  `applySceneMessage(scene, msg)` — client-side mirror of the server's scene handlers
+  (UPDATE_SCENE, SET_WALLS, TOGGLE_DOOR, ADD/UPDATE/REMOVE_LIGHT, FOG_SET/REVEAL/RESET,
+  ADD/REMOVE/CLEAR_ANNOTATIONS) reusing normalize/sanitize + caps; same reference returned
+  for anything else. Server stays authoritative (no server refactor).
+- **`SceneSettings.tsx`** extracted from ScenePanel (name/map/grid/fog incl. Inverted/
+  illumination/background) parameterized `{scene, roomId, onPatch, onSetFog, onResetFog}`;
+  dock ScenePanel = scene list + SceneSettings wired live to the ACTIVE scene; the editor
+  inspector wires it to the SELECTED scene through the staging path.
+- **MapCanvas** gains `hotkeysEnabled?` (board passes `activePage==="board"`; the editor
+  canvas only renders while the Scenes page is active — exactly one hotkey listener lives
+  at a time) and `embedded?` (`.map-root--embedded`; stage sizes from a ResizeObserver on
+  the root element instead of the window — identical values on the board).
+- **ScenesPage**: top scene **tabs** (chip per scene, gold "● Live" badge on the active
+  one, dirty dot on staged ones, ＋ Add) + actions (Live-updates toggle persisted
+  `cm-scene-editor-live`, Apply/Discard when staging, **Set Live on Board** = SET_SCENE);
+  main = embedded MapCanvas with LOCAL viewport (fit on switch; never `dm.updateViewport`);
+  right inspector ≈300px = SceneSettings + Delete scene. **Staging** (Live updates OFF):
+  per-scene drafts `{scene, baselineJson}`; `editorSend` routes scene-shape messages
+  through `applySceneMessage` into the draft (MEASURE + ephemeral arrows still forward
+  live; token moves always live via `onMoveToken`); Apply = ONE `UPDATE_SCENE` with the
+  draft (ephemeral annotations stripped); Set Live auto-applies dirty drafts; baseline
+  mismatch renders a "⚠ changed on the board" hint. Token pre-staging (drag actors into
+  the editor) stays in Phase 7.
+- Accepted edges: Apply clobbers concurrent live edits to the same scene (single DM);
+  one-round-trip flash on Apply; measure tool's module-level linger shared between the two
+  canvas instances (cosmetic only).
+
+**Players page top tab bar.** The left roster column (wasteful at 4–5 players) is
+replaced by a browser-tab-style `.chip-tabs` row: chip per slot (status dot + name),
+**click toggles** that sheet open/closed in the side-by-side SheetCards scroller,
+double-click renames inline, hover ✕ removes the slot, trailing ＋ Add creates "Player N".
+PageShell (roster + divider) remains for the NPCs page only.
+
+**Prep secrecy (redaction).** `redactStateFor` player branch: `scenes` filtered to the
+active scene only; `tokens` filtered to that scene (on top of the hidden-token strip);
+`hpVisibleSheetIds` computed after filtering. Players can no longer inspect prepped
+scenes/walls/fog via devtools — prep is invisible until **Set Live**. Verified safe:
+players only ever render the active scene; server-side MEASURE validates against full
+server state; SET_SCENE swaps list + id atomically in one STATE frame.
+
+**Verify:** `npm run build`; new `tests/unit-scene-editor.test.ts` (fog sanitizer,
+inverted round-trip, `applySceneMessage` coverage + caps, active-scene-only redaction);
+new `tests/smoke-scenes.mjs` (player frames contain exactly the active scene, brush/invert
+round-trip + DM-only, Apply-path full-scene UPDATE_SCENE); re-run ALL suites (redaction
+changed); two-window manual — brush feel, editor pan/zoom independence, Live-ON instant /
+Live-OFF staged edits, Set Live flow, hotkey isolation, Players tabs.
 
 ---
 
@@ -955,10 +1177,9 @@ hot-path message). Normalize + a redaction check (hidden tokens already stripped
 the visible arrow are the same heading) — build the field + rotate UI here even though
 directional LOS is a Phase 6 stretch, so they stay consistent.
 
-**Fog brush (user).** Paint AND erase fog freehand, complementing dynamic vision for
-"specific fog" control: fog shapes gain `mode: "reveal" | "cover"` (cover shapes re-hide),
-rendered in painter's order; brush strokes = coalesced circles (decimated like draw
-strokes) under the existing 300-shape cap (oldest dropped). Erase = cover-mode brush.
+**Fog brush (user).** → **Pulled forward into Phase 6.5** (see that section): brush
+shapes with `mode: "reveal" | "cover"`, painter's-order rendering, plus the added
+`fog.inverted` base toggle. Nothing left here.
 
 **Measurement templates.** Cone/sphere/line spell templates as a map tool (the Phase 5
 tool framework): drag to size, snapped origin, transient relay like MEASURE, optional
@@ -977,15 +1198,11 @@ the non-3D coin sound); sounds = flick "ping" on launch + metallic clink impacts
 material variant on the engine's impact callback). Self-contained — can be pulled
 forward of the rest of Phase 7 anytime.
 
-**Scenes-page map editor depth.** Grow the 5.5 Scenes page into the DM's prep surface.
-Key property: the editor canvas shows the **selected** scene, not the active one — the DM
-preps scene B (upload map, calibrate grid, place walls/lights, pre-paint fog, **pre-stage
-tokens** for the ambush) while players play scene A, then "Set active" pushes it to the
-table. Same Konva canvas + tool framework as the board (wall/light editors from Phase 6,
-calibrate, fog brush, draw) plus an inspector column (scene properties) and map notes/pins.
-All edits ride existing messages (`UPDATE_SCENE` etc.) — live-synced, no separate save.
-Not in scope: tile/brush map *creation* (Dungeondraft-scale product) — maps stay imported
-images.
+**Scenes-page map editor depth.** → **Core pulled forward into Phase 6.5** (selected-scene
+editor canvas, inspector column, Live-updates staging, Set Live). **Still Phase 7:**
+**pre-staging tokens** (drag actors from a directory into the editor), map notes/pins.
+Not in scope ever: tile/brush map *creation* (Dungeondraft-scale product) — maps stay
+imported images.
 
 **Tokens/Assets page.** The deferred 5.5 page (DM-only): thumbnail grid of the room's
 uploaded images grouped by kind (tokens/portraits/maps via R2 prefix list), upload,
@@ -1086,12 +1303,15 @@ persist; mute is local; theme input can't inject non-variable CSS; oversized cli
 - Per-player scene access (lost pre-revamp feature, `e23a632`: `SceneAccessPanel` +
   `PlayerSceneToolbar`) — DM grants players access to specific scenes; players switch
   among granted scenes instead of being locked to the active one. Useful for split
-  parties. Needs a redaction story (players currently only ever receive the active
-  scene's implications) — revisit after Phase 6.
+  parties. **Note (Phase 6.5): players now receive ONLY the active scene at the
+  redaction level — this feature must widen that filter to "active + granted scenes".**
 - Screen-layer dice option (user, 2026-07-02): a per-client mode where thrown dice ignore
   the world anchor and tumble on their own fixed overlay above the board (v1-style) —
   always in view regardless of pan/zoom. World-anchored stays the default.
-- DM undo (server-authoritative undo is a project; ship "restore last deleted token" only if cheap)
+- DM undo — **shipped (2026-07-03, client-side)** for board scene edits + tokens via
+  `src/lib/history.ts` command/inverse. Remaining: fine-grained undo inside the scene
+  editor's *staged* drafts (today only its whole-draft Discard), and any server-authoritative
+  multi-client undo (out of scope — single DM).
 - Multi-select / group token move
 - Live token-drag ghosts (transient relay pattern exists when wanted)
 - Mobile/tablet layout (FloatingWindow makes it feasible later)

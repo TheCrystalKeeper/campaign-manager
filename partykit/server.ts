@@ -8,10 +8,12 @@ import {
   DEFAULT_ABILITY_SCORE,
   EPHEMERAL_ANNOTATION_TTL_MS,
   MAX_FOG_REVEALS,
+  MAX_LIGHTS,
   MAX_LOG_ENTRIES,
   MAX_MEASURE_NUMBERS,
   MAX_POINTER_ARROWS_PER_AUTHOR,
   MAX_SCENE_ANNOTATIONS,
+  MAX_WALLS,
   normalizeCharacterSheet,
   normalizeGameState,
   normalizeItem,
@@ -20,6 +22,8 @@ import {
   playerTokenColorForSlot,
   sanitizeAnnotation,
   sanitizeFogReveal,
+  sanitizeLight,
+  sanitizeWall,
   SHEET_SECTIONS,
   syncPlayerTokenFromState,
   type ClientMessage,
@@ -1178,8 +1182,13 @@ export default class GameServer implements Party.Server {
           break;
         }
         scene.fog.enabled = Boolean(parsed.enabled);
+        if (typeof parsed.inverted === "boolean") {
+          scene.fog.inverted = parsed.inverted;
+        }
         this.logEvent(
-          `Fog of war ${scene.fog.enabled ? "enabled" : "disabled"} on “${scene.name}”.`,
+          `Fog of war ${scene.fog.enabled ? "enabled" : "disabled"}${
+            scene.fog.inverted ? " (inverted)" : ""
+          } on “${scene.name}”.`,
           true,
         );
         void this.broadcastState();
@@ -1214,6 +1223,67 @@ export default class GameServer implements Party.Server {
           this.logEvent(`Player drawing ${enabled ? "enabled" : "disabled"} by the DM.`);
           void this.broadcastState();
         }
+        break;
+      }
+      case "SET_WALLS": {
+        const scene = this.state.scenes.find((item) => item.id === parsed.sceneId);
+        if (!scene) {
+          break;
+        }
+        if (!Array.isArray(parsed.walls)) {
+          this.sendTo(sender, { type: "ERROR", message: "Invalid walls." });
+          return;
+        }
+        scene.walls = parsed.walls
+          .map((wall) => sanitizeWall(wall))
+          .filter((wall): wall is NonNullable<typeof wall> => wall !== null)
+          .slice(-MAX_WALLS);
+        void this.broadcastState();
+        break;
+      }
+      case "TOGGLE_DOOR": {
+        const scene = this.state.scenes.find((item) => item.id === parsed.sceneId);
+        const door = scene?.walls.find((wall) => wall.id === parsed.wallId);
+        if (!scene || !door || door.kind !== "door") {
+          break;
+        }
+        door.open = !door.open;
+        void this.broadcastState();
+        break;
+      }
+      case "ADD_LIGHT": {
+        const scene = this.state.scenes.find((item) => item.id === parsed.sceneId);
+        const light = sanitizeLight(parsed.light);
+        if (!scene || !light) {
+          this.sendTo(sender, { type: "ERROR", message: "Invalid light." });
+          return;
+        }
+        if (scene.lights.length >= MAX_LIGHTS) {
+          this.sendTo(sender, { type: "ERROR", message: `Light limit reached (${MAX_LIGHTS}).` });
+          return;
+        }
+        scene.lights.push(light);
+        void this.broadcastState();
+        break;
+      }
+      case "UPDATE_LIGHT": {
+        const scene = this.state.scenes.find((item) => item.id === parsed.sceneId);
+        const light = sanitizeLight(parsed.light);
+        if (!scene || !light) {
+          this.sendTo(sender, { type: "ERROR", message: "Invalid light." });
+          return;
+        }
+        scene.lights = scene.lights.map((item) => (item.id === light.id ? light : item));
+        void this.broadcastState();
+        break;
+      }
+      case "REMOVE_LIGHT": {
+        const scene = this.state.scenes.find((item) => item.id === parsed.sceneId);
+        if (!scene) {
+          break;
+        }
+        scene.lights = scene.lights.filter((light) => light.id !== parsed.lightId);
+        void this.broadcastState();
         break;
       }
       case "SET_SHEET_FOLDER": {

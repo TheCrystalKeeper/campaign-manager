@@ -1413,6 +1413,9 @@ body.pointer-dragging * {
   position: absolute;
   left: calc(100% + 0.35rem);
   top: 0;
+  align-items: stretch;
+  gap: 0.15rem;
+  width: 12rem;
 }
 .map-tool-btn {
   width: 2.2rem;
@@ -1422,11 +1425,49 @@ body.pointer-dragging * {
   padding: 0;
   font-size: 1rem;
 }
-.map-toolbar-options .map-tool-btn {
-  width: auto;
-  min-width: 2.2rem;
-  padding: 0 0.4rem;
-  font-size: 0.8rem;
+/* Contextual-option controls: labeled rows of equal-width, equal-height buttons. */
+.map-opt-label {
+  font-size: 0.62rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-top: 0.25rem;
+  padding-left: 0.1rem;
+}
+.map-opt-label:first-child {
+  margin-top: 0;
+}
+.map-opt-row {
+  display: flex;
+  gap: 0.25rem;
+  align-items: stretch;
+}
+.map-opt-btn {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 1.9rem;
+  display: grid;
+  place-items: center;
+  padding: 0 0.3rem;
+  font-size: 0.74rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.map-opt-swatches {
+  flex-wrap: wrap;
+  gap: 0.2rem;
+}
+.map-opt-slider {
+  width: 100%;
+  margin: 0.15rem 0 0.1rem;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+/* Undo/redo rail buttons dim when there's nothing to undo/redo. */
+.map-tool-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 .map-toolbar-sep {
   width: 70%;
@@ -1435,11 +1476,12 @@ body.pointer-dragging * {
   margin: 0.15rem 0;
 }
 .map-toolbar-hint {
-  max-width: 9rem;
-  font-size: 0.68rem;
+  max-width: 100%;
+  margin-top: 0.2rem;
+  font-size: 0.66rem;
   color: var(--text-muted);
   text-align: center;
-  line-height: 1.25;
+  line-height: 1.3;
 }
 .draw-swatch {
   width: 1.4rem;
@@ -1677,47 +1719,166 @@ body.pointer-dragging * {
   overflow-y: auto;
 }
 
-/* Clickable roster rows (Players page): whole row selects, name edits on dbl-click. */
-.party-slot--row {
-  cursor: pointer;
-  padding: 0.28rem 0.3rem;
-  border-bottom: none;
-  border: 1px solid transparent;
+/* --- Chip tab bars (Players page, Scenes editor) ------------------------------
+   Browser-tab-like chips along the top of a prep page. Players: chips TOGGLE
+   sheets open/closed. Scenes: chips select the edited scene. */
+.chip-tabs {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  padding: 0 0.75rem 0.5rem;
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+}
+.chip-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.6rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: var(--radius);
+  cursor: pointer;
+  font: inherit;
+  color: var(--text);
 }
-.party-slot--row:hover {
-  background: var(--surface-inset);
-}
-.party-slot--selected {
-  background: var(--surface-2);
+.chip-tab:hover {
   border-color: var(--accent);
 }
-.party-slot-name {
-  flex: 1;
-  min-width: 0;
+.chip-tab--open {
+  background: var(--surface-2);
+  border-color: var(--accent);
+  color: var(--accent-bright);
 }
-.party-slot-name[readonly] {
+.chip-tab--add {
+  border-style: dashed;
+  color: var(--text-muted);
+}
+.chip-tab .status-dot {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  background: var(--border);
+  flex-shrink: 0;
+}
+.chip-tab .status-dot.online {
+  background: var(--success);
+}
+.chip-tab-live {
+  color: #e9c176;
+  font-size: 0.7rem;
+}
+.chip-tab-name {
+  max-width: 12rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chip-tab-dirty {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--accent);
+  flex-shrink: 0;
+}
+.chip-tab-name-input {
+  width: auto;
+  min-width: 2.5rem;
+  padding: 0.05rem 0.25rem;
+  font-weight: 600;
+}
+.chip-tab-name-input[readonly] {
   cursor: pointer;
   background: transparent;
   border-color: transparent;
+  color: inherit;
 }
-.party-slot--row:hover .party-slot-name[readonly] {
-  border-color: var(--border-subtle);
+.chip-tab-close {
+  width: 1.15rem;
+  height: 1.15rem;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  font-size: 0.62rem;
+  line-height: 1;
+  border-radius: 50%;
+  background: transparent;
+  border-color: transparent;
+  color: var(--text-muted);
+  opacity: 0;
+  transition: opacity 0.12s ease;
 }
-.scene-preview {
+.chip-tab:hover .chip-tab-close {
+  opacity: 1;
+}
+.chip-tab-close:hover {
+  color: var(--danger-text);
+  background: var(--danger-soft);
+}
+
+/* --- Players page (tab bar + full-width sheet scroller) ----------------------- */
+.players-page {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-  align-items: center;
-  max-width: 1100px;
-  margin: 0 auto;
 }
-.scene-preview img {
-  max-width: 100%;
-  max-height: calc(100vh - 10rem);
+.players-page-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0.6rem 1rem 1rem;
+}
+
+/* --- Scenes page (scene editor) ------------------------------------------------ */
+.scene-editor {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.scene-tabs-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-left: auto;
+}
+.scene-editor-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem 0.75rem;
+}
+.scene-editor-canvas {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
   border: 1px solid var(--border);
-  border-radius: var(--radius);
-  box-shadow: var(--elev-2);
+  border-radius: var(--radius-lg);
+  background: #0c0b09;
+}
+.scene-editor-inspector {
+  flex: 0 0 300px;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0.5rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--surface-inset);
+}
+
+/* Embedded map canvas (scene editor): fill the host box, not the window. */
+.map-root--embedded {
+  position: absolute;
+  inset: 0;
+}
+.map-root--embedded .map-toolbar {
+  position: absolute;
 }
 
 /* --- Toast (transient status, e.g. reconnecting) --------------------------- */

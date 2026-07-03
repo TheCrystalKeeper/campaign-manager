@@ -138,6 +138,45 @@ export function TokenEditor({ token, state, dm, openSheet, onClose }: TokenEdito
           </button>
         </div>
 
+        <div className="row" style={{ justifyContent: "space-between" }}>
+          <label style={{ margin: 0 }}>Vision (sees in the dark)</label>
+          <button
+            className={token.vision?.enabled ? "btn-active" : ""}
+            title="When dynamic lighting is on, this token reveals what it can see for its owner"
+            onClick={() =>
+              dm.updateToken({
+                ...token,
+                vision: {
+                  enabled: !token.vision?.enabled,
+                  rangeFt: token.vision?.rangeFt ?? 0,
+                },
+              })
+            }
+          >
+            {token.vision?.enabled ? "On" : "Off"}
+          </button>
+        </div>
+        {token.vision?.enabled ? (
+          <div className="field">
+            <label>Darkvision range (ft, 0 = only lit areas)</label>
+            <input
+              type="number"
+              min={0}
+              step={5}
+              value={token.vision.rangeFt}
+              onChange={(e) =>
+                dm.updateToken({
+                  ...token,
+                  vision: {
+                    enabled: true,
+                    rangeFt: Math.max(0, Number(e.target.value) || 0),
+                  },
+                })
+              }
+            />
+          </div>
+        ) : null}
+
         <div className="field">
           <label>Conditions</label>
           <div className="cond-grid">

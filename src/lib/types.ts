@@ -33,14 +33,46 @@ export type Annotation = {
   ephemeral: boolean;
 };
 
-/** A fog-of-war reveal shape (world coords). Fog = black layer minus these. */
+/**
+ * A fog-of-war shape (world coords), applied in painter's order over the base:
+ * `mode` absent/"reveal" cuts fog away, "cover" paints fog back in. Sanitizers only
+ * ever EMIT `mode: "cover"` (reveal stays implicit) to keep persisted shapes small.
+ */
 export type FogReveal =
-  | { kind: "rect"; x: number; y: number; w: number; h: number }
-  | { kind: "circle"; x: number; y: number; r: number };
+  | { kind: "rect"; x: number; y: number; w: number; h: number; mode?: "reveal" | "cover" }
+  | { kind: "circle"; x: number; y: number; r: number; mode?: "reveal" | "cover" }
+  /** Freehand brush stroke: flat [x0,y0,x1,y1,…]; stroke width = 2r, round caps. */
+  | { kind: "brush"; points: number[]; r: number; mode?: "reveal" | "cover" };
 
 export type SceneFog = {
   enabled: boolean;
   reveals: FogReveal[];
+  /** false = map starts fully covered (reveals cut); true = starts clear (cover paints fog in). */
+  inverted: boolean;
+};
+
+/** A sight-blocking segment. Doors block only while closed (`open` false/absent). */
+export type Wall = {
+  id: string;
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  kind: "wall" | "door";
+  open?: boolean;
+};
+
+/** A light source. Radii are in FEET (converted to world px via the scene grid). */
+export type Light = {
+  id: string;
+  x: number;
+  y: number;
+  /** Bright-light radius (fully lit). */
+  brightR: number;
+  /** Dim-light radius (outer reach); should be ≥ brightR. */
+  dimR: number;
+  color?: string;
+  enabled: boolean;
 };
 
 export const MAX_SCENE_ANNOTATIONS = 200;
@@ -51,7 +83,11 @@ export const ANNOTATION_FADE_MS = 600;
 /** Live pointer arrows one author may have at once — older ones fade first. */
 export const MAX_POINTER_ARROWS_PER_AUTHOR = 5;
 export const MAX_FOG_REVEALS = 300;
+/** Flat x,y numbers per fog brush stroke (60 samples) — 300×120 ≈ 290KB worst case. */
+export const MAX_FOG_BRUSH_POINTS = 120;
 export const MAX_MEASURE_NUMBERS = 48; // flat x,y numbers → 24 ruler points
+export const MAX_WALLS = 600;
+export const MAX_LIGHTS = 50;
 
 /// <summary>
 /// A scene is a single background map image (drawn at world origin) plus a grid,
@@ -77,6 +113,12 @@ export type Scene = {
   /** DM strokes persist; player strokes are ephemeral. Capped server-side. */
   annotations: Annotation[];
   fog: SceneFog;
+  /** Phase 6 dynamic vision: sight-blocking walls/doors. */
+  walls: Wall[];
+  /** Phase 6 dynamic vision: light sources. */
+  lights: Light[];
+  /** When true (default), the scene is lit everywhere — the vision pass is skipped. */
+  globalIllumination: boolean;
 };
 
 export type TokenKind = "player" | "enemy";
@@ -101,6 +143,14 @@ export type Token = {
   showHp: TokenHpDisplay;
   /** DM-hidden: stripped from player frames entirely; DM sees it ghosted. */
   hidden?: boolean;
+  /** Phase 6 vision: this token sees in the dark up to `rangeFt` (0 = only lit areas). */
+  vision?: TokenVision;
+};
+
+export type TokenVision = {
+  enabled: boolean;
+  /** Darkvision range in feet; 0 = sees lit areas only. */
+  rangeFt: number;
 };
 
 export const CONDITIONS = [
@@ -544,10 +594,16 @@ export type ClientMessage =
   | { type: "ADD_ANNOTATION"; sceneId: string; annotation: Annotation }
   | { type: "REMOVE_ANNOTATION"; sceneId: string; annotationId: string }
   | { type: "CLEAR_ANNOTATIONS"; sceneId: string }
-  | { type: "FOG_SET"; sceneId: string; enabled: boolean }
+  | { type: "FOG_SET"; sceneId: string; enabled: boolean; inverted?: boolean }
   | { type: "FOG_REVEAL"; sceneId: string; shape: FogReveal }
   | { type: "FOG_RESET"; sceneId: string }
-  | { type: "SET_PLAYERS_CAN_DRAW"; enabled: boolean };
+  | { type: "SET_PLAYERS_CAN_DRAW"; enabled: boolean }
+  /** Replace a scene's wall set (batched on edit-commit — no per-segment spam). */
+  | { type: "SET_WALLS"; sceneId: string; walls: Wall[] }
+  | { type: "TOGGLE_DOOR"; sceneId: string; wallId: string }
+  | { type: "ADD_LIGHT"; sceneId: string; light: Light }
+  | { type: "UPDATE_LIGHT"; sceneId: string; light: Light }
+  | { type: "REMOVE_LIGHT"; sceneId: string; lightId: string };
 
 export type ServerMessage =
   | { type: "STATE"; state: GameState; yourClientId: string; yourRole: Role | null }
@@ -645,6 +701,14 @@ export function syncPlayerTokenFromState(token: Token, state: GameState): Token 
 /// </summary>
 export function normalizeToken(token: Token): Token {
   const kind = token.kind ?? (token.ownerPlayerId ? "player" : "enemy");
+  // Player-owned tokens default to sight (see lit areas; 0ft darkvision) so a player
+  // isn't stranded in the dark the moment the DM turns on dynamic lighting. The DM can
+  // still turn it off or add darkvision per token. Enemies default to no vision.
+  const vision = token.vision
+    ? sanitizeTokenVision(token.vision)
+    : token.ownerPlayerId
+      ? { enabled: true, rangeFt: 0 }
+      : undefined;
   return {
     ...token,
     kind,
@@ -656,6 +720,7 @@ export function normalizeToken(token: Token): Token {
     showHp: token.showHp === "bar" || token.showHp === "values" ? token.showHp : "none",
     color: token.color || (kind === "enemy" ? TOKEN_ENEMY_COLOR : TOKEN_PLAYER_COLOR),
     ...(token.hidden ? { hidden: true } : { hidden: undefined }),
+    ...(vision ? { vision } : {}),
   };
 }
 
@@ -1038,11 +1103,35 @@ export function sanitizeAnnotation(annotation: unknown): Annotation | null {
   };
 }
 
-/// <summary>Validates a fog reveal shape (rect or circle in world coords).</summary>
+/// <summary>Validates a fog shape (rect, circle, or brush stroke in world coords).</summary>
 export function sanitizeFogReveal(shape: unknown): FogReveal | null {
-  const s = shape as Partial<FogReveal & { w: number; h: number; r: number }> | null;
+  const s = shape as Partial<
+    FogReveal & { x: number; y: number; w: number; h: number; r: number; points: number[] }
+  > | null;
   if (!s || typeof s !== "object") {
     return null;
+  }
+  // Only "cover" is ever stored — absent mode means reveal (keeps payloads small).
+  const cover = s.mode === "cover" ? ({ mode: "cover" } as const) : {};
+  if (s.kind === "brush") {
+    if (
+      !Array.isArray(s.points) ||
+      s.points.length < 4 ||
+      s.points.length % 2 !== 0 ||
+      !s.points.every((value) => Number.isFinite(value))
+    ) {
+      return null;
+    }
+    const r = numberOr(s.r, NaN);
+    if (!Number.isFinite(r)) {
+      return null;
+    }
+    return {
+      kind: "brush",
+      points: s.points.slice(0, MAX_FOG_BRUSH_POINTS).map((value) => numberOr(value, 0)),
+      r: Math.min(Math.max(r, 4), 2000),
+      ...cover,
+    };
   }
   const x = numberOr(s.x, NaN);
   const y = numberOr(s.y, NaN);
@@ -1055,14 +1144,14 @@ export function sanitizeFogReveal(shape: unknown): FogReveal | null {
     if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) {
       return null;
     }
-    return { kind: "rect", x, y, w, h };
+    return { kind: "rect", x, y, w, h, ...cover };
   }
   if (s.kind === "circle") {
     const r = numberOr(s.r, NaN);
     if (!Number.isFinite(r) || r <= 0) {
       return null;
     }
-    return { kind: "circle", x, y, r };
+    return { kind: "circle", x, y, r, ...cover };
   }
   return null;
 }
@@ -1075,7 +1164,71 @@ function sanitizeFog(fog: unknown): SceneFog {
         .filter((shape): shape is FogReveal => shape !== null)
         .slice(-MAX_FOG_REVEALS)
     : [];
-  return { enabled: Boolean(f?.enabled), reveals };
+  return { enabled: Boolean(f?.enabled), reveals, inverted: f?.inverted === true };
+}
+
+/// <summary>Validates a wall/door segment (world coords, finite, non-degenerate).</summary>
+export function sanitizeWall(wall: unknown): Wall | null {
+  const w = wall as Partial<Wall> | null;
+  if (!w || typeof w !== "object" || typeof w.id !== "string") {
+    return null;
+  }
+  const x1 = numberOr(w.x1, NaN);
+  const y1 = numberOr(w.y1, NaN);
+  const x2 = numberOr(w.x2, NaN);
+  const y2 = numberOr(w.y2, NaN);
+  if (![x1, y1, x2, y2].every(Number.isFinite)) {
+    return null;
+  }
+  if (Math.hypot(x2 - x1, y2 - y1) < 1) {
+    return null; // degenerate (zero-length) segment
+  }
+  const kind = w.kind === "door" ? "door" : "wall";
+  return {
+    id: w.id.slice(0, 40),
+    x1,
+    y1,
+    x2,
+    y2,
+    kind,
+    ...(kind === "door" && w.open ? { open: true } : {}),
+  };
+}
+
+/// <summary>Validates a light source; radii clamped to sane feet ranges.</summary>
+export function sanitizeLight(light: unknown): Light | null {
+  const l = light as Partial<Light> | null;
+  if (!l || typeof l !== "object" || typeof l.id !== "string") {
+    return null;
+  }
+  const x = numberOr(l.x, NaN);
+  const y = numberOr(l.y, NaN);
+  if (!Number.isFinite(x) || !Number.isFinite(y)) {
+    return null;
+  }
+  const brightR = Math.min(Math.max(numberOr(l.brightR, 20), 0), 1000);
+  const dimR = Math.min(Math.max(numberOr(l.dimR, 40), brightR), 1000);
+  return {
+    id: l.id.slice(0, 40),
+    x,
+    y,
+    brightR,
+    dimR,
+    ...(typeof l.color === "string" ? { color: l.color.slice(0, 32) } : {}),
+    enabled: l.enabled !== false,
+  };
+}
+
+/// <summary>Validates a token's vision block.</summary>
+export function sanitizeTokenVision(vision: unknown): TokenVision | undefined {
+  const v = vision as Partial<TokenVision> | null;
+  if (!v || typeof v !== "object") {
+    return undefined;
+  }
+  return {
+    enabled: Boolean(v.enabled),
+    rangeFt: Math.min(Math.max(numberOr(v.rangeFt, 0), 0), 1000),
+  };
 }
 
 /// <summary>
@@ -1096,6 +1249,18 @@ export function normalizeScene(scene: Partial<Scene> & Record<string, unknown>):
         .map((annotation) => sanitizeAnnotation(annotation))
         .filter((annotation): annotation is Annotation => annotation !== null)
         .slice(-MAX_SCENE_ANNOTATIONS)
+    : [];
+  const walls = Array.isArray(scene.walls)
+    ? scene.walls
+        .map((wall) => sanitizeWall(wall))
+        .filter((wall): wall is Wall => wall !== null)
+        .slice(-MAX_WALLS)
+    : [];
+  const lights = Array.isArray(scene.lights)
+    ? scene.lights
+        .map((light) => sanitizeLight(light))
+        .filter((light): light is Light => light !== null)
+        .slice(-MAX_LIGHTS)
     : [];
   return {
     id: typeof scene.id === "string" ? scene.id : `scene-${crypto.randomUUID().slice(0, 8)}`,
@@ -1118,6 +1283,10 @@ export function normalizeScene(scene: Partial<Scene> & Record<string, unknown>):
         : { ...DEFAULT_VIEWPORT },
     annotations,
     fog: sanitizeFog(scene.fog),
+    walls,
+    lights,
+    // Default ON so existing scenes stay fully lit until the DM opts into dynamic vision.
+    globalIllumination: scene.globalIllumination !== false,
   };
 }
 

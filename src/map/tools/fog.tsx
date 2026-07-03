@@ -1,34 +1,58 @@
-import { Circle, Rect } from "react-konva";
-import type { FogReveal } from "../../lib/types";
-import type { MapTool } from "./types";
+import { Circle, Line } from "react-konva";
+import { MAX_FOG_BRUSH_POINTS } from "../../lib/types";
+import type { MapTool, ToolRuntime } from "./types";
 
 /// <summary>
-/// Manual fog reveals (DM): drag a rectangle to reveal an area (Shift-drag for a
-/// circle from the press point). Enable/reset fog from the toolbar's fog controls.
+/// Fog brush (DM): paint freehand to reveal fog — or, with the toolbar's Cover mode,
+/// to paint fog back in. A plain click lays a single dab (circle). Strokes are
+/// decimated and capped like draw strokes; hitting the cap commits and continues a
+/// fresh stroke. Fog on/off, brush size, Invert (start-clear), and Reset live in the
+/// toolbar's fog options.
 /// </summary>
 
 type FogDraft = {
-  shape: "rect" | "circle";
-  x0: number;
-  y0: number;
-  x1: number;
-  y1: number;
+  /** Committed samples (decimated). */
+  points: number[];
+  /** The current cursor, kept as a trailing point so the preview tracks it smoothly. */
+  live: [number, number];
 };
+
+/** Only "cover" is ever sent — absent mode means reveal (matches the sanitizer). */
+function modeField(rt: ToolRuntime): { mode: "cover" } | Record<string, never> {
+  return rt.fogMode === "cover" ? { mode: "cover" } : {};
+}
+
+function commitStroke(rt: ToolRuntime, points: number[]) {
+  if (points.length === 2) {
+    // A click-dab: a single circle of the brush radius.
+    rt.send({
+      type: "FOG_REVEAL",
+      sceneId: rt.scene.id,
+      shape: { kind: "circle", x: points[0], y: points[1], r: rt.fogBrushR, ...modeField(rt) },
+    });
+    return;
+  }
+  if (points.length < 4) {
+    return;
+  }
+  rt.send({
+    type: "FOG_REVEAL",
+    sceneId: rt.scene.id,
+    shape: { kind: "brush", points, r: rt.fogBrushR, ...modeField(rt) },
+  });
+}
 
 export const fogTool: MapTool = {
   id: "fog",
-  label: "Fog reveal",
+  label: "Fog brush",
   icon: "🌫",
   hotkey: "f",
   dmOnly: true,
   cursor: "crosshair",
   onDown: (event, rt) => {
     rt.setDraft({
-      shape: event.shiftKey ? "circle" : "rect",
-      x0: event.world.x,
-      y0: event.world.y,
-      x1: event.world.x,
-      y1: event.world.y,
+      points: [event.world.x, event.world.y],
+      live: [event.world.x, event.world.y],
     } satisfies FogDraft);
   },
   onMove: (event, rt) => {
@@ -36,68 +60,75 @@ export const fogTool: MapTool = {
     if (!draft) {
       return;
     }
-    rt.setDraft({ ...draft, x1: event.world.x, y1: event.world.y });
+    const pts = draft.points;
+    const lastX = pts[pts.length - 2];
+    const lastY = pts[pts.length - 1];
+    // Commit a new sample only past the decimation step, but ALWAYS move the live
+    // endpoint so the preview follows the cursor smoothly (no chunky jumps).
+    const minDist = Math.max(rt.fogBrushR / 3, rt.scene.gridSize / 6);
+    const live: [number, number] = [event.world.x, event.world.y];
+    if (Math.hypot(event.world.x - lastX, event.world.y - lastY) < minDist) {
+      rt.setDraft({ points: pts, live } satisfies FogDraft);
+      return;
+    }
+    const points = [...pts, event.world.x, event.world.y];
+    if (points.length >= MAX_FOG_BRUSH_POINTS) {
+      // Cap hit mid-stroke: commit and keep painting from here (draw-tool idiom).
+      commitStroke(rt, points);
+      rt.setDraft({ points: [event.world.x, event.world.y], live } satisfies FogDraft);
+      return;
+    }
+    rt.setDraft({ points, live } satisfies FogDraft);
   },
-  onUp: (_event, rt) => {
+  onUp: (event, rt) => {
     const draft = rt.draft as FogDraft | null;
     rt.setDraft(null);
     if (!draft) {
       return;
     }
-    let shape: FogReveal | null = null;
-    if (draft.shape === "circle") {
-      const r = Math.hypot(draft.x1 - draft.x0, draft.y1 - draft.y0);
-      if (r > 4) {
-        shape = { kind: "circle", x: draft.x0, y: draft.y0, r };
-      }
-    } else {
-      const w = Math.abs(draft.x1 - draft.x0);
-      const h = Math.abs(draft.y1 - draft.y0);
-      if (w > 4 && h > 4) {
-        shape = {
-          kind: "rect",
-          x: Math.min(draft.x0, draft.x1),
-          y: Math.min(draft.y0, draft.y1),
-          w,
-          h,
-        };
-      }
-    }
-    if (shape) {
-      rt.send({ type: "FOG_REVEAL", sceneId: rt.scene.id, shape });
-    }
+    // End the stroke exactly where released.
+    const pts = draft.points;
+    const lastX = pts[pts.length - 2];
+    const lastY = pts[pts.length - 1];
+    const points =
+      pts.length >= 2 && (event.world.x !== lastX || event.world.y !== lastY)
+        ? [...pts, event.world.x, event.world.y].slice(0, MAX_FOG_BRUSH_POINTS)
+        : pts;
+    commitStroke(rt, points);
   },
-  renderDraft: (draft) => {
+  renderDraft: (draft, rt) => {
     const d = draft as FogDraft | null;
     if (!d) {
       return null;
     }
-    if (d.shape === "circle") {
-      return (
+    const color = rt.fogMode === "cover" ? "#3a3f4a" : "#9ad1ff";
+    // Preview follows the cursor: committed samples plus the live endpoint.
+    const preview = [...d.points, d.live[0], d.live[1]];
+    return (
+      <>
+        {preview.length >= 4 ? (
+          <Line
+            points={preview}
+            stroke={color}
+            strokeWidth={rt.fogBrushR * 2}
+            lineCap="round"
+            lineJoin="round"
+            opacity={0.35}
+            listening={false}
+          />
+        ) : null}
+        {/* Brush cursor ring at the live point. */}
         <Circle
-          x={d.x0}
-          y={d.y0}
-          radius={Math.hypot(d.x1 - d.x0, d.y1 - d.y0)}
-          stroke="#9ad1ff"
-          strokeWidth={2}
-          dash={[6, 4]}
-          fill="rgba(154,209,255,0.12)"
+          x={d.live[0]}
+          y={d.live[1]}
+          radius={rt.fogBrushR}
+          stroke={color}
+          strokeWidth={1.5}
+          dash={[5, 4]}
+          opacity={0.8}
           listening={false}
         />
-      );
-    }
-    return (
-      <Rect
-        x={Math.min(d.x0, d.x1)}
-        y={Math.min(d.y0, d.y1)}
-        width={Math.abs(d.x1 - d.x0)}
-        height={Math.abs(d.y1 - d.y0)}
-        stroke="#9ad1ff"
-        strokeWidth={2}
-        dash={[6, 4]}
-        fill="rgba(154,209,255,0.12)"
-        listening={false}
-      />
+      </>
     );
   },
 };

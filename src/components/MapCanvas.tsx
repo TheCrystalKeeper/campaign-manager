@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Arrow, Circle, Group, Image as KonvaImage, Layer, Line, Rect, Stage, Text } from "react-konva";
 import type Konva from "konva";
 import {
@@ -8,6 +8,7 @@ import {
   type ClientMessage,
   type GameState,
   type HitPoints,
+  type Light,
   type Viewport,
 } from "../lib/types";
 import {
@@ -16,11 +17,15 @@ import {
   tokenRadiusForGridSize,
 } from "../lib/sceneUtils";
 import type { MeasureEvent } from "../hooks/useGameRoom";
+import type { History } from "../lib/history";
 import { toolsForRole } from "../map/tools/registry";
 import { selectTool } from "../map/tools/select";
+import { LIGHT_PRESETS, type LightPreset } from "../map/tools/lights";
 import { RulerShape } from "../map/tools/measure";
 import type { ToolPointerEvent, ToolRuntime } from "../map/tools/types";
 import { MapToolbar } from "./MapToolbar";
+import { FogLayer } from "./MapFog";
+import { DmLightingOverlay, VisionMaskLayer, WallsLightsEditor } from "./MapVision";
 import {
   annotationOpacity,
   annotationPathLength,
@@ -76,6 +81,15 @@ type MapCanvasProps = {
   /** Per-client snap-to-grid — owned by App (settings + the toolbar 🧲 share it). */
   snap: boolean;
   onToggleSnap: () => void;
+  /**
+   * Gates the window-level tool hotkeys (V/M/D/…): with two canvases mounted
+   * (board + scene editor), only the visible one may listen. Default true.
+   */
+  hotkeysEnabled?: boolean;
+  /** Scene-editor mode: the canvas fills its host element instead of the window. */
+  embedded?: boolean;
+  /** DM undo/redo for map/token edits — renders the ↶/↷ rail buttons when present. */
+  history?: History;
 };
 
 /// <summary>
@@ -104,15 +118,28 @@ function useImage(url: string | null): HTMLImageElement | null {
 }
 
 /// <summary>
-/// Tracks the browser window size so the Konva stage fills the viewport.
+/// Tracks the size of the canvas host element (ResizeObserver) so the Konva stage
+/// fills it. On the board the host is fixed/inset-0 (== window size); embedded in
+/// the scene editor it is the editor box. Guards the initial 0×0 pre-measure.
 /// </summary>
-function useWindowSize() {
+function useElementSize(ref: React.RefObject<HTMLDivElement | null>) {
   const [size, setSize] = useState({ width: window.innerWidth, height: window.innerHeight });
   useEffect(() => {
-    const onResize = () => setSize({ width: window.innerWidth, height: window.innerHeight });
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
-  }, []);
+    const el = ref.current;
+    if (!el) {
+      return;
+    }
+    const measure = () => {
+      const rect = el.getBoundingClientRect();
+      if (rect.width > 0 && rect.height > 0) {
+        setSize({ width: rect.width, height: rect.height });
+      }
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [ref]);
   return size;
 }
 
@@ -283,11 +310,36 @@ export function MapCanvas({
   subscribeMeasure,
   snap,
   onToggleSnap,
+  hotkeysEnabled = true,
+  embedded = false,
+  history,
 }: MapCanvasProps) {
   const stageRef = useRef<Konva.Stage>(null);
-  const { width: stageW, height: stageH } = useWindowSize();
+  const rootRef = useRef<HTMLDivElement>(null);
+  const { width: stageW, height: stageH } = useElementSize(rootRef);
   const scene = state.scenes.find((item) => item.id === sceneId) ?? state.scenes[0];
   const mapImg = useImage(scene?.mapUrl ?? null);
+  const sceneWalls = scene?.walls;
+
+  // Stable wall/light editor callbacks so the memoized WallsLightsEditor layer bails
+  // during (heavy) fog-brush strokes when a scene has many walls/lights.
+  const onDeleteWall = useCallback(
+    (id: string) =>
+      send({ type: "SET_WALLS", sceneId: sceneId, walls: (sceneWalls ?? []).filter((w) => w.id !== id) }),
+    [send, sceneId, sceneWalls],
+  );
+  const onToggleDoor = useCallback(
+    (id: string) => send({ type: "TOGGLE_DOOR", sceneId, wallId: id }),
+    [send, sceneId],
+  );
+  const onMoveLight = useCallback(
+    (light: Light) => send({ type: "UPDATE_LIGHT", sceneId, light }),
+    [send, sceneId],
+  );
+  const onDeleteLight = useCallback(
+    (id: string) => send({ type: "REMOVE_LIGHT", sceneId, lightId: id }),
+    [send, sceneId],
+  );
 
   const canControlView = Boolean(onViewportChange);
   const placing = Boolean(onPlaceToken);
@@ -298,6 +350,15 @@ export function MapCanvas({
   const [draft, setDraft] = useState<unknown>(null);
   const [drawColor, setDrawColor] = useState("#ffd166");
   const [drawWidth, setDrawWidth] = useState(4);
+  /** Fog brush: paint direction + size (radius = gridSize × scale). */
+  const [fogMode, setFogMode] = useState<"reveal" | "cover">("reveal");
+  const [fogBrushScale, setFogBrushScale] = useState(0.75);
+  /** Walls tool: default kind a plain drag draws. */
+  const [wallKind, setWallKind] = useState<"wall" | "door">("wall");
+  /** Lights tool: which preset a freshly placed light uses. */
+  const [lightPreset, setLightPreset] = useState<LightPreset>("torch");
+  /** DM-only: preview dynamic vision as a player would see it. */
+  const [visionPreview, setVisionPreview] = useState(false);
   const [rulers, setRulers] = useState<Record<string, RemoteRuler>>({});
   /** Active middle-mouse pan: pointer start + the viewport frozen at press. */
   const panRef = useRef<{ x: number; y: number; vp: Viewport } | null>(null);
@@ -452,8 +513,12 @@ export function MapCanvas({
     }
   }, [availableTools, activeToolId]);
 
-  // Tool hotkeys (V/M/D/G/F, Esc = back to select) — ignored while typing.
+  // Tool hotkeys (V/M/D/G/F/W/L, Esc = back to select) — ignored while typing, and
+  // gated off entirely when this canvas isn't the visible one (board under a page).
   useEffect(() => {
+    if (!hotkeysEnabled) {
+      return;
+    }
     const onKey = (event: KeyboardEvent) => {
       if (event.ctrlKey || event.metaKey || event.altKey) {
         return;
@@ -478,7 +543,7 @@ export function MapCanvas({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [availableTools]);
+  }, [availableTools, hotkeysEnabled]);
 
   const gridLines = useMemo(() => {
     const lines: number[][] = [];
@@ -501,12 +566,14 @@ export function MapCanvas({
   }, [scene]);
 
   if (!scene) {
-    return <div className="map-root" />;
+    return <div className={`map-root${embedded ? " map-root--embedded" : ""}`} ref={rootRef} />;
   }
 
   const activeTool =
     availableTools.find((tool) => tool.id === activeToolId) ?? selectTool;
   const toolActive = activeTool.id !== "select";
+
+  const fogBrushR = scene.gridSize * fogBrushScale;
 
   const runtime: ToolRuntime = {
     scene,
@@ -517,6 +584,11 @@ export function MapCanvas({
     setDraft,
     drawColor,
     drawWidth,
+    snap,
+    fogMode,
+    fogBrushR,
+    wallKind,
+    lightRadii: LIGHT_PRESETS[lightPreset],
   };
 
   /** Snaps a world point to the nearest grid cell center when snap is on. */
@@ -673,6 +745,26 @@ export function MapCanvas({
   const currentTurnTokenId =
     state.combat?.entries[state.combat.turnIndex]?.tokenId ?? null;
 
+  // ---- Dynamic vision (Phase 6) ----
+  const ftToPx = scene.gridSize / Math.max(scene.feetPerSquare, 1);
+  const wallsActive = activeTool.id === "walls";
+  const lightsActive = activeTool.id === "lights";
+  // The viewer's vision-enabled tokens on this scene reveal the dark. Players use their
+  // own tokens; the DM sees everything unless previewing (then all vision tokens reveal).
+  const viewerVisionTokens = sceneTokens.filter(
+    (token) =>
+      token.vision?.enabled &&
+      (isDm ? visionPreview : token.ownerPlayerId === yourPlayerId),
+  );
+  // Dynamic lighting off = the scene is dark. Players (and the DM's 👁 preview) get the
+  // strict LOS-gated mask; the DM's own view instead gets a dimmed "here's my lighting"
+  // overlay so lights are visibly working during setup without needing a token.
+  const dark = !scene.globalIllumination;
+  const maskActive = dark && (!isDm || visionPreview);
+  const dmLightingActive = dark && isDm && !visionPreview;
+  const sceneVisionTokens = sceneTokens.filter((token) => token.vision?.enabled);
+  const hasVisionTokens = sceneVisionTokens.length > 0;
+
   const emitViewportFromStage = () => {
     const stage = stageRef.current;
     if (!stage || !onViewportChange) return;
@@ -722,7 +814,8 @@ export function MapCanvas({
 
   return (
     <div
-      className="map-root"
+      className={`map-root${embedded ? " map-root--embedded" : ""}`}
+      ref={rootRef}
       style={toolActive ? { cursor: activeTool.cursor } : undefined}
     >
       <Stage
@@ -747,6 +840,11 @@ export function MapCanvas({
           if (arrowGestureArmed(e)) {
             e.evt.preventDefault();
             startArrow();
+            return;
+          }
+          // Clicking an existing wall/light marker interacts with it (drag/toggle/delete)
+          // rather than placing a new one underneath.
+          if (typeof e.target?.hasName === "function" && e.target.hasName("map-handle")) {
             return;
           }
           if (toolActive && e.evt.button === 0) {
@@ -843,39 +941,32 @@ export function MapCanvas({
           })}
         </Layer>
 
-        {/* Manual fog of war: own layer so destination-out reveals only cut the fog. */}
-        {scene.fog.enabled ? (
-          <Layer listening={false} opacity={isDm ? 0.5 : 1}>
-            <Rect
-              x={-10000}
-              y={-10000}
-              width={scene.width + 20000}
-              height={scene.height + 20000}
-              fill="#05060a"
-            />
-            {scene.fog.reveals.map((reveal, index) =>
-              reveal.kind === "rect" ? (
-                <Rect
-                  key={index}
-                  x={reveal.x}
-                  y={reveal.y}
-                  width={reveal.w}
-                  height={reveal.h}
-                  fill="#000"
-                  globalCompositeOperation="destination-out"
-                />
-              ) : (
-                <Circle
-                  key={index}
-                  x={reveal.x}
-                  y={reveal.y}
-                  radius={reveal.r}
-                  fill="#000"
-                  globalCompositeOperation="destination-out"
-                />
-              ),
-            )}
-          </Layer>
+        {/* Manual fog of war (memoized so brush strokes don't re-diff committed shapes). */}
+        <FogLayer scene={scene} isDm={isDm} />
+
+        {/* Dynamic vision: a darkness sheet above tokens (also hides tokens in the dark),
+            erased inside each viewer token's line of sight where light/darkvision reach. */}
+        {maskActive ? (
+          <VisionMaskLayer scene={scene} tokens={viewerVisionTokens} ftToPx={ftToPx} />
+        ) : null}
+
+        {/* DM dynamic-lighting overview: dimmed map with lit pools cut bright. */}
+        {dmLightingActive ? (
+          <DmLightingOverlay scene={scene} tokens={sceneVisionTokens} ftToPx={ftToPx} />
+        ) : null}
+
+        {/* DM wall/door lines + light markers; interactive only with the matching tool. */}
+        {isDm && (scene.walls.length > 0 || scene.lights.length > 0 || wallsActive || lightsActive) ? (
+          <WallsLightsEditor
+            scene={scene}
+            ftToPx={ftToPx}
+            wallsActive={wallsActive}
+            lightsActive={lightsActive}
+            onDeleteWall={onDeleteWall}
+            onToggleDoor={onToggleDoor}
+            onMoveLight={onMoveLight}
+            onDeleteLight={onDeleteLight}
+          />
         ) : null}
 
         {/* Topmost overlay: everyone's live rulers + the active tool's draft. */}
@@ -920,11 +1011,40 @@ export function MapCanvas({
         fogEnabled={scene.fog.enabled}
         onToggleFog={() => send({ type: "FOG_SET", sceneId: scene.id, enabled: !scene.fog.enabled })}
         onResetFog={() => send({ type: "FOG_RESET", sceneId: scene.id })}
+        fogMode={fogMode}
+        onFogMode={setFogMode}
+        fogBrushScale={fogBrushScale}
+        onFogBrushScale={setFogBrushScale}
+        fogInverted={scene.fog.inverted}
+        onToggleFogInverted={() =>
+          send({
+            type: "FOG_SET",
+            sceneId: scene.id,
+            enabled: scene.fog.enabled,
+            inverted: !scene.fog.inverted,
+          })
+        }
         onClearAnnotations={() => send({ type: "CLEAR_ANNOTATIONS", sceneId: scene.id })}
         playersCanDraw={playersCanDraw}
         onTogglePlayersCanDraw={() =>
           send({ type: "SET_PLAYERS_CAN_DRAW", enabled: !playersCanDraw })
         }
+        globalIllumination={scene.globalIllumination}
+        onToggleGlobalIllumination={() =>
+          send({ type: "UPDATE_SCENE", scene: { ...scene, globalIllumination: !scene.globalIllumination } })
+        }
+        visionPreview={visionPreview}
+        onToggleVisionPreview={() => setVisionPreview((v) => !v)}
+        wallKind={wallKind}
+        onWallKind={setWallKind}
+        wallCount={scene.walls.length}
+        onClearWalls={() => send({ type: "SET_WALLS", sceneId: scene.id, walls: [] })}
+        lightPreset={lightPreset}
+        onLightPreset={setLightPreset}
+        lightCount={scene.lights.length}
+        onClearLights={() => send({ type: "UPDATE_SCENE", scene: { ...scene, lights: [] } })}
+        hasVisionTokens={hasVisionTokens}
+        history={history}
       />
 
       {!scene.mapUrl ? <div className="map-empty">No map image for “{scene.name}”</div> : null}
