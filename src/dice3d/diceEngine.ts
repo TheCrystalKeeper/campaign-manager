@@ -18,7 +18,7 @@ import {
   type Vec3,
   type WorldPoint,
 } from "./diceProtocol";
-import { DICE_FADE_MS, DICE_REVEAL_FADE_MS, DICE_ROLL_LINGER_MS } from "./diceTiming";
+import { DICE_FADE_MS, DICE_REVEAL_FADE_MS } from "./diceTiming";
 
 /// Three.js + Rapier dice engine.
 /// in a hidden pre-simulation that records the exact motion (a DiceTrack). Every client
@@ -46,7 +46,6 @@ const FIXED_DT = 1 / 60;
 const SETTLE_LINVEL = 0.16;
 const SETTLE_ANGVEL = 0.2;
 const FADE_MS = DICE_FADE_MS;
-const ROLL_LINGER_MS = DICE_ROLL_LINGER_MS;
 const REVEAL_FADE_MS = DICE_REVEAL_FADE_MS;
 
 // Pre-simulation recording.
@@ -120,8 +119,6 @@ export class DiceEngine {
   private container: HTMLElement;
   private resizeObserver: ResizeObserver;
 
-  // Full-window arena bounds in client px (for pointer + cursor sync).
-  private area = { left: 0, top: 0, width: 1, height: 1 };
   // Pixels per physics unit; fixed so tracks look the same on every client.
   private k = SCREEN_SCALE;
   // Physics play-box half-extents; fit viewport and cap for small-screen sync.
@@ -186,8 +183,6 @@ export class DiceEngine {
     const ch = Math.max(this.container.clientHeight, 1);
     this.renderer.setSize(cw, ch, false);
 
-    const crect = this.container.getBoundingClientRect();
-    this.area = { left: crect.left, top: crect.top, width: crect.width, height: crect.height };
     this.container.style.clipPath = "none";
     this.syncPlayAreaExtents();
     this.updateCamera();

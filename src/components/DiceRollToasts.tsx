@@ -34,7 +34,7 @@ export function DiceRollToasts({
   const seenPublicRef = useRef(new Set<string>());
   const seenPrivateRef = useRef(new Set<string>());
   const hydratedRef = useRef(false);
-  const removeTimersRef = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  const removeTimersRef = useRef(new Map<string, number>());
 
   const removeToast = useCallback((key: string) => {
     const timer = removeTimersRef.current.get(key);
