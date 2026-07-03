@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { DICE_QUICK_SIDES } from "../lib/dice";
 import { playRollSound } from "../lib/rollSound";
+import { clampToViewport } from "../lib/clampToViewport";
 import type { DiceOverlayController } from "../dice/useDiceOverlay";
 
 type DiceTrayProps = {
@@ -13,6 +14,8 @@ type DiceTrayProps = {
   /** Text-roll fallback (3D off, engine warming up, or invalid for 3D). */
   onTextRoll: (expression: string) => void;
   onClose: () => void;
+  /** Bumped by "Reset UI layout" — the tray returns to its default position. */
+  resetSignal?: number;
 };
 
 type TrayPos = { x: number; y: number };
@@ -26,12 +29,7 @@ const EST_SIZE: TraySize = { w: 500, h: 170 };
 
 /// <summary>Keeps the whole tray on screen (with a margin), using its measured size.</summary>
 function clampPos(pos: TrayPos, size: TraySize = EST_SIZE): TrayPos {
-  const maxX = Math.max(MARGIN, window.innerWidth - size.w - MARGIN);
-  const maxY = Math.max(MARGIN, window.innerHeight - size.h - MARGIN);
-  return {
-    x: Math.min(Math.max(pos.x, MARGIN), maxX),
-    y: Math.min(Math.max(pos.y, MARGIN), maxY),
-  };
+  return clampToViewport(pos, size, MARGIN);
 }
 
 function defaultPos(size: TraySize = EST_SIZE): TrayPos {
@@ -81,11 +79,13 @@ export function DiceTray({
   controller,
   onTextRoll,
   onClose,
+  resetSignal,
 }: DiceTrayProps) {
   const [expression, setExpression] = useState("1d20");
   const [pos, setPos] = useState<TrayPos>(loadPos);
   const trayRef = useRef<HTMLDivElement>(null);
   const suppressClickRef = useRef(false);
+  const lastResetRef = useRef(resetSignal);
 
   const selectionActive = Object.keys(controller.selection).length > 0;
 
@@ -107,6 +107,15 @@ export function DiceTray({
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, []);
+
+  // "Reset UI layout" (settings): back to the default bottom-center spot.
+  useEffect(() => {
+    if (lastResetRef.current === resetSignal) {
+      return;
+    }
+    lastResetRef.current = resetSignal;
+    setPos(clampPos(defaultPos(measure()), measure()));
+  }, [resetSignal]);
 
   // Esc puts readied dice back.
   useEffect(() => {

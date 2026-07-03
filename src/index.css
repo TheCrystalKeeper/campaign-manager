@@ -496,6 +496,48 @@ label {
   border: 1px solid var(--border);
   background: rgba(0, 0, 0, 0.3);
   flex-shrink: 0;
+  display: block;
+}
+/* Clickable portrait upload: the whole thumbnail is the file picker. */
+.sheet-portrait-btn {
+  position: relative;
+  display: inline-block;
+  width: 3.5rem;
+  height: 3.5rem;
+  margin: 0;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+.sheet-portrait--empty {
+  display: grid;
+  place-items: center;
+  border-style: dashed;
+  color: var(--text-muted);
+  font-size: 1.5rem;
+  line-height: 1;
+}
+.sheet-portrait-btn:hover .sheet-portrait {
+  border-color: var(--accent);
+}
+.sheet-portrait-hint {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 1px 0;
+  font-size: 0.58rem;
+  text-align: center;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.62);
+  border-radius: 0 0 var(--radius) var(--radius);
+  opacity: 0;
+  transition: opacity 0.12s ease;
+  pointer-events: none;
+}
+/* Empty portrait always advertises itself; a filled one only on hover. */
+.sheet-portrait-btn:hover .sheet-portrait-hint,
+.sheet-portrait-btn .sheet-portrait--empty ~ .sheet-portrait-hint {
+  opacity: 1;
 }
 .grid-2 {
   display: grid;
@@ -528,10 +570,12 @@ label {
   padding: 0.2rem;
   margin-top: 0.2rem;
 }
+/* Grid (not space-between) so the input + total columns line up across every row,
+   independent of the sheet/card width — the label flexes, the numbers stay aligned. */
 .stat-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 3.4rem 2.6rem;
   align-items: center;
-  justify-content: space-between;
   gap: 0.4rem;
   padding: 0.08rem 0;
   border-bottom: 1px solid var(--border-subtle);
@@ -540,11 +584,10 @@ label {
 .stat-row .total {
   font-family: var(--font-display);
   color: var(--accent-bright);
-  min-width: 2.2rem;
   text-align: right;
 }
 .stat-row input {
-  width: 3.2rem;
+  width: 100%;
 }
 .section-title {
   font-family: var(--font-display);
@@ -813,7 +856,108 @@ button.mod.roll-btn {
 }
 .window-body {
   min-height: 0;
+  flex: 1 1 auto;
   overflow-y: auto;
+  /* Size container: wide windows re-flow their content (multi-column sheet). */
+  container-type: inline-size;
+}
+.window--maximized {
+  border-radius: var(--radius);
+}
+
+/* Invisible resize grab zones on every edge and corner (hidden when maximized). */
+.win-rs {
+  position: absolute;
+  z-index: 5;
+  touch-action: none;
+}
+.win-rs--n {
+  top: -2px;
+  left: 10px;
+  right: 10px;
+  height: 6px;
+  cursor: ns-resize;
+}
+.win-rs--s {
+  bottom: -2px;
+  left: 10px;
+  right: 10px;
+  height: 6px;
+  cursor: ns-resize;
+}
+.win-rs--e {
+  right: -2px;
+  top: 10px;
+  bottom: 10px;
+  width: 6px;
+  cursor: ew-resize;
+}
+.win-rs--w {
+  left: -2px;
+  top: 10px;
+  bottom: 10px;
+  width: 6px;
+  cursor: ew-resize;
+}
+.win-rs--ne,
+.win-rs--nw,
+.win-rs--se,
+.win-rs--sw {
+  width: 12px;
+  height: 12px;
+}
+.win-rs--ne {
+  top: -2px;
+  right: -2px;
+  cursor: nesw-resize;
+}
+.win-rs--sw {
+  bottom: -2px;
+  left: -2px;
+  cursor: nesw-resize;
+}
+.win-rs--nw {
+  top: -2px;
+  left: -2px;
+  cursor: nwse-resize;
+}
+.win-rs--se {
+  /* Kept fully inside the (overflow-clipped, rounded) window so the visible grip
+     below isn't cut off. */
+  bottom: 0;
+  right: 0;
+  width: 18px;
+  height: 18px;
+  cursor: nwse-resize;
+}
+/* Visible diagonal grip so users can see the window is resizable from this corner. */
+.win-rs--se::after {
+  content: "";
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  width: 10px;
+  height: 10px;
+  opacity: 0.55;
+  background-image:
+    linear-gradient(135deg, transparent 44%, var(--text-muted) 44%, var(--text-muted) 56%, transparent 56%),
+    linear-gradient(135deg, transparent 69%, var(--text-muted) 69%, var(--text-muted) 81%, transparent 81%);
+}
+.window:hover .win-rs--se::after {
+  opacity: 0.85;
+}
+
+/* Wide sheet container (resized/maximized window, prep page): two columns. */
+@container (min-width: 620px) {
+  .sheet-body {
+    display: block;
+    column-count: 2;
+    column-gap: 0.45rem;
+  }
+  .sheet-body > .sheet-card {
+    break-inside: avoid;
+    margin-bottom: 0.45rem;
+  }
 }
 
 /* --- Docked sidebar (FoundryVTT-style) --------------------------------------
@@ -862,6 +1006,13 @@ button.mod.roll-btn {
 .dock-rail-spacer {
   flex: 1;
 }
+.dock-sep {
+  width: 60%;
+  height: 1px;
+  background: var(--border);
+  margin: 0.1rem 0;
+  flex-shrink: 0;
+}
 .dock-panel {
   width: var(--dock-panel-w);
   min-height: 0;
@@ -907,21 +1058,23 @@ button.mod.roll-btn {
   flex: 1;
 }
 
-/* --- Transient log toasts (bottom-left) --------------------------------------- */
+/* --- Transient log toasts (bottom-right) --------------------------------------- */
 .log-toasts {
   position: fixed;
   /* Bottom-right, just left of the always-present dock rail. Slides left by the
-     panel width when the dock is expanded, in step with the panel animation. */
+     panel width when the dock is expanded, in step with the panel animation.
+     Lifts (inline bottom offset) above the dice tray when they'd overlap, and
+     sits above the DM prep pages — toasts are global. */
   right: var(--dock-rail-w);
   bottom: 1rem;
-  z-index: 15;
+  z-index: 35;
   pointer-events: none;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
   gap: 0.3rem;
   max-width: min(360px, 60vw);
-  transition: right 0.18s ease;
+  transition: right 0.18s ease, bottom 0.15s ease;
 }
 .log-toasts--dock-open {
   right: calc(var(--dock-rail-w) + var(--dock-panel-w));
@@ -962,21 +1115,93 @@ button.mod.roll-btn {
 }
 
 /* --- Directories (Actors / Items) -------------------------------------------- */
+.dir {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding: 0.5rem 0.4rem;
+}
+/* Top create buttons: labeled + icon, side by side. */
+.dir-toolbar {
+  display: flex;
+  gap: 0.35rem;
+}
+.dir-create {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: 0.42rem 0.4rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dir-create:first-child {
+  background: var(--surface-2);
+  border-color: var(--accent);
+  color: var(--accent-bright);
+}
+.dir-create-ico {
+  font-size: 0.95rem;
+}
+/* Search row: inline magnifier + sort / collapse-all icon buttons. */
+.dir-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+.dir-search-ico {
+  position: absolute;
+  left: 0.5rem;
+  font-size: 0.8rem;
+  opacity: 0.6;
+  pointer-events: none;
+}
+.dir-search input {
+  padding-left: 1.75rem;
+}
+.dir-icon-btn {
+  flex-shrink: 0;
+  width: 1.95rem;
+  height: 1.95rem;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  font-size: 0.85rem;
+}
+.dir-icon-btn--on {
+  border-color: var(--accent);
+  color: var(--accent-bright);
+}
+.dir-list {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.dir-empty {
+  padding: 0.5rem 0.3rem;
+}
+.dir-group {
+  margin-bottom: 0.1rem;
+}
+/* Rows: portrait + bold name, with an inset separator (not edge-to-edge). */
 .dir-row {
   display: flex;
   align-items: center;
-  gap: 0.35rem;
-  padding: 0.18rem 0.25rem;
-  border-radius: var(--radius);
-  cursor: pointer;
-}
-.dir-row:hover {
-  background: var(--surface-inset);
-}
-.dir-row {
+  gap: 0.55rem;
+  padding: 0.32rem 0.4rem;
+  margin: 0 0.3rem;
+  border-bottom: 1px solid var(--border-subtle);
   cursor: grab;
   user-select: none;
   touch-action: none;
+}
+.dir-row:hover {
+  background: var(--surface-inset);
 }
 
 /* --- Pointer drag-and-drop ---------------------------------------------------- */
@@ -1008,17 +1233,23 @@ body.pointer-dragging * {
   border-radius: var(--radius);
 }
 .dir-icon {
-  width: 1.5rem;
-  height: 1.5rem;
-  border-radius: 50%;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 6px;
   object-fit: cover;
   flex-shrink: 0;
+  background: rgba(0, 0, 0, 0.25);
 }
 .dir-dot {
-  display: inline-block;
+  display: grid;
+  place-items: center;
+  font-size: 1rem;
+  color: #fff;
 }
 .dir-name {
   flex: 1;
+  min-width: 0;
+  font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1037,35 +1268,49 @@ body.pointer-dragging * {
   flex-shrink: 0;
 }
 .dir-actions .icon-btn {
-  width: 1.5rem;
-  height: 1.5rem;
+  width: 1.6rem;
+  height: 1.6rem;
   font-size: 0.8rem;
 }
 .dir-folder {
   display: flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: 0.3rem;
   background: var(--surface-inset);
   border-radius: var(--radius);
-  padding: 0.1rem 0.25rem;
+  padding: 0.28rem 0.3rem;
+  margin: 0.15rem 0.15rem 0.1rem;
 }
 .dir-folder-toggle {
   background: none;
   border: none;
-  padding: 0.15rem 0.25rem;
+  padding: 0 0.15rem;
+  flex-shrink: 0;
+  font-size: 0.8rem;
+}
+.dir-folder-ico {
   flex-shrink: 0;
 }
 .dir-folder-name {
   flex: 1;
+  min-width: 0;
   background: transparent;
   border-color: transparent;
   padding: 0.1rem 0.25rem;
-  font-weight: 600;
+  font-weight: 700;
+  font-family: var(--font-display);
 }
 .dir-folder-name:hover,
 .dir-folder-name:focus {
   border-color: var(--border);
   background: var(--input-bg);
+}
+.dir-folder-count {
+  flex-shrink: 0;
+  min-width: 1rem;
+  text-align: center;
+  font-size: 0.72rem;
+  color: var(--text-muted);
 }
 .dir-folder .icon-btn {
   width: 1.5rem;
@@ -1073,7 +1318,7 @@ body.pointer-dragging * {
   font-size: 0.75rem;
 }
 .dir-folder-body {
-  padding-left: 0.9rem;
+  padding-left: 0.6rem;
 }
 .dir-root-drop {
   /* Always present (no layout shift when a drag starts); lights up mid-drag. */
@@ -1317,6 +1562,162 @@ body.pointer-dragging * {
 }
 .dice-tray-expr {
   width: 5.5rem;
+}
+
+/* --- Page switcher + DM prep pages (Phase 5.5) -------------------------------
+   The top-left switcher (DM only) routes between the Board and full-screen
+   prep pages. Pages are opaque surfaces above the board chrome (dock, tray,
+   toolbar) but below toasts and the switcher itself. */
+.page-switcher {
+  position: fixed;
+  top: 1rem;
+  left: 1rem;
+  z-index: 32;
+  pointer-events: auto;
+  display: flex;
+  gap: 0.25rem;
+  padding: 0.3rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  backdrop-filter: var(--blur);
+}
+
+.page {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  pointer-events: auto;
+  display: none;
+  background: var(--bg);
+  padding-top: 3.4rem; /* clears the fixed page switcher */
+}
+.page--active {
+  display: flex;
+}
+.page-roster {
+  /* width is set inline (draggable divider); this is the fallback. */
+  width: 340px;
+  flex-shrink: 0;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0.6rem;
+  background: var(--surface-inset);
+  display: flex;
+  flex-direction: column;
+}
+/* Draggable divider between the roster and the main area. */
+.page-resize {
+  flex-shrink: 0;
+  width: 6px;
+  cursor: ew-resize;
+  background: var(--border-subtle);
+  touch-action: none;
+  transition: background 0.12s ease;
+}
+.page-resize:hover {
+  background: var(--accent);
+}
+.page-roster > .panel-body {
+  padding: 0;
+}
+.page-main {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0.6rem 1rem 1rem;
+}
+.page-empty {
+  display: grid;
+  place-items: center;
+  height: 60%;
+  text-align: center;
+  padding: 0 2rem;
+}
+
+/* Open sheets as fixed-width columns; scroll sideways when several are open. */
+.sheet-cards {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  height: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 0.4rem;
+}
+.sheet-col {
+  flex: 0 0 400px;
+  width: 400px;
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--elev-1);
+  overflow: hidden;
+  /* Own size container so the sheet inside stays single-column at 400px
+     (the 2-column reflow is only for wide floating windows). */
+  container-type: inline-size;
+}
+.sheet-col-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface-inset);
+  flex-shrink: 0;
+}
+.sheet-col-body {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* Clickable roster rows (Players page): whole row selects, name edits on dbl-click. */
+.party-slot--row {
+  cursor: pointer;
+  padding: 0.28rem 0.3rem;
+  border-bottom: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+}
+.party-slot--row:hover {
+  background: var(--surface-inset);
+}
+.party-slot--selected {
+  background: var(--surface-2);
+  border-color: var(--accent);
+}
+.party-slot-name {
+  flex: 1;
+  min-width: 0;
+}
+.party-slot-name[readonly] {
+  cursor: pointer;
+  background: transparent;
+  border-color: transparent;
+}
+.party-slot--row:hover .party-slot-name[readonly] {
+  border-color: var(--border-subtle);
+}
+.scene-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  align-items: center;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+.scene-preview img {
+  max-width: 100%;
+  max-height: calc(100vh - 10rem);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--elev-2);
 }
 
 /* --- Toast (transient status, e.g. reconnecting) --------------------------- */

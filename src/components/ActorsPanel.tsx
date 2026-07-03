@@ -9,6 +9,8 @@ type ActorsPanelProps = {
   openSheet: (sheetId: string) => void;
   /** Drop an actor (or null for a blank token) onto the map at screen coords. */
   dropActorAt: (sheetId: string | null, clientX: number, clientY: number) => void;
+  /** Restrict the directory to one kind (the NPCs page shows NPCs only). */
+  filterKind?: "pc" | "npc";
 };
 
 const newId = (prefix: string) => `${prefix}-${crypto.randomUUID().slice(0, 8)}`;
@@ -31,8 +33,10 @@ const byOrderThenName = (a: DirectoryRowData, b: DirectoryRowData) =>
 /// The Actors directory (PCs + NPCs): folders, search, quick create, manual
 /// drag-reordering, and drag-to-board token placement.
 /// </summary>
-export function ActorsPanel({ state, dm, openSheet, dropActorAt }: ActorsPanelProps) {
-  const records = Object.values(state.sheets);
+export function ActorsPanel({ state, dm, openSheet, dropActorAt, filterKind }: ActorsPanelProps) {
+  const records = Object.values(state.sheets).filter(
+    (record) => !filterKind || record.kind === filterKind,
+  );
 
   const rows: DirectoryRowData[] = records
     .map((record) =>
@@ -69,7 +73,7 @@ export function ActorsPanel({ state, dm, openSheet, dropActorAt }: ActorsPanelPr
       folders={state.folders.filter((folder) => folder.kind === "actor")}
       rows={rows}
       createLabel="Create NPC"
-      onCreate={(name) => {
+      onCreate={(name, folderId) => {
         const sheetId = newId("sheet");
         const finalName =
           name ||
@@ -78,6 +82,11 @@ export function ActorsPanel({ state, dm, openSheet, dropActorAt }: ActorsPanelPr
             records.filter((r) => r.kind === "npc").map((r) => r.data.characterName),
           );
         dm.createSheet(sheetId, finalName);
+        // Messages are ordered, so the freshly-created sheet exists by the time
+        // the server processes this folder move.
+        if (folderId) {
+          dm.setSheetFolder(sheetId, folderId);
+        }
         openSheet(sheetId);
       }}
       onCreateFolder={(name) =>
@@ -117,19 +126,23 @@ export function ActorsPanel({ state, dm, openSheet, dropActorAt }: ActorsPanelPr
         );
       }}
       footer={
-        <div
-          className="dir-row dir-blank-chip"
-          title="Drag onto the map to place a plain token with no sheet"
-          onPointerDown={(event) =>
-            startPointerDrag(event, {
-              label: "Blank token",
-              onDrop: (drop) => dropOnBoard(null, drop.element, drop.clientX, drop.clientY),
-            })
-          }
-        >
-          <span className="dir-icon dir-dot" style={{ background: TOKEN_ENEMY_COLOR }} />
-          <span className="dir-name muted">Blank token — drag onto the map</span>
-        </div>
+        // The blank-token chip drags onto the board; hide it on the prep page,
+        // which sits over (and so covers) the board.
+        filterKind ? undefined : (
+          <div
+            className="dir-row dir-blank-chip"
+            title="Drag onto the map to place a plain token with no sheet"
+            onPointerDown={(event) =>
+              startPointerDrag(event, {
+                label: "Blank token",
+                onDrop: (drop) => dropOnBoard(null, drop.element, drop.clientX, drop.clientY),
+              })
+            }
+          >
+            <span className="dir-icon dir-dot" style={{ background: TOKEN_ENEMY_COLOR }} />
+            <span className="dir-name muted">Blank token — drag onto the map</span>
+          </div>
+        )
       }
     />
   );

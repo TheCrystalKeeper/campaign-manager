@@ -16,9 +16,10 @@ type LogToastsProps = {
 };
 
 /// <summary>
-/// Transient bottom-left notifications for new log entries (rolls, chat,
+/// Transient bottom-right notifications for new log entries (rolls, chat,
 /// events): each fades in, lingers a few seconds, and fades out. Entries
-/// present at join time are never replayed.
+/// present at join time are never replayed. The stack lifts itself above the
+/// (draggable) dice tray whenever the two would overlap.
 /// </summary>
 export function LogToasts({
   log,
@@ -29,6 +30,9 @@ export function LogToasts({
 }: LogToastsProps) {
   const seenRef = useRef<Set<string> | null>(null);
   const [toasts, setToasts] = useState<LogEntry[]>([]);
+  const stackRef = useRef<HTMLDivElement>(null);
+  /** Extra bottom offset (px) applied when the open dice tray occludes the stack. */
+  const [lift, setLift] = useState(0);
 
   useEffect(() => {
     // First state after joining: mark history as seen without replaying it.
@@ -52,7 +56,42 @@ export function LogToasts({
     }, TOAST_LIFETIME_MS);
   }, [log]);
 
-  if (suppress || toasts.length === 0) {
+  // Occlusion check against the open tray: measured fresh (the tray is draggable),
+  // rechecked on a short timer while any toast is visible. The stack's "natural"
+  // (unlifted) rect decides, so lifting can't oscillate.
+  const visible = !suppress && toasts.length > 0;
+  useEffect(() => {
+    if (!visible) {
+      setLift(0);
+      return;
+    }
+    const check = () => {
+      const stack = stackRef.current;
+      const tray = document.querySelector(".dice-tray--open");
+      if (!stack || !tray) {
+        setLift(0);
+        return;
+      }
+      const t = tray.getBoundingClientRect();
+      const s = stack.getBoundingClientRect();
+      setLift((current) => {
+        const naturalTop = s.top + current;
+        const naturalBottom = s.bottom + current;
+        const overlaps =
+          t.left < s.right && t.right > s.left && t.top < naturalBottom && t.bottom > naturalTop;
+        return overlaps ? Math.max(0, Math.round(window.innerHeight - t.top + 8 - 16)) : 0;
+      });
+    };
+    check();
+    const timer = setInterval(check, 300);
+    window.addEventListener("resize", check);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener("resize", check);
+    };
+  }, [visible, toasts.length]);
+
+  if (!visible) {
     return null;
   }
 
@@ -60,7 +99,11 @@ export function LogToasts({
     id === "dm" ? "DM" : (playerSlots.find((slot) => slot.id === id)?.name ?? "player");
 
   return (
-    <div className={`log-toasts${dockExpanded ? " log-toasts--dock-open" : ""}`}>
+    <div
+      ref={stackRef}
+      className={`log-toasts${dockExpanded ? " log-toasts--dock-open" : ""}`}
+      style={lift > 0 ? { bottom: `calc(1rem + ${lift}px)` } : undefined}
+    >
       {toasts.map((entry) => {
         if (entry.kind === "event") {
           return (

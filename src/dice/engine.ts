@@ -543,6 +543,21 @@ export class DiceEngine {
     return this.drag !== null;
   }
 
+  /// <summary>
+  /// Aborts the active grab and removes its armed dice without throwing — the
+  /// "drag it back into the tray to cancel" gesture. The dice simply vanish from
+  /// the hand; the tray-selection restore is the caller's job.
+  /// </summary>
+  cancelActiveDrag() {
+    if (!this.drag) {
+      return;
+    }
+    const rollId = this.drag.rollId;
+    this.drag = null;
+    this.clearRoll(rollId);
+    this.requestRender();
+  }
+
   /// <summary>Throws the armed dice for the user without a drag gesture.</summary>
   autoThrow(rollId: string) {
     const roll = this.rolls.get(rollId);
@@ -556,7 +571,7 @@ export class DiceEngine {
       die.mesh.position.set(pos.x, DIE_SCALE * 2.6, pos.z);
     });
     const angle = Math.random() * Math.PI * 2;
-    const speed = 8 + Math.random() * 3.5;
+    const speed = 6 + Math.random() * 2.5;
     this.release(roll, Math.cos(angle) * speed, Math.sin(angle) * speed);
   }
 
@@ -573,7 +588,7 @@ export class DiceEngine {
   }
 
   private buildReleaseStates(roll: RollInstance, vx: number, vz: number): DieThrowState[] {
-    const cap = 26;
+    const cap = 16;
     const cvx = clamp(vx, -cap, cap);
     const cvz = clamp(vz, -cap, cap);
     const speed = Math.hypot(cvx, cvz);
@@ -601,21 +616,22 @@ export class DiceEngine {
 
   private releaseVelocity(samples: { t: number; x: number; z: number }[]): { vx: number; vz: number } {
     if (samples.length < 2) {
-      return { vx: 0, vz: -7 };
+      return { vx: 0, vz: -5.5 };
     }
     const last = samples[samples.length - 1];
     const first = samples[0];
     const dt = Math.max((last.t - first.t) / 1000, 0.001);
-    const vx = ((last.x - first.x) / dt) * 0.9;
-    const vz = ((last.z - first.z) / dt) * 0.9;
+    // 0.75 (was 0.9): damp the flick speed so hard drags don't rocket across the table.
+    const vx = ((last.x - first.x) / dt) * 0.75;
+    const vz = ((last.z - first.z) / dt) * 0.75;
     const speed = Math.hypot(vx, vz);
     if (speed < 0.8) {
       // A plain click (no fling): lob the dice "up" the screen, onto the board.
-      return { vx: 0, vz: -7 };
+      return { vx: 0, vz: -5.5 };
     }
-    if (speed < 6) {
+    if (speed < 4.5) {
       // Keep the gesture's direction but give it enough energy to tumble.
-      const boost = 6 / speed;
+      const boost = 4.5 / speed;
       return { vx: vx * boost, vz: vz * boost };
     }
     return { vx, vz };
@@ -631,8 +647,8 @@ export class DiceEngine {
     world.createCollider(
       RAPIER.ColliderDesc.cuboid(500, 0.5, 500)
         .setTranslation(0, -0.5, 0)
-        .setRestitution(0.25)
-        .setFriction(0.8),
+        .setRestitution(0.2)
+        .setFriction(0.9),
       floorBody,
     );
 
@@ -663,8 +679,10 @@ export class DiceEngine {
       const body = world.createRigidBody(
         RAPIER.RigidBodyDesc.dynamic()
           .setCcdEnabled(true)
-          .setLinearDamping(0.2)
-          .setAngularDamping(0.25)
+          // Higher linear damping bleeds off the glide so dice don't skate across the
+          // table like they're on ice; angular barely rises so they still tumble.
+          .setLinearDamping(0.45)
+          .setAngularDamping(0.28)
           .setTranslation(s.p[0], s.p[1], s.p[2])
           .setRotation({ x: s.q[0], y: s.q[1], z: s.q[2], w: s.q[3] }),
       );
@@ -678,8 +696,8 @@ export class DiceEngine {
         scaled[i * 3 + 2] = p.z * DIE_SCALE;
       });
       const colliderDesc = (RAPIER.ColliderDesc.convexHull(scaled) ?? RAPIER.ColliderDesc.ball(DIE_SCALE))
-        .setRestitution(0.35)
-        .setFriction(0.85)
+        .setRestitution(0.3)
+        .setFriction(0.9)
         .setDensity(1.2)
         .setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS);
       const collider = world.createCollider(colliderDesc, body);

@@ -13,6 +13,8 @@ import type { DiceEngine, SafeInsets } from "./engine";
 import type { DiceTrayScene } from "./trayScene";
 
 const ENABLED_KEY = "dice-3d-enabled";
+/** Shared with dice/audio.ts and lib/rollSound.ts — one mute for all dice sound. */
+const MUTED_KEY = "dice-muted";
 
 /** Physical dice cap per throw (bigger pools resolve as text rolls). */
 const MAX_PHYSICAL_DICE = 12;
@@ -27,6 +29,14 @@ function readEnabled(): boolean {
     // fall through to the media query default
   }
   return !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+function readMuted(): boolean {
+  try {
+    return window.localStorage.getItem(MUTED_KEY) === "1";
+  } catch {
+    return false;
+  }
 }
 
 /** How many physical dice one selection unit costs (a d100 is a pair of d10s). */
@@ -85,7 +95,15 @@ export function useDiceOverlay(room: GameRoom): DiceOverlayController {
   const [container, setContainer] = useState<HTMLDivElement | null>(null);
   const containerRef = useCallback((node: HTMLDivElement | null) => setContainer(node), []);
   const [trayMount, setTrayMount] = useState<HTMLDivElement | null>(null);
-  const trayMountRef = useCallback((node: HTMLDivElement | null) => setTrayMount(node), []);
+  // A plain ref mirror of the tray well element, readable from the (deps-free)
+  // drag listeners so a release over the tray can cancel the throw.
+  const trayElRef = useRef<HTMLDivElement | null>(null);
+  const trayMountRef = useCallback((node: HTMLDivElement | null) => {
+    trayElRef.current = node;
+    setTrayMount(node);
+  }, []);
+  /** The tray selection captured at grab time, restored if the grab is cancelled. */
+  const grabbedSelectionRef = useRef<Record<number, number>>({});
 
   const roomRef = useRef(room);
   roomRef.current = room;
@@ -103,7 +121,7 @@ export function useDiceOverlay(room: GameRoom): DiceOverlayController {
   const [enabled, setEnabledState] = useState(readEnabled);
   const enabledRef = useRef(enabled);
   enabledRef.current = enabled;
-  const [muted, setMutedState] = useState(false);
+  const [muted, setMutedState] = useState(readMuted);
   const [selection, setSelection] = useState<Record<number, number>>({});
   const selectionRef = useRef(selection);
   selectionRef.current = selection;
@@ -257,6 +275,12 @@ export function useDiceOverlay(room: GameRoom): DiceOverlayController {
   const setMuted = useCallback((next: boolean) => {
     audioRef.current?.setMuted(next);
     setMutedState(next);
+    // Persist even before the engine/audio loads (settings can toggle with 3D off).
+    try {
+      window.localStorage.setItem(MUTED_KEY, next ? "1" : "0");
+    } catch {
+      // preference just won't persist
+    }
   }, []);
 
   const adjustSelection = useCallback((sides: number, delta: number) => {
@@ -294,21 +318,53 @@ export function useDiceOverlay(room: GameRoom): DiceOverlayController {
     ];
   }, []);
 
-  /// <summary>Registers a roll and its window drag listeners through to release.</summary>
-  const rideDrag = useCallback((engine: DiceEngine, onUpExtra?: () => void) => {
-    const onMove = (e: PointerEvent) => {
-      engine.moveDrag(e.clientX, e.clientY);
-      e.preventDefault();
-    };
-    const onUp = (e: PointerEvent) => {
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
-      engine.endDrag(e.clientX, e.clientY);
-      onUpExtra?.();
-    };
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", onUp);
+  /** Is a screen point inside the tray well's rect (the drop-to-cancel zone)? */
+  const isOverTray = useCallback((clientX: number, clientY: number): boolean => {
+    const el = trayElRef.current;
+    if (!el) {
+      return false;
+    }
+    const r = el.getBoundingClientRect();
+    return clientX >= r.left && clientX <= r.right && clientY >= r.top && clientY <= r.bottom;
   }, []);
+
+  /// <summary>
+  /// Registers a roll and its window drag listeners through to release. If the die is
+  /// dragged out of the tray and then dropped back onto it, the throw is cancelled and
+  /// the readied dice return to the tray (rather than being flung).
+  /// </summary>
+  const rideDrag = useCallback(
+    (engine: DiceEngine, rollId: string, onUpExtra?: () => void) => {
+      // Only allow drop-to-cancel once the die has actually left the tray, so a plain
+      // click-in-place still lobs the dice gently instead of instantly cancelling.
+      let leftTray = false;
+      const onMove = (e: PointerEvent) => {
+        if (!isOverTray(e.clientX, e.clientY)) {
+          leftTray = true;
+        }
+        engine.moveDrag(e.clientX, e.clientY);
+        e.preventDefault();
+      };
+      const onUp = (e: PointerEvent) => {
+        window.removeEventListener("pointermove", onMove);
+        window.removeEventListener("pointerup", onUp);
+        if (leftTray && isOverTray(e.clientX, e.clientY)) {
+          // Dropped back into the tray: discard the throw, un-arm it, and put the
+          // readied dice back so nothing is left in hand.
+          engine.cancelActiveDrag();
+          armedRef.current.delete(rollId);
+          ourRollIdsRef.current.delete(rollId);
+          setSelection(grabbedSelectionRef.current);
+        } else {
+          engine.endDrag(e.clientX, e.clientY);
+        }
+        onUpExtra?.();
+      };
+      window.addEventListener("pointermove", onMove);
+      window.addEventListener("pointerup", onUp);
+    },
+    [isOverTray],
+  );
 
   const grabFromTray = useCallback(
     (event: { clientX: number; clientY: number }): boolean => {
@@ -350,10 +406,12 @@ export function useDiceOverlay(room: GameRoom): DiceOverlayController {
       const rollId = uid();
       armedRef.current.set(rollId, { specs, modifier: 0 });
       ourRollIdsRef.current.add(rollId);
+      // Remember what was readied so dropping the dice back into the tray restores it.
+      grabbedSelectionRef.current = current;
       setSelection({});
       audioRef.current?.resume();
       engine.beginTrayGrab(rollId, specs, poses, event.clientX, event.clientY);
-      rideDrag(engine, () => trayRef.current?.restoreLifted());
+      rideDrag(engine, rollId, () => trayRef.current?.restoreLifted());
       return true;
     },
     [ensureEngine, rideDrag],

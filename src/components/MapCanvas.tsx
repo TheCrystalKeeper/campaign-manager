@@ -32,7 +32,6 @@ import {
   ANNOTATION_MIN_LENGTH,
 } from "../lib/mapAnnotation";
 
-const SNAP_KEY = "cm-map-snap";
 /** The classic pointer-arrow palette (dark outline + cream fill), from the v1 system. */
 const ARROW_COLOR = "#f0e6d2";
 
@@ -74,6 +73,9 @@ type MapCanvasProps = {
   send: (message: ClientMessage) => void;
   /** Live-ruler relay subscription (transient MEASURE messages). */
   subscribeMeasure: (listener: (event: MeasureEvent) => void) => () => void;
+  /** Per-client snap-to-grid — owned by App (settings + the toolbar 🧲 share it). */
+  snap: boolean;
+  onToggleSnap: () => void;
 };
 
 /// <summary>
@@ -121,6 +123,7 @@ function useWindowSize() {
 /// </summary>
 function TokenNode({
   token,
+  imageUrl,
   radius,
   draggable,
   selected,
@@ -131,6 +134,8 @@ function TokenNode({
   onMove,
 }: {
   token: GameState["tokens"][number];
+  /** Portrait to render on the token (resolved live from the linked sheet). */
+  imageUrl: string | null;
   radius: number;
   draggable: boolean;
   selected: boolean;
@@ -141,7 +146,7 @@ function TokenNode({
   onSelect?: () => void;
   onMove: (x: number, y: number) => void;
 }) {
-  const img = useImage(token.imageUrl);
+  const img = useImage(imageUrl);
   const dead = hp !== null && hp.max > 0 && hp.current <= 0;
   const showBar = hp !== null && hp.max > 0;
   const ratio = showBar ? Math.min(Math.max(hp.current / hp.max, 0), 1) : 0;
@@ -276,6 +281,8 @@ export function MapCanvas({
   onPlaceToken,
   send,
   subscribeMeasure,
+  snap,
+  onToggleSnap,
 }: MapCanvasProps) {
   const stageRef = useRef<Konva.Stage>(null);
   const { width: stageW, height: stageH } = useWindowSize();
@@ -291,13 +298,6 @@ export function MapCanvas({
   const [draft, setDraft] = useState<unknown>(null);
   const [drawColor, setDrawColor] = useState("#ffd166");
   const [drawWidth, setDrawWidth] = useState(4);
-  const [snap, setSnap] = useState(() => {
-    try {
-      return localStorage.getItem(SNAP_KEY) === "1";
-    } catch {
-      return false;
-    }
-  });
   const [rulers, setRulers] = useState<Record<string, RemoteRuler>>({});
   /** Active middle-mouse pan: pointer start + the viewport frozen at press. */
   const panRef = useRef<{ x: number; y: number; vp: Viewport } | null>(null);
@@ -530,17 +530,6 @@ export function MapCanvas({
       y: Math.floor((y - scene.gridOffsetY) / g) * g + scene.gridOffsetY + g / 2,
     };
   };
-
-  const toggleSnap = () =>
-    setSnap((current) => {
-      const next = !current;
-      try {
-        localStorage.setItem(SNAP_KEY, next ? "1" : "0");
-      } catch {
-        // preference just won't persist
-      }
-      return next;
-    });
 
   /** Routes a stage pointer event to the active tool in world coordinates. */
   const toolPointer =
@@ -825,7 +814,11 @@ export function MapCanvas({
         <Layer listening={activeTool.id === "select"}>
           {sceneTokens.map((token) => {
             const draggable = isDm || token.ownerPlayerId === yourPlayerId;
-            const sheetHp = token.sheetId ? state.sheets[token.sheetId]?.data.hp : undefined;
+            // Prefer the linked sheet's portrait so uploads/changes reflect live;
+            // fall back to the token's own snapshot, then its color.
+            const linkedSheetId = token.sheetId ?? token.ownerPlayerId;
+            const sheet = linkedSheetId ? state.sheets[linkedSheetId] : undefined;
+            const sheetHp = sheet?.data.hp;
             // DM always sees bars; players only when the DM turned the display on.
             // (Redaction keeps hp available for showHp tokens even on hidden sheets.)
             const hp = sheetHp && (isDm || token.showHp !== "none") ? sheetHp : null;
@@ -833,6 +826,7 @@ export function MapCanvas({
               <TokenNode
                 key={token.id}
                 token={token}
+                imageUrl={sheet?.data.iconUrl ?? token.imageUrl ?? null}
                 radius={radius}
                 draggable={draggable}
                 selected={selectedTokenId === token.id}
@@ -918,7 +912,7 @@ export function MapCanvas({
           setDraft(null);
         }}
         snap={snap}
-        onToggleSnap={toggleSnap}
+        onToggleSnap={onToggleSnap}
         drawColor={drawColor}
         onDrawColor={setDrawColor}
         drawWidth={drawWidth}

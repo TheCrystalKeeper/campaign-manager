@@ -7,32 +7,35 @@ architecture reference — **historical**, describes the codebase before Phases 
 
 ## STATUS (2026-07-02) — read this first in a fresh session
 
-**Phases 0–5 are SHIPPED and machine-verified** (plus two UX-feedback rounds and a
-3D-dice feedback round). **Phase 5.5 (shell & layout round) is next**, then Phase 6
-(walls, lights, dynamic vision). The roadmap was restructured 2026-07-02 (user):
-5.5 = shell/layout fixes, 6 = vision, 7 = game-content depth, 8 = full aesthetic revamp
+**Phases 0–5.5 are SHIPPED and machine-verified** (plus two UX-feedback rounds and a
+3D-dice feedback round). **Phase 6 (walls, lights, dynamic vision) is next.** The
+roadmap was restructured 2026-07-02 (user):
+5.5 = shell/layout fixes ✅, 6 = vision, 7 = game-content depth, 8 = full aesthetic revamp
 (+ sound design), 9 = optional extras (soundboard/themes/asset library — the old
 Phase 7). Each shipped phase below carries an "as built" note where reality diverged
 from the original spec — trust those notes over the older prose.
 
 - **Verification:** `tests/` holds the WS smoke suites + unit tests with a README on how
   to run them (partykit dev server + `node tests/smoke-*.mjs`). All pass as of this date
-  (phase0–5 + ux2 + both unit suites). Re-run the full set after any
-  server/redaction/protocol change.
+  (phase0–5 + ux2 + both unit suites; re-run after 5.5 — shell-only, no protocol change).
+  Re-run the full set after any server/redaction/protocol change.
 - **Shipped file map (orientation):** shared logic `src/lib/{types,redact,dice,dice3d,
-  pointerDrag,sceneUtils}.ts`; server `partykit/server.ts`; shell `src/App.tsx` +
-  `src/panels/registry.tsx` (dock tabs + pop-out windows) + `src/components/{Dock,
-  FloatingWindow,FloatingCluster,Directory,ActorsPanel,ItemsPanel,PartyPanel,ScenePanel,
-  CharacterSheet,TokenEditor,InitiativeTracker,LogPanel,LogToasts,NotesPanel,DiceTray,
-  MapCanvas,MapToolbar,JoinScreen}.tsx`; 3D dice `src/dice/{engine,geometry,audio,
-  trayScene,useDiceOverlay}.ts`; map tools `src/map/tools/{types,registry,select,measure,
-  draw,calibrate,fog}`.
-- **Working state is uncommitted on branch `bare-bones`** (the whole revamp, Phases 0–5).
+  pointerDrag,sceneUtils,clampToViewport}.ts`; server `partykit/server.ts`; shell
+  `src/App.tsx` + `src/panels/registry.tsx` (dock tabs + pop-out windows) +
+  `src/components/{Dock,FloatingWindow,FloatingCluster,Directory,ActorsPanel,ItemsPanel,
+  PartyPanel,ScenePanel,CharacterSheet,TokenEditor,InitiativeTracker,LogPanel,LogToasts,
+  NotesPanel,DiceTray,SettingsPanel,MapCanvas,MapToolbar,JoinScreen}.tsx`; DM prep pages
+  `src/pages/{PageShell,PlayersPage,NpcsPage,ScenesPage}.tsx`; 3D dice
+  `src/dice/{engine,geometry,audio,trayScene,useDiceOverlay}.ts`; map tools
+  `src/map/tools/{types,registry,select,measure,draw,calibrate,fog}`.
+- **Working state is uncommitted on the revamp branch** (the whole revamp, Phases 0–5.5).
 - **Manual checks still owed by the user:** (a) 3D dice feel in two browser windows —
   tray ready/gather/throw, constant size across zoom, window-aware walls; (b) Phase 5
   visuals — grid calibration gesture on a real map image, fog render (black for players /
-  50% for DM), ruler + drawing feel, snap-to-grid. Everything protocol-level is already
-  machine-verified.
+  50% for DM), ruler + drawing feel, snap-to-grid; (c) Phase 5.5 shell feel — window
+  resize/maximize from every edge, drag-to-every-edge recoverability, toast lift over the
+  tray, page switcher flow, wide-sheet two-column layout. Everything protocol-level is
+  already machine-verified.
 
 **Locked decisions**
 - **Layout:** one full-bleed board; FoundryVTT-style **docked right sidebar** of panel tabs,
@@ -79,8 +82,9 @@ from the original spec — trust those notes over the older prose.
 | Custom CSS themes (idea) | 9 (enabled by 0; themed after 8) |
 | Actors/Items directories, folders, inventory *(added via UX feedback)* | 1–2 (shipped: `Directory`, folders, `sortOrder`, sheet inventory) |
 | Docked sidebar + pop-out, masked secrets, transient toasts *(UX feedback)* | shipped (post-3) |
-| Shell/layout fixes: toasts vs tray, settings panel, rail reorg, page switcher *(user 2026-07-02)* | 5.5 |
+| Shell/layout fixes: toasts vs tray, settings panel, rail reorg, page switcher *(user 2026-07-02)* | 5.5 ✅ |
 | Sheets/items depth, roll breakdown colors, fog brush, HP quick-adjust, templates, coin flip *(user 2026-07-02)* | 7 |
+| Tabbed character-sheet redesign (reference layout) + token facing/rotation *(user 2026-07-02)* | 7 (structure; final skin in 8) |
 | Full aesthetic revamp — tactile/paper/wood + sound design *(user 2026-07-02)* | 8 |
 
 ---
@@ -562,11 +566,95 @@ reveals < ~150KB; snapped drops land on cell centers with offset.
 
 ---
 
-## Phase 5.5 — Shell & layout round — ⏭ NEXT
+## Phase 5.5 — Shell & layout round — ✅ SHIPPED
 
 Core UI/layout fixes the user flagged before Phase 6: the shell has outgrown the
 placeholder top-left cluster, floating UI needs a universal can't-lose-it guarantee, and
 the top-left corner becomes a page switcher.
+
+> **As built (2026-07-02):** shipped per spec (`npm run build` + all smoke/unit suites
+> pass; shell-only — zero server/protocol changes). Deltas & notes:
+> - `src/lib/clampToViewport.ts` exports `clampToViewport` + `clampSizeToViewport`
+>   (+`CLAMP_MARGIN`); DiceTray's local clamp delegates to it; `FloatingWindow` clamps
+>   the WHOLE window on mount/drag/resize-drag/window-resize (previously title-bar-only).
+> - `FloatingWindow` geometry is `{x, y, w, h|null}` (`h: null` = auto height, CSS-capped)
+>   persisted under the existing `cm-window-pos:{id}` key — the old `{x,y}` shape still
+>   loads. Resize = 8 invisible grab zones (`.win-rs--*`, inside the border since the
+>   window clips overflow); maximize (⛶/❐) is transient (not persisted); double-click
+>   title bar = default pos+size. `PanelDef` gained optional `minWidth/minHeight`.
+> - **Settings** is a floating-only registry panel (`SettingsPanel.tsx`): 3D dice, dice
+>   sound, snap-to-grid, roll/chat toasts, reset UI layout, Leave; DM extra = players-can-
+>   draw mirror. Snap state was LIFTED from MapCanvas to App (same `cm-map-snap` key) so
+>   settings + the toolbar 🧲 share it; toasts pref = `cm-log-toasts`; dice mute now
+>   persists/initializes from `dice-muted` even before the 3D audio engine loads.
+> - **Reset UI layout** clears `cm-window-pos:*` + `cm-dice-tray-pos`, then bumps a
+>   `layoutEpoch` — open windows remount to defaults (their keys include the epoch); the
+>   tray watches a `resetSignal` prop and re-centers without remounting (tray scene lives).
+> - **Rail order:** 🪪 sheet, separator, tabs, 🎲 dice, spacer, ⚙ settings, chevron —
+>   via a generic `DockAction { slot: "top" | "after-tabs" | "bottom" }` prop on `Dock`.
+>   The old top-left cluster is gone.
+> - **Toasts** lift above the open tray by measuring both rects (300ms recheck while
+>   visible — the tray is draggable); the stack's *natural* (unlifted) rect decides, so no
+>   oscillation. z-index 15→35 (above pages, below windows).
+> - **Pages** are opaque overlays INSIDE `.overlay` (z: dock 20 < tray 25 < page 30 <
+>   switcher 32 < toasts 35 < windows 40+). MapCanvas + dock + tray stay MOUNTED under
+>   pages (board keeps viewport/selection; tray scene persists); floating windows/token
+>   editor render only on the Board. All three pages stay mounted (hidden via
+>   `.page--active`) so each keeps its selection/drafts across switches. Combat start
+>   setPage("board") for the DM. Players: no switcher, `activePage` forced to "board".
+> - **Pages content:** shared `PageShell` (roster column + `container-type` main).
+>   Players = slot admin roster (reuses `.party-slot` styling + selection) beside a
+>   full-size editable PC sheet; NPCs = the real `ActorsPanel` as roster (its `openSheet`
+>   prop selects into the page instead of opening a window) beside a full-size sheet with
+>   reveal eyes; Scenes = `ScenePanel` beside a large active-map preview (Phase 7 grows
+>   this into the selected-scene prep editor).
+> - **Sheet multi-column** is a container query: `.window-body` and `.sheet-col` are
+>   `container-type: inline-size`; `.sheet-body` ≥620px → 2 CSS columns
+>   (`break-inside: avoid` cards). No JS.
+>
+> **QoL round (2026-07-02, user feedback — same-day follow-up):**
+> - **Drag a die back into the tray to cancel the throw.** `DiceEngine.cancelActiveDrag()`
+>   removes the armed dice without releasing; `useDiceOverlay.rideDrag` tracks whether the
+>   pointer ever *left* the tray well and, on release back over it, cancels + restores the
+>   readied selection (so a plain click-in-place still lobs). Tray-well hit-test reads a
+>   plain ref mirror of the well element; `grabbedSelectionRef` snapshots the pre-grab
+>   selection to restore.
+> - **Resizable page roster.** `PageShell` owns the left column width (drag divider
+>   `.page-resize`, persisted `cm-page-roster-w`, 220–640px, clamps on window shrink).
+> - **Multiple sheets side-by-side.** Players/NPCs pages hold an `openIds` list rendered
+>   by the shared `pages/SheetCards.tsx` as fixed-width (400px) columns in a horizontal
+>   scroller; each column is its own size container so sheets stay single-column/compact
+>   (this also fixes "skills column too wide"). `.stat-row` switched from flex
+>   space-between to a fixed 3-column grid so save/skill inputs align across rows.
+> - **Players roster rows** are now click-anywhere-to-open (not just the name box);
+>   double-click the name to rename (readOnly input until then, `key={slot.name}` remounts
+>   on external rename). Open rows highlight; card ✕ closes.
+> - **Portrait upload** is the thumbnail itself — a `<label>`-wrapped file input
+>   (`.sheet-portrait-btn`); empty state shows a dashed "＋ / Add photo" affordance, filled
+>   shows "Change" on hover. The separate "Upload portrait" text link was removed.
+>
+> **QoL round 2 (2026-07-02, user feedback — same-day):**
+> - **NPCs page shows NPCs only.** `ActorsPanel` gained `filterKind?: "pc" | "npc"`; the
+>   page passes `"npc"` (and hides the blank-token drag chip, which can't reach the
+>   board-covered page anyway). The dock Actors tab still lists PCs + NPCs.
+> - **Directory redesign** (`Directory.tsx`, shared by Actors/Items/NPCs page):
+>   FoundryVTT-style — labeled `Create {NPC/Item}` + `Create Folder` buttons up top; a
+>   search row with an inline 🔍, an A–Z sort toggle (view-only, doesn't touch manual
+>   order), and a collapse/expand-all-folders button; folder headers with a folder glyph,
+>   bold name, member count, a per-folder ＋ create and delete; rows now show a 2rem
+>   rounded-square portrait, bold name, and an **inset** bottom separator (margin, not
+>   edge-to-edge). Portrait-less rows show a kind glyph (👤/🎒) on the color chip. The old
+>   top "new name" text input is gone (create auto-numbers, then opens the sheet/editor to
+>   rename). `onCreate` gained an optional `folderId` — actors move in via createSheet +
+>   setSheetFolder, items via createItem + updateItem (both rely on ordered messages;
+>   no server change).
+> - **Tokens use the linked sheet's portrait live.** `MapCanvas` resolves a token's image
+>   from `sheets[token.sheetId ?? token.ownerPlayerId].data.iconUrl` first, falling back to
+>   the drop-time `token.imageUrl`, then the color — so uploading/changing a portrait
+>   updates placed tokens immediately (previously only the drop-time snapshot).
+> - **Visible resize grip.** `FloatingWindow`'s SE corner handle (`.win-rs--se`) now sits
+>   fully inside the window and draws a diagonal-line grip (`::after`), so windows visibly
+>   advertise resize; all other invisible edge/corner handles are unchanged.
 
 **Universal on-screen clamping (new engineering rule #7).** Extract the dice tray's
 clamp into a shared helper — `src/lib/clampToViewport.ts`:
@@ -650,7 +738,7 @@ every edge/corner, maximize/restore, and a wide sheet window goes multi-column;
 
 ---
 
-## Phase 6 — Walls, lights, dynamic vision (the big one) — planned (after 5.5)
+## Phase 6 — Walls, lights, dynamic vision (the big one) — ⏭ NEXT
 
 **Data model:**
 ```ts
@@ -708,6 +796,125 @@ within range only; (if built) LOS redaction verified at WS-frame level.
 The "make it playable for a real campaign" phase (user, 2026-07-02). Each item follows
 the fixed recipe (GameState field → normalize → message → redaction → cap).
 
+### Tabbed character-sheet redesign (reference layout — user 2026-07-02)
+
+The user supplied screenshots of a target character-sheet UI the **popup sheets should
+follow** (a rich, digital-VTT 5e sheet with a persistent left "vitals" sidebar and a
+right-side vertical **page rail** that swaps the main area between pages) — six of a **PC**
+(Perrin, Halfling Monk) and one of an **NPC** (Animated Armor). This is the
+**layout/structure** spec; the ornate parchment/red-banner **skin** is a Phase 8 aesthetic
+concern — build the structure + behavior here (consuming the "Sheets fleshed out" data
+model below), apply the final look in Phase 8. The sheet stays a resizable
+`FloatingWindow` (Phase 5.5) and, wide, the main area already goes multi-column.
+
+**Scope (user 2026-07-02): layout + manual fields FIRST, automation LATER.** Build the
+structure and hand-editable fields; do **not** auto-compute encumbrance, attunement limits,
+rest recovery, or trait-driven crit math yet. Automation is a **separate future plan** the
+user wants to design once we understand the rules-engine work — leave clean hooks
+(derived-stat builder, `traits` map) but keep everything manually settable for now.
+
+**Shell (persistent on every page).**
+- **Left "vitals" sidebar** (collapsible via a `‹` tab on its right edge):
+  - Large framed **portrait** (click-to-upload, Phase 5.5 affordance).
+  - **AC shield** badge (center) flanked by two groups of small circles = **death saves**
+    (left = successes, right = failures — *PC only; still confirming exact meaning*).
+  - Three badges: **Initiative** (+3), **Walk/Speed** (25), **Proficiency** (+2).
+  - **Hit Points** bar (`9 / 9`) with a **TMP** (temp HP) control; **Hit Dice** bar
+    (`1 / 1`); a small **skull** button (death-save / mark-dead — *PC only; confirming*).
+  - **Favorites** section with a "Drop favorite" drop zone (drag actions/items here for a
+    quick-access row).
+- **Top header:** character **name** + subtitle (`class level`, e.g. "Monk 1"); two header
+  buttons = **Short Rest** (🍴) and **Long Rest** (⛰) *(confirmed)*; an ornate
+  **level ring** badge (right). Window chrome keeps the existing ⋮ / dock / ✕ controls.
+- **Right vertical page rail** (the sub-page switcher; icon → page):
+  1. ⚙ **Main** — ability scores + skills/saves/proficiencies (default page). **PC only —
+     NPCs omit this tab** (see NPC variant below).
+  2. 🎒 **Inventory**.
+  3. ☰ **Features**.
+  4. 📖 **Spells** — spell slots + prepared/known list; **always present, just empty** for
+     non-casters (not hidden) *(confirmed)*.
+  5. ⚡ **Effects**.
+  6. 🖋 **Biography**.
+  7. ★ **Special Traits**.
+
+**Pages (right rail).**
+1. **Main:** top row of six **ability blocks** (abbr, modifier, score: STR −1/8, DEX +3/16,
+   …). Left **Skills** list — each row: governing-ability abbr, proficiency dot
+   (empty/half/expertise), skill name, total mod, and **passive** score. **Tools** list
+   below (same row shape). Middle **Saving Throws** (2-col grid, proficiency dots).
+   **Immunities** / resistances as pills (e.g. "Advantage against being frightened").
+   **Weapon/armor proficiencies** as pills ("Simple", "Shortsword"). **Languages** as
+   pills. Right column: **type/species/background** chips ("Humanoid · halfling",
+   "Lightfoot Halfling", "Priest") each with an icon → opens that detail.
+2. **Inventory:** **encumbrance** header (`weight / capacity` bar — red when over,
+   STRENGTH, SIZE, MULTIPLIER), **attunement** thumbnails + counter (`0 / 3`), **currency**
+   row (CP/SP/EP/GP/PP). Search + filter/sort. Item **tables grouped by category**
+   (Weapons, Equipment, Consumables, Loot) with columns per group: icon, name/subtitle
+   (type · action), WEIGHT, QUANTITY (± steppers), PRICE, **ROLL** (to-hit, e.g. +5),
+   **FORMULA** (damage, e.g. 1d6+3), CHARGES (n/max), and row actions (attune/equip,
+   expand, ⋮). Per-category **+ add**. Rows link to the Items catalog (`itemId`); attacks
+   surface on the Main/attacks area when equipped.
+3. **Features:** class chip header (Monk 1). Search + filter/sort. Grouped **Class
+   Features** / **Species Features** (and feats), columns USES / RECOVERY, row expand + ⋮,
+   **+ add**. (Unarmored Defense, Martial Arts, Lucky, Brave, Halfling Nimbleness, …)
+4. **Spells:** spellcasting page — spell slots per level (current/max), prepared/known list
+   grouped by level, cast/prepare toggles. **Always present; simply empty** for non-casters
+   (no hide) *(confirmed)*.
+5. **Effects:** **Passive Effects** list (name, SOURCE, on/off toggle, ⋮) + a **Conditions**
+   grid of the 15 5e conditions (Blinded … Unconscious) as toggles. Ties into
+   `Token.conditions` (Phase 3) — toggling here should reflect on the token and vice-versa.
+   **+ add** custom effect.
+6. **Biography:** top **details grid** (Alignment, Faith, Gender, Eyes, Hair, Skin, Height,
+   Weight, Age). Collapsible **Ideals / Bonds / Flaws** (left) and **Personality Traits /
+   Appearance** (right). Full-width rich-text **Biography** (the current `notes`/bio field),
+   with an edit affordance + artwork credit line.
+7. **Special Traits:** **Original Class** dropdown (multiclass base). **Feats** list —
+   each a name + description with a **lock/enable** toggle (manual overrides that grant a
+   rules effect, e.g. Diamond Soul, Alert, Jack of All Trades, Observant, Reliable Talent,
+   Remarkable Athlete) plus numeric override inputs (Weapon/Spell Crit Threshold, Melee
+   Crit Damage Dice). **Species Traits** list (Elven Accuracy, Halfling Lucky, Powerful
+   Build …) as the same enable-toggle rows. These are **DM/player switches that adjust
+   derived math** (crit range, extra dice, half-proficiency) — model as a
+   `sheet.data.traits: Record<string, boolean | number>` consumed by the roll/derived-stat
+   builder.
+
+**Data-model additions this layout implies** (fold into "Sheets fleshed out" below; all
+under `SheetRecord.data`, section-reveal aware, capped): temp HP + death saves + hit dice;
+currency + carried weight/capacity + attunement slots; tool proficiencies; languages;
+damage/condition immunities & resistances; weapon/armor proficiencies; feats/traits toggle
+map; per-page item/feature/effect rows (row-count caps). New `SheetSectionId`s per page so
+NPC redaction stays automatic. Reuse: the tab rail is the same "action-button rail" idiom
+as the dock (Phase 5.5); pages reuse the Directory/table + search/sort atoms; conditions
+reuse the Phase 3 `CONDITIONS` set + `Token.conditions`.
+
+**NPC variant (user 2026-07-02 — from the Animated Armor screenshot).** NPCs get the **same
+sheet minus the ⚙ Main tab**; their rail starts on **☰ Features**, which becomes the NPC's
+home page. Differences:
+- **No Main tab** → the ability scores + saves live on the **Features page header** instead:
+  a top row of six **ability blocks** (STR +2/14, DEX +0/11, …) with an inline
+  **saving-throw** row directly beneath (proficiency dot + mod + shield per ability).
+- **Richer left sidebar** (it absorbs what the missing Main tab held): AC shield + HP
+  (`33 / 33`, **TMP** and **+MAX** controls, no death saves), **Speed** (`Walk 25`),
+  **Skills**, **Senses** (Blindsight 60 / "Blind beyond this radius" / Passive Perception 6),
+  and **Immunities** (condition-immunity pills: Poison, Psychic, Blinded, Charmed, Deafened,
+  Frightened, Paralyzed, Petrified, Poisoned, Exhaustion). No Favorites/death saves.
+- **Header** shows the **type line** ("Medium · Construct · Unaligned"), a **source + XP**
+  ref ("MM pg. 19 · 200 XP"), **Proficiency +2**, the rest buttons, and a **CR badge** (the
+  ring, showing CR where the PC shows level).
+- **Features page body** = **Features** table (Antimagic Susceptibility, False Appearance)
+  **+ an Actions** table (Multiattack; Slam — Natural · Action, ROLL +4, FORMULA 1d6+2),
+  columns USES / ROLL / FORMULA, expand + ⋮, **+ add**. (Attacks/actions are the same rows
+  the PC's Inventory/attacks produce — shared model.)
+- All other tabs (Inventory, Spells, Effects, Biography, Special Traits) match the PC.
+
+**Resolved (user 2026-07-02):** 🍴/⛰ = Short/Long Rest ✓; 📖 = Spells, kept visible-but-empty
+for non-casters ✓; **manual fields first, automation is a later dedicated plan** ✓; NPCs =
+same sheet without the Main tab (Features is their first tab) ✓.
+**Still to confirm:** the PC left-sidebar **circles flanking the AC shield** (three each
+side) = death-save successes/failures, and the **skull button** below Hit Dice = the
+death-save control — i.e. this is the persistent PC vitals sidebar (all PC pages), which
+NPCs don't have.
+
 **Sheets fleshed out (PC + NPC).** Grow `CharacterSheet`: attacks/actions (name, to-hit
 part, damage expression, linked item), class resources (name/current/max chips), death
 saves, spell slots (level→current/max grid), speed/senses/proficiency. NPC sheets get a
@@ -733,6 +940,19 @@ the total. Attack/damage rolls from the new sheet actions produce fully-labeled 
 editor + initiative-tracker rows (and a right-click token shortcut). Message reuses
 `UPDATE_SHEET` or a slim `ADJUST_HP {sheetId, delta}` (server clamps 0..max, logs during
 combat).
+
+**Token facing / direction (user 2026-07-02).** Tokens gain a **rotatable direction**
+shown as a **wide arrow/wedge attached to the edge of the token circle**, pointing the way
+the token faces. `Token.facing?: number` (degrees, 0 = up/north; absent = no arrow). Both
+**player (own token) and DM** can rotate: a rotate handle when the token is selected
+(drag around the token), plus a keyboard/scroll nudge (e.g. Alt+scroll or `[` / `]`), and a
+numeric field in `TokenEditor`. Rendered in `MapCanvas` as a Konva wedge/arrow on the
+circle rim (rotates with `facing`); snap to 45° with a modifier. Sync = the existing
+`MOVE_TOKEN`/`UPDATE_TOKEN` path (add `facing`; throttle rotate-drag like token drag; no new
+hot-path message). Normalize + a redaction check (hidden tokens already stripped).
+**Shares the `facing` field with Phase 6's directional-vision cone** (the vision wedge and
+the visible arrow are the same heading) — build the field + rotate UI here even though
+directional LOS is a Phase 6 stretch, so they stay consistent.
 
 **Fog brush (user).** Paint AND erase fog freehand, complementing dynamic vision for
 "specific fog" control: fog shapes gain `mode: "reveal" | "cover"` (cover shapes re-hide),

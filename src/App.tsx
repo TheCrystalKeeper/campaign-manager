@@ -1,13 +1,16 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { JoinScreen } from "./components/JoinScreen";
 import { MapCanvas } from "./components/MapCanvas";
 import { FloatingCluster } from "./components/FloatingCluster";
 import { FloatingWindow } from "./components/FloatingWindow";
-import { Dock } from "./components/Dock";
+import { Dock, type DockAction } from "./components/Dock";
 import { DiceTray } from "./components/DiceTray";
 import { LogToasts } from "./components/LogToasts";
 import { TokenEditor } from "./components/TokenEditor";
 import { dockPanelsForRole, PANELS, type PanelContext, type PanelId } from "./panels/registry";
+import { PlayersPage } from "./pages/PlayersPage";
+import { NpcsPage } from "./pages/NpcsPage";
+import { ScenesPage } from "./pages/ScenesPage";
 import { useDiceOverlay } from "./dice/useDiceOverlay";
 import { useDmActions, useGameRoom, type JoinParams } from "./hooks/useGameRoom";
 import { fitViewportToScene } from "./lib/sceneUtils";
@@ -15,10 +18,41 @@ import { DEFAULT_VIEWPORT, TOKEN_ENEMY_COLOR, type Viewport } from "./lib/types"
 
 type SessionParams = JoinParams & { roomId: string };
 
+/** DM-only prep pages; the Board stays the play surface (players are board-only). */
+type PageId = "board" | "players" | "npcs" | "scenes";
+
+const DM_PAGES: Array<{ id: PageId; label: string }> = [
+  { id: "board", label: "Board" },
+  { id: "players", label: "Players" },
+  { id: "npcs", label: "NPCs" },
+  { id: "scenes", label: "Scenes" },
+];
+
+const SNAP_KEY = "cm-map-snap";
+const TOASTS_KEY = "cm-log-toasts";
+
+function readLocalFlag(key: string, fallback: boolean): boolean {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw === null ? fallback : raw === "1";
+  } catch {
+    return fallback;
+  }
+}
+
+function writeLocalFlag(key: string, on: boolean) {
+  try {
+    localStorage.setItem(key, on ? "1" : "0");
+  } catch {
+    // preference just won't persist
+  }
+}
+
 /// <summary>
 /// Root shell: lobby (join flow) or the in-campaign view — a full-bleed map, a
 /// FoundryVTT-style docked sidebar of panel tabs (each pop-out-able into a
-/// floating window), and floating character-sheet windows.
+/// floating window), floating character-sheet windows, and (DM only) the
+/// top-left page switcher to the Players/NPCs/Scenes prep pages.
 /// </summary>
 export default function App() {
   const [session, setSession] = useState<SessionParams | null>(null);
@@ -28,9 +62,15 @@ export default function App() {
   const [dockTab, setDockTab] = useState<PanelId>("log");
   const [popped, setPopped] = useState<PanelId[]>([]);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [viewSheetId, setViewSheetId] = useState<string | null>(null);
   const [secretRolls, setSecretRolls] = useState(false);
   const [trayOpen, setTrayOpen] = useState(true);
+  const [page, setPage] = useState<PageId>("board");
+  const [snap, setSnap] = useState(() => readLocalFlag(SNAP_KEY, false));
+  const [toastsEnabled, setToastsEnabledState] = useState(() => readLocalFlag(TOASTS_KEY, true));
+  /** Bumped by "Reset UI layout" — remounts windows / repositions the tray. */
+  const [layoutEpoch, setLayoutEpoch] = useState(0);
   const lastSceneRef = useRef<string | null>(null);
 
   const room = useGameRoom(session?.roomId ?? null);
@@ -82,13 +122,15 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session]);
 
-  // Combat pulls the tracker forward when it starts (unless it's popped out).
+  // Combat pulls the tracker forward when it starts (unless it's popped out) —
+  // and pulls the DM back to the Board from any prep page.
   const combatActive = Boolean(state?.combat);
   useEffect(() => {
     if (status !== "joined") {
       return;
     }
     if (combatActive) {
+      setPage("board");
       setPopped((current) => {
         if (!current.includes("initiative")) {
           setDockTab("initiative");
@@ -132,13 +174,48 @@ export default function App() {
     setSession(null);
     setPopped([]);
     setSheetOpen(false);
+    setSettingsOpen(false);
     setSelectedTokenId(null);
     setSecretRolls(false);
     setViewSheetId(null);
     setDockTab("log");
     setDockOpen(true);
+    setPage("board");
     lastSceneRef.current = null;
   };
+
+  const toggleSnap = useCallback(() => {
+    setSnap((current) => {
+      writeLocalFlag(SNAP_KEY, !current);
+      return !current;
+    });
+  }, []);
+
+  const setToastsEnabled = useCallback((on: boolean) => {
+    writeLocalFlag(TOASTS_KEY, on);
+    setToastsEnabledState(on);
+  }, []);
+
+  /// <summary>Clears every saved floating-UI position/size and re-lays-out live elements.</summary>
+  const resetUiLayout = useCallback(() => {
+    try {
+      const doomed: string[] = [];
+      for (let i = 0; i < localStorage.length; i += 1) {
+        const key = localStorage.key(i);
+        if (key && (key.startsWith("cm-window-pos:") || key === "cm-dice-tray-pos")) {
+          doomed.push(key);
+        }
+      }
+      for (const key of doomed) {
+        localStorage.removeItem(key);
+      }
+    } catch {
+      // storage unavailable — live elements still reset below
+    }
+    // Open windows remount (key includes the epoch) → default geometry; the
+    // tray watches the same signal and re-centers without remounting.
+    setLayoutEpoch((current) => current + 1);
+  }, []);
 
   if (!session) {
     return <JoinScreen onJoin={setSession} />;
@@ -222,10 +299,52 @@ export default function App() {
     rollDice: (expression, options) =>
       room.rollDice(expression, { ...options, private: isDm && secretRolls }),
     dropActorAt,
+    dice,
+    snap,
+    toggleSnap,
+    toastsEnabled,
+    setToastsEnabled,
+    resetUiLayout,
+    leave,
   };
 
   const dockPanels = yourRole ? dockPanelsForRole(yourRole) : [];
   const sheetPanel = PANELS.find((panel) => panel.id === "sheet")!;
+  const settingsPanel = PANELS.find((panel) => panel.id === "settings")!;
+
+  // Players have no pages — the Board (with maximizable sheet windows) covers them.
+  const activePage: PageId = isDm ? page : "board";
+  const onBoard = activePage === "board";
+
+  const toggleSheet = () => {
+    if (sheetOpen) {
+      setSheetOpen(false);
+    } else {
+      setViewSheetId(isDm ? viewSheetId : room.yourPlayerId);
+      setSheetOpen(true);
+    }
+  };
+
+  // Rail action buttons: sheet on top, dice after the tabs, settings at the bottom.
+  const dockActions: DockAction[] = [
+    { id: "sheet", icon: "🪪", title: "Character sheet", active: sheetOpen, slot: "top", onClick: toggleSheet },
+    {
+      id: "dice",
+      icon: "🎲",
+      title: "Dice tray",
+      active: trayOpen,
+      slot: "after-tabs",
+      onClick: () => setTrayOpen((open) => !open),
+    },
+    {
+      id: "settings",
+      icon: "⚙",
+      title: "Settings",
+      active: settingsOpen,
+      slot: "bottom",
+      onClick: () => setSettingsOpen((open) => !open),
+    },
+  ];
 
   // Avatar strip: connected players + NPCs with a token in the active scene.
   const npcChipSheetIds = [
@@ -264,6 +383,8 @@ export default function App() {
         selectedTokenId={selectedTokenId}
         send={room.send}
         subscribeMeasure={room.subscribeMeasure}
+        snap={snap}
+        onToggleSnap={toggleSnap}
       />
 
       {/* 3D dice canvas: above the map, below all UI, never takes pointer events. */}
@@ -323,30 +444,19 @@ export default function App() {
           })}
         </FloatingCluster>
 
-        <FloatingCluster anchor="top-left">
-          <button
-            className={sheetOpen ? "btn-active" : ""}
-            title="Character sheet"
-            onClick={() => {
-              if (sheetOpen) {
-                setSheetOpen(false);
-              } else {
-                setViewSheetId(isDm ? viewSheetId : room.yourPlayerId);
-                setSheetOpen(true);
-              }
-            }}
-          >
-            🪪 Sheet
-          </button>
-          <button
-            className={trayOpen ? "btn-active" : ""}
-            title="Dice tray"
-            onClick={() => setTrayOpen((open) => !open)}
-          >
-            🎲 Dice
-          </button>
-          <button onClick={leave}>Leave</button>
-        </FloatingCluster>
+        {isDm ? (
+          <div className="page-switcher">
+            {DM_PAGES.map((entry) => (
+              <button
+                key={entry.id}
+                className={activePage === entry.id ? "btn-active" : ""}
+                onClick={() => setPage(entry.id)}
+              >
+                {entry.label}
+              </button>
+            ))}
+          </div>
+        ) : null}
 
         <Dock
           panels={dockPanels}
@@ -354,6 +464,7 @@ export default function App() {
           activeTab={dockTab}
           popped={popped}
           context={panelContext}
+          actions={dockActions}
           onSelectTab={(id) => {
             if (popped.includes(id)) {
               dockBack(id);
@@ -366,35 +477,75 @@ export default function App() {
           onToggleOpen={() => setDockOpen((open) => !open)}
         />
 
-        {popped.map((panelId) => {
-          const panel = PANELS.find((item) => item.id === panelId);
-          if (!panel || (yourRole && !panel.roles.includes(yourRole))) {
-            return null;
-          }
-          return (
-            <FloatingWindow
-              key={panel.id}
-              id={panel.id}
-              title={panel.title(panelContext)}
-              width={panel.width}
-              defaultPos={panel.defaultPos}
-              onClose={() => setPopped((current) => current.filter((id) => id !== panel.id))}
-              onDock={() => dockBack(panel.id)}
-            >
-              {panel.render(panelContext)}
-            </FloatingWindow>
-          );
-        })}
+        {/* DM prep pages: an opaque surface over the board chrome. Kept mounted
+            so each page preserves its own state (selection, drafts) across
+            switches; the board underneath keeps viewport/selection/windows. */}
+        {isDm ? (
+          <>
+            <div className={`page${activePage === "players" ? " page--active" : ""}`}>
+              <PlayersPage ctx={panelContext} />
+            </div>
+            <div className={`page${activePage === "npcs" ? " page--active" : ""}`}>
+              <NpcsPage ctx={panelContext} />
+            </div>
+            <div className={`page${activePage === "scenes" ? " page--active" : ""}`}>
+              <ScenesPage ctx={panelContext} />
+            </div>
+          </>
+        ) : null}
 
-        {sheetOpen ? (
+        {/* Floating windows are board furniture — hidden while a prep page is up. */}
+        {onBoard
+          ? popped.map((panelId) => {
+              const panel = PANELS.find((item) => item.id === panelId);
+              if (!panel || (yourRole && !panel.roles.includes(yourRole))) {
+                return null;
+              }
+              return (
+                <FloatingWindow
+                  key={`${panel.id}:${layoutEpoch}`}
+                  id={panel.id}
+                  title={panel.title(panelContext)}
+                  width={panel.width}
+                  minWidth={panel.minWidth}
+                  minHeight={panel.minHeight}
+                  defaultPos={panel.defaultPos}
+                  onClose={() => setPopped((current) => current.filter((id) => id !== panel.id))}
+                  onDock={() => dockBack(panel.id)}
+                >
+                  {panel.render(panelContext)}
+                </FloatingWindow>
+              );
+            })
+          : null}
+
+        {onBoard && sheetOpen ? (
           <FloatingWindow
+            key={`sheet:${layoutEpoch}`}
             id="sheet"
             title={sheetPanel.title(panelContext)}
             width={sheetPanel.width}
+            minWidth={sheetPanel.minWidth}
+            minHeight={sheetPanel.minHeight}
             defaultPos={sheetPanel.defaultPos}
             onClose={() => setSheetOpen(false)}
           >
             {sheetPanel.render(panelContext)}
+          </FloatingWindow>
+        ) : null}
+
+        {onBoard && settingsOpen ? (
+          <FloatingWindow
+            key={`settings:${layoutEpoch}`}
+            id="settings"
+            title={settingsPanel.title(panelContext)}
+            width={settingsPanel.width}
+            minWidth={settingsPanel.minWidth}
+            minHeight={settingsPanel.minHeight}
+            defaultPos={settingsPanel.defaultPos}
+            onClose={() => setSettingsOpen(false)}
+          >
+            {settingsPanel.render(panelContext)}
           </FloatingWindow>
         ) : null}
 
@@ -421,13 +572,19 @@ export default function App() {
             room.rollDice(expression, { private: isDm && secretRolls })
           }
           onClose={() => setTrayOpen(false)}
+          resetSignal={layoutEpoch}
         />
 
         <LogToasts
           log={state.log}
           yourPlayerId={room.yourPlayerId}
           playerSlots={state.playerSlots}
-          suppress={(dockOpen && dockTab === "log") || popped.includes("log")}
+          // Toasts are global (they follow you onto prep pages); hidden only when
+          // the Log panel itself is visible on the board, or turned off in settings.
+          suppress={
+            !toastsEnabled ||
+            (onBoard && ((dockOpen && dockTab === "log") || popped.includes("log")))
+          }
           dockExpanded={dockOpen}
         />
 

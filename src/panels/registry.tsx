@@ -7,7 +7,9 @@ import { LogPanel } from "../components/LogPanel";
 import { NotesPanel } from "../components/NotesPanel";
 import { PartyPanel } from "../components/PartyPanel";
 import { ScenePanel } from "../components/ScenePanel";
+import { SettingsPanel } from "../components/SettingsPanel";
 import type { WindowPos } from "../components/FloatingWindow";
+import type { DiceOverlayController } from "../dice/useDiceOverlay";
 import type { GameRoom, RollOptions, useDmActions } from "../hooks/useGameRoom";
 import type { CharacterSheet, GameState, Role } from "../lib/types";
 
@@ -19,7 +21,8 @@ export type PanelId =
   | "actors"
   | "items"
   | "party"
-  | "notes";
+  | "notes"
+  | "settings";
 
 /** Everything a panel might need, assembled once in App and passed to render(). */
 export type PanelContext = {
@@ -36,6 +39,18 @@ export type PanelContext = {
   rollDice: (expression: string, options?: Omit<RollOptions, "private">) => void;
   /** DM: place a token for a sheet (null → blank) at screen coordinates on the map. */
   dropActorAt: (sheetId: string | null, clientX: number, clientY: number) => void;
+  /** The 3D dice controller (settings: 3D on/off, mute). */
+  dice: DiceOverlayController;
+  /** Per-client snap-to-grid (shared by the map toolbar 🧲 and settings). */
+  snap: boolean;
+  toggleSnap: () => void;
+  /** Per-client log-toast notifications. */
+  toastsEnabled: boolean;
+  setToastsEnabled: (on: boolean) => void;
+  /** Clears saved window/tray positions and returns floating UI to defaults. */
+  resetUiLayout: () => void;
+  /** Leaves the campaign (back to the lobby). */
+  leave: () => void;
 };
 
 export type PanelDef = {
@@ -51,6 +66,9 @@ export type PanelDef = {
   title: (ctx: PanelContext) => string;
   defaultPos: (viewportWidth: number, viewportHeight: number) => WindowPos;
   width: number;
+  /** Content-driven minimum window size (resizing floor). */
+  minWidth?: number;
+  minHeight?: number;
   render: (ctx: PanelContext) => ReactNode;
 };
 
@@ -223,6 +241,17 @@ export const PANELS: PanelDef[] = [
     render: (ctx) => (
       <NotesPanel notes={ctx.state.dmNotes} onChange={(notes) => ctx.dm.updateDmNotes(notes)} />
     ),
+  },
+  {
+    id: "settings",
+    label: "Settings",
+    icon: "⚙",
+    dockable: false,
+    roles: ["dm", "player"],
+    title: () => "Settings",
+    defaultPos: (vw, vh) => ({ x: Math.max(16, vw - 400), y: Math.max(60, vh - 480) }),
+    width: 320,
+    render: (ctx) => <SettingsPanel ctx={ctx} />,
   },
 ];
 

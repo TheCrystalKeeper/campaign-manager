@@ -67,10 +67,14 @@ export function ItemsPanel({ state, dm }: ItemsPanelProps) {
       folders={state.folders.filter((folder) => folder.kind === "item")}
       rows={rows}
       createLabel="Create Item"
-      onCreate={(name) => {
+      onCreate={(name, folderId) => {
         const itemId = newId("item");
         const finalName = name || nextName("Item", Object.values(state.items).map((i) => i.name));
         dm.createItem(itemId, finalName);
+        // Folder ＋ button: move the just-created item in (messages stay ordered).
+        if (folderId) {
+          dm.updateItem({ id: itemId, name: finalName, description: "", iconUrl: null, folderId });
+        }
         setExpandedId(itemId);
       }}
       onCreateFolder={(name) =>

@@ -157,14 +157,40 @@ export function CharacterSheetPanel({
       : null;
 
   return (
-    <div className="panel-body stack">
+    // sheet-body: goes multi-column when its container (window / page) is wide.
+    <div className="panel-body stack sheet-body">
       <SheetCard
         title="Identity"
         hidden={hiddenFor("identity")}
         revealToggle={revealToggleFor("identity")}
       >
         <div className="sheet-top">
-          {value.iconUrl ? (
+          {canEdit ? (
+            <label
+              className="sheet-portrait-btn"
+              title="Click to upload a portrait"
+            >
+              {value.iconUrl ? (
+                <img className="sheet-portrait" src={value.iconUrl} alt="portrait" />
+              ) : (
+                <div className="sheet-portrait sheet-portrait--empty">
+                  <span>{uploading ? "…" : "＋"}</span>
+                </div>
+              )}
+              <span className="sheet-portrait-hint">
+                {uploading ? "Uploading…" : value.iconUrl ? "Change" : "Add photo"}
+              </span>
+              <input
+                type="file"
+                accept="image/*"
+                style={{ display: "none" }}
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) void handlePortrait(file);
+                }}
+              />
+            </label>
+          ) : value.iconUrl ? (
             <img className="sheet-portrait" src={value.iconUrl} alt="portrait" />
           ) : (
             <div className="sheet-portrait" />
@@ -176,20 +202,6 @@ export function CharacterSheetPanel({
               disabled={!canEdit}
               onChange={(e) => update({ characterName: e.target.value })}
             />
-            {canEdit ? (
-              <label style={{ marginTop: "0.4rem", cursor: "pointer" }}>
-                {uploading ? "Uploading…" : "Upload portrait"}
-                <input
-                  type="file"
-                  accept="image/*"
-                  style={{ display: "none" }}
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) void handlePortrait(file);
-                  }}
-                />
-              </label>
-            ) : null}
           </div>
         </div>
 
