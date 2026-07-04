@@ -131,10 +131,16 @@ export function tokenDiameterForGridSize(gridSize: number): number {
 }
 
 /// <summary>
-/// Token radius in world pixels (half of one grid cell diameter).
+/// Token radius in world pixels for a token spanning `sizeCells` grid cells (diameter).
+/// A size-1 (Medium) token is ~0.9 of a cell so it sits inside its square without overlapping.
 /// </summary>
+export function tokenRadius(gridSize: number, sizeCells = 1): number {
+  return (gridSize / 2) * Math.max(sizeCells, 0.1) * 0.9;
+}
+
+/** Default (size-1) token radius. */
 export function tokenRadiusForGridSize(gridSize: number): number {
-  return gridSize / 4;
+  return tokenRadius(gridSize, 1);
 }
 
 /// <summary>

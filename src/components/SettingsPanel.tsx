@@ -2,7 +2,9 @@ import { useState } from "react";
 import type { PanelContext } from "../panels/registry";
 import {
   DEFAULT_TOKEN_SHAPES,
+  DEFAULT_TOKEN_SIZE,
   TOKEN_SHAPES,
+  tokenSizeLabel,
   type TokenShape,
   type TokenShapeDefaults,
 } from "../lib/types";
@@ -129,6 +131,17 @@ export function SettingsPanel({ ctx }: { ctx: PanelContext }) {
               </div>
             );
           })}
+          <div className="field">
+            <label>Default token size ({tokenSizeLabel(state.defaultTokenSize ?? DEFAULT_TOKEN_SIZE)})</label>
+            <input
+              type="range"
+              min={0.5}
+              max={4}
+              step={0.25}
+              value={state.defaultTokenSize ?? DEFAULT_TOKEN_SIZE}
+              onChange={(e) => ctx.dm.setDefaultTokenSize(Number(e.target.value))}
+            />
+          </div>
         </>
       ) : null}
 

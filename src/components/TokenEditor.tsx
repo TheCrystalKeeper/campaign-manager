@@ -1,7 +1,9 @@
 import { useRef, useState } from "react";
 import {
   CONDITIONS,
+  DEFAULT_TOKEN_SIZE,
   TOKEN_SHAPES,
+  tokenSizeLabel,
   type GameState,
   type Token,
   type TokenHpDisplay,
@@ -119,6 +121,35 @@ export function TokenEditor({ token, state, dm, openSheet, openItemSheet, onClos
               ))}
             </select>
           </div>
+        </div>
+
+        <div className="field">
+          <div className="row" style={{ justifyContent: "space-between" }}>
+            <label style={{ margin: 0 }}>
+              Size ({token.size === undefined ? "default" : tokenSizeLabel(token.size)})
+            </label>
+            <button
+              className={token.size === undefined ? "btn-active" : ""}
+              title="Use the campaign default token size"
+              onClick={() =>
+                dm.updateToken({
+                  ...token,
+                  size: token.size === undefined ? (state.defaultTokenSize ?? DEFAULT_TOKEN_SIZE) : undefined,
+                })
+              }
+            >
+              {token.size === undefined ? "Default" : "Custom"}
+            </button>
+          </div>
+          <input
+            type="range"
+            min={0.5}
+            max={4}
+            step={0.25}
+            value={token.size ?? state.defaultTokenSize ?? DEFAULT_TOKEN_SIZE}
+            disabled={token.size === undefined}
+            onChange={(e) => dm.updateToken({ ...token, size: Number(e.target.value) })}
+          />
         </div>
 
         <div className="field">

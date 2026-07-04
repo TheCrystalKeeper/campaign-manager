@@ -470,6 +470,8 @@ export function useDmActions(room: GameRoom) {
         send({ type: "CREATE_FOLDER", folderId, kind, name }),
       renameFolder: (folderId: string, name: string) =>
         send({ type: "RENAME_FOLDER", folderId, name }),
+      moveFolder: (folderId: string, sortOrder: number) =>
+        send({ type: "MOVE_FOLDER", folderId, sortOrder }),
       deleteFolder: (folderId: string) => send({ type: "DELETE_FOLDER", folderId }),
       createItem: (itemId: string, name: string) => send({ type: "CREATE_ITEM", itemId, name }),
       updateItem: (item: ItemRecord) => send({ type: "UPDATE_ITEM", item }),
@@ -478,6 +480,7 @@ export function useDmActions(room: GameRoom) {
       deleteItem: (itemId: string) => send({ type: "DELETE_ITEM", itemId }),
       setTokenDefaults: (defaults: TokenShapeDefaults) =>
         send({ type: "SET_TOKEN_DEFAULTS", defaults }),
+      setDefaultTokenSize: (size: number) => send({ type: "SET_DEFAULT_TOKEN_SIZE", size }),
       clearAnnotations: (sceneId: string) => send({ type: "CLEAR_ANNOTATIONS", sceneId }),
       setFogEnabled: (sceneId: string, enabled: boolean, inverted?: boolean) =>
         send({ type: "FOG_SET", sceneId, enabled, inverted }),

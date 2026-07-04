@@ -197,7 +197,27 @@ export type Token = {
   imageFit?: "framed" | "raw";
   /** For "item" tokens: the catalog item this represents (double-click → Item Sheet). */
   itemId?: string | null;
+  /** Size in grid cells (diameter). Unset → the scene/campaign default. 1 = Medium. */
+  size?: number;
 };
+
+/** Named token sizes (grid cells across). Used by the size pickers. */
+export const TOKEN_SIZES = [
+  { id: "tiny", label: "Tiny", cells: 0.5 },
+  { id: "medium", label: "Medium", cells: 1 },
+  { id: "large", label: "Large", cells: 2 },
+  { id: "huge", label: "Huge", cells: 3 },
+  { id: "gargantuan", label: "Gargantuan", cells: 4 },
+] as const;
+export const DEFAULT_TOKEN_SIZE = 1;
+export const clampTokenSize = (n: number) => Math.min(Math.max(n, 0.25), 10);
+
+/** Human label for a token size in cells, e.g. "Medium · 1×" or "1.5×". */
+export function tokenSizeLabel(cells: number): string {
+  const named = TOKEN_SIZES.find((s) => s.cells === cells);
+  const mult = `${Number.isInteger(cells) ? cells : cells.toFixed(2)}×`;
+  return named ? `${named.label} · ${mult}` : mult;
+}
 
 /** Per-group default token shape (Phase 6.7). */
 export type TokenShapeDefaults = { player: TokenShape; enemy: TokenShape; item: TokenShape };
@@ -263,6 +283,8 @@ export type Folder = {
   id: string;
   name: string;
   kind: "actor" | "npc" | "item";
+  /** Manual ordering among sibling folders (fractional insertion); unset sorts last by name. */
+  sortOrder?: number;
 };
 
 /** Item Sheet categories & rarities (Phase 6.7). */
@@ -626,6 +648,8 @@ export type GameState = {
   items: Record<string, ItemRecord>;
   /** Per-group default token shapes (Phase 6.7). */
   tokenShapeDefaults?: TokenShapeDefaults;
+  /** Default token size in grid cells (diameter), applied to tokens without their own `size`. */
+  defaultTokenSize?: number;
   /**
    * Whether players may use the Draw tool (persistent/scribble annotations). Off by
    * default; the shift-drag pointer arrow is always allowed regardless of this.
@@ -671,12 +695,14 @@ export type ClientMessage =
     }
   | { type: "CREATE_FOLDER"; folderId: string; kind: Folder["kind"]; name: string }
   | { type: "RENAME_FOLDER"; folderId: string; name: string }
+  | { type: "MOVE_FOLDER"; folderId: string; sortOrder: number }
   | { type: "DELETE_FOLDER"; folderId: string }
   | { type: "CREATE_ITEM"; itemId: string; name: string }
   | { type: "UPDATE_ITEM"; item: ItemRecord }
   | { type: "DUPLICATE_ITEM"; itemId: string; newItemId: string }
   | { type: "DELETE_ITEM"; itemId: string }
   | { type: "SET_TOKEN_DEFAULTS"; defaults: TokenShapeDefaults }
+  | { type: "SET_DEFAULT_TOKEN_SIZE"; size: number }
   | { type: "UPDATE_DM_NOTES"; notes: string }
   | { type: "IMPORT_CAMPAIGN"; manifest: CampaignManifest }
   | { type: "ADD_PLAYER_SLOT"; name: string }
@@ -869,6 +895,10 @@ export function normalizeToken(token: Token): Token {
     shape: TOKEN_SHAPES.includes(token.shape as TokenShape) ? token.shape : undefined,
     imageFit: token.imageFit === "raw" ? "raw" : undefined,
     itemId: typeof token.itemId === "string" ? token.itemId : undefined,
+    size:
+      typeof token.size === "number" && Number.isFinite(token.size)
+        ? clampTokenSize(token.size)
+        : undefined,
   };
 }
 
@@ -1560,6 +1590,10 @@ export function normalizeGameState(state: GameState & LegacyGameStateFields): Ga
     items,
     playersCanDraw: Boolean(state.playersCanDraw),
     tokenShapeDefaults: normalizeTokenShapeDefaults(state.tokenShapeDefaults),
+    defaultTokenSize:
+      typeof state.defaultTokenSize === "number" && Number.isFinite(state.defaultTokenSize)
+        ? clampTokenSize(state.defaultTokenSize)
+        : DEFAULT_TOKEN_SIZE,
     tokens: [],
   };
   base.tokens = (state.tokens ?? []).map((token) => {
@@ -1608,5 +1642,6 @@ export function createInitialState(roomId: string): GameState {
     items: {},
     playersCanDraw: false,
     tokenShapeDefaults: { ...DEFAULT_TOKEN_SHAPES },
+    defaultTokenSize: DEFAULT_TOKEN_SIZE,
   };
 }

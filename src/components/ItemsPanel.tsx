@@ -86,6 +86,7 @@ export function ItemsPanel({ state, dm, openItemSheet, dropItemAt }: ItemsPanelP
         )
       }
       onRenameFolder={(folderId, name) => dm.renameFolder(folderId, name)}
+      onMoveFolder={(folderId, sortOrder) => dm.moveFolder(folderId, sortOrder)}
       onDeleteFolder={(folderId) => dm.deleteFolder(folderId)}
       onMoveRow={(itemId, folderId, sortOrder) => {
         const item = state.items[itemId];
@@ -102,6 +103,7 @@ export function ItemsPanel({ state, dm, openItemSheet, dropItemAt }: ItemsPanelP
         }
       }}
       onRowClick={(itemId) => openItemSheet(itemId)}
+      onDeleteSelected={(ids) => ids.forEach((id) => dm.deleteItem(id))}
       renderRowActions={(itemId) => (
         <>
           <button

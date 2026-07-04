@@ -266,6 +266,17 @@ function check(name: string, ok: boolean, detail = "") {
   check("invalid item type/rarity dropped", badItem.type === undefined && badItem.rarity === undefined);
   check("negative quantity clamped to 0", badItem.quantity === 0);
 
+  const sized = normalizeToken({
+    id: "sz", sceneId: "s", x: 0, y: 0, label: "x", color: "#fff", kind: "enemy",
+    imageUrl: null, ownerPlayerId: null, sheetId: null, conditions: [], showHp: "none", size: 3,
+  } as never);
+  check("token size kept", sized.size === 3);
+  const overSized = normalizeToken({
+    id: "sz2", sceneId: "s", x: 0, y: 0, label: "x", color: "#fff", kind: "enemy",
+    imageUrl: null, ownerPlayerId: null, sheetId: null, conditions: [], showHp: "none", size: 999,
+  } as never);
+  check("token size clamps to 10", overSized.size === 10);
+
   const defs = normalizeTokenShapeDefaults({ player: "square", enemy: "bogus", item: "octagon" });
   check("token shape defaults: valid kept", defs.player === "square" && defs.item === "octagon");
   check("token shape defaults: invalid → built-in", defs.enemy === "circle");
@@ -287,6 +298,17 @@ function check(name: string, ok: boolean, detail = "") {
   check("npcSortOrder kept", rec.npcSortOrder === 3);
   const bare = normalizeSheetRecord({ id: "sheet-2", kind: "npc" } as never, "NPC");
   check("absent npcFolderId → undefined", bare.npcFolderId === undefined);
+
+  // Folder sortOrder (drag-to-reorder) survives normalization.
+  const withFolders = normalizeGameState({
+    ...createInitialState("room-f"),
+    folders: [
+      { id: "f1", name: "B", kind: "npc", sortOrder: 20 },
+      { id: "f2", name: "A", kind: "npc", sortOrder: 10 },
+    ],
+  } as never);
+  const f1 = withFolders.folders.find((f) => f.id === "f1");
+  check("folder sortOrder preserved", f1?.sortOrder === 20);
 }
 
 // ---------------------------------------------------------------------------

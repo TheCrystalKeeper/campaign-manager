@@ -27,7 +27,7 @@ import {
 import {
   clampViewportScale,
   loadImageForCanvas,
-  tokenRadiusForGridSize,
+  tokenRadius,
 } from "../lib/sceneUtils";
 import type { MeasureEvent } from "../hooks/useGameRoom";
 import type { History } from "../lib/history";
@@ -489,7 +489,6 @@ export function MapCanvas({
 
   const canControlView = Boolean(onViewportChange);
   const placing = Boolean(onPlaceToken);
-  const radius = tokenRadiusForGridSize(scene?.gridSize ?? 50);
 
   // ---- Map tools (Phase 5): active tool, its transient draft, per-client options ----
   const [activeToolId, setActiveToolId] = useState("select");
@@ -1003,6 +1002,9 @@ export function MapCanvas({
       className={`map-root${embedded ? " map-root--embedded" : ""}`}
       ref={rootRef}
       style={toolActive ? { cursor: activeTool.cursor } : undefined}
+      // Right-click is a game gesture here (delete wall/light, etc.) — never the browser's
+      // save/copy/inspect menu.
+      onContextMenu={(e) => e.preventDefault()}
     >
       <Stage
         ref={stageRef}
@@ -1120,6 +1122,7 @@ export function MapCanvas({
             // DM always sees bars; players only when the DM turned the display on.
             // (Redaction keeps hp available for showHp tokens even on hidden sheets.)
             const hp = sheetHp && (isDm || token.showHp !== "none") ? sheetHp : null;
+            const radius = tokenRadius(scene.gridSize, token.size ?? state.defaultTokenSize ?? 1);
             return (
               <TokenNode
                 key={token.id}

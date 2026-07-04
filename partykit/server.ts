@@ -20,6 +20,7 @@ import {
   normalizeScene,
   normalizeToken,
   normalizeTokenShapeDefaults,
+  clampTokenSize,
   playerTokenColorForSlot,
   sanitizeAnnotation,
   sanitizeFogReveal,
@@ -1338,6 +1339,14 @@ export default class GameServer implements Party.Server {
         void this.broadcastState();
         break;
       }
+      case "MOVE_FOLDER": {
+        const folder = this.state.folders.find((f) => f.id === parsed.folderId);
+        if (folder && typeof parsed.sortOrder === "number" && Number.isFinite(parsed.sortOrder)) {
+          folder.sortOrder = parsed.sortOrder;
+          void this.broadcastState();
+        }
+        break;
+      }
       case "DELETE_FOLDER": {
         if (!this.state.folders.some((f) => f.id === parsed.folderId)) {
           break;
@@ -1422,6 +1431,13 @@ export default class GameServer implements Party.Server {
       case "SET_TOKEN_DEFAULTS": {
         this.state.tokenShapeDefaults = normalizeTokenShapeDefaults(parsed.defaults);
         void this.broadcastState();
+        break;
+      }
+      case "SET_DEFAULT_TOKEN_SIZE": {
+        if (typeof parsed.size === "number" && Number.isFinite(parsed.size)) {
+          this.state.defaultTokenSize = clampTokenSize(parsed.size);
+          void this.broadcastState();
+        }
         break;
       }
       case "ADD_PLAYER_SLOT": {

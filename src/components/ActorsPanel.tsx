@@ -90,6 +90,17 @@ export function ActorsPanel({
       folders={state.folders.filter((folder) => folder.kind === folderKind)}
       rows={rows}
       createLabel="Create NPC"
+      // The combined Actors sidebar can also spin up a new player slot; the NPC-only page can't.
+      onCreatePlayer={
+        filterKind
+          ? undefined
+          : () => {
+              const taken = new Set(state.playerSlots.map((slot) => slot.name));
+              let n = 1;
+              while (taken.has(`Player ${n}`)) n += 1;
+              dm.addPlayerSlot(`Player ${n}`);
+            }
+      }
       onCreate={(name, folderId) => {
         const sheetId = newId("sheet");
         const finalName =
@@ -114,12 +125,19 @@ export function ActorsPanel({
         )
       }
       onRenameFolder={(folderId, name) => dm.renameFolder(folderId, name)}
+      onMoveFolder={(folderId, sortOrder) => dm.moveFolder(folderId, sortOrder)}
       onDeleteFolder={(folderId) => dm.deleteFolder(folderId)}
       onMoveRow={(sheetId, folderId, sortOrder) =>
         dm.setSheetFolder(sheetId, folderId, sortOrder, folderKind)
       }
       onExternalDrop={dropOnBoard}
       onRowClick={(sheetId) => openSheet(sheetId)}
+      onDeleteSelected={(ids) =>
+        // Only NPC sheets can be deleted; player sheets are tied to slots.
+        ids.forEach((id) => {
+          if (state.sheets[id]?.kind === "npc") dm.deleteSheet(id);
+        })
+      }
       renderRowActions={(sheetId) => {
         const record = state.sheets[sheetId];
         if (!record || record.kind !== "npc") {

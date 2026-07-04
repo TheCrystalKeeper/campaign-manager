@@ -161,6 +161,50 @@ label {
   padding: 3px 4px;
 }
 
+/* Scene settings: map image upload — a clickable dropzone-style button. */
+.map-upload {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  cursor: pointer;
+  padding: 0.5rem 0.6rem;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+.map-upload:hover {
+  border-color: var(--accent);
+  border-style: solid;
+  background: var(--surface-inset);
+}
+.map-upload--busy {
+  opacity: 0.7;
+  pointer-events: none;
+}
+.map-upload-ico {
+  font-size: 1.5rem;
+  line-height: 1;
+}
+.map-upload-thumb {
+  width: 48px;
+  height: 36px;
+  object-fit: cover;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+.map-upload-text {
+  display: flex;
+  flex-direction: column;
+  font-weight: 600;
+  color: var(--text);
+}
+.map-upload-text small {
+  font-weight: 400;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
 /* Phase 6.7: Item Sheet icon thumbnail. */
 .item-sheet-icon {
   width: 56px;
@@ -1164,6 +1208,34 @@ button.mod.roll-btn {
   flex-direction: column;
   gap: 0.45rem;
   padding: 0.5rem 0.4rem;
+  position: relative; /* anchor for the drag-select marquee */
+}
+
+/* Drag-select marquee + multi-selection (Directory). */
+.dir-marquee {
+  position: absolute;
+  z-index: 3;
+  border: 1px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  pointer-events: none;
+  border-radius: 2px;
+}
+.dir-list {
+  user-select: none;
+}
+/* Selection action bar — occupies the search row's slot so folders don't shift. */
+.dir-selbar {
+  gap: 0.4rem;
+  font-size: 0.8rem;
+}
+.dir-selcount {
+  font-weight: 600;
+  color: var(--accent-bright);
+  padding-left: 0.15rem;
+}
+.dir-selbar button {
+  padding: 0.18rem 0.55rem;
+  font-size: 0.78rem;
 }
 /* Top create buttons: labeled + icon, side by side. */
 .dir-toolbar {
@@ -1197,6 +1269,9 @@ button.mod.roll-btn {
   display: flex;
   align-items: center;
   gap: 0.25rem;
+  /* Fixed height so swapping to the selection (Delete/Clear) bar never resizes the row,
+     keeping the folders below from jumping while drag-selecting. */
+  min-height: 2.25rem;
 }
 .dir-search-ico {
   position: absolute;
@@ -1225,6 +1300,8 @@ button.mod.roll-btn {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  /* Fill the directory so there's empty space below the rows to start a drag-select. */
+  flex: 1;
 }
 .dir-empty {
   padding: 0.5rem 0.3rem;
@@ -1246,6 +1323,11 @@ button.mod.roll-btn {
 }
 .dir-row:hover {
   background: var(--surface-inset);
+}
+.dir-row--selected,
+.dir-row--selected:hover {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  box-shadow: inset 2px 0 0 var(--accent);
 }
 
 /* --- Pointer drag-and-drop ---------------------------------------------------- */
@@ -1324,6 +1406,14 @@ body.pointer-dragging * {
   border-radius: var(--radius);
   padding: 0.28rem 0.3rem;
   margin: 0.15rem 0.15rem 0.1rem;
+  cursor: grab; /* the header drags to reorder folders */
+}
+.dir-folder input,
+.dir-folder button {
+  cursor: auto;
+}
+.dir-folder button {
+  cursor: pointer;
 }
 .dir-folder-toggle {
   background: none;
@@ -1344,7 +1434,8 @@ body.pointer-dragging * {
   font-weight: 700;
   font-family: var(--font-display);
 }
-.dir-folder-name:hover,
+/* Only the focused (actively-editing) folder name shows the input box, so pressing Enter
+   (which blurs) returns it to a clean, un-boxed label even while the cursor hovers it. */
 .dir-folder-name:focus {
   border-color: var(--border);
   background: var(--input-bg);
@@ -1727,6 +1818,8 @@ body.pointer-dragging * {
 }
 .page-roster > .panel-body {
   padding: 0;
+  /* Fill the roster so the directory's drag-select area extends below the last row. */
+  min-height: 100%;
 }
 .page-main {
   flex: 1;

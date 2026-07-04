@@ -44,8 +44,18 @@ export function SceneSettings({ scene, roomId, onPatch, onSetFog, onResetFog }: 
         <input value={scene.name} onChange={(e) => onPatch({ name: e.target.value })} />
       </div>
 
-      <label style={{ cursor: "pointer" }}>
-        {busy ? "Uploading…" : scene.mapUrl ? "Replace map image" : "Upload map image"}
+      <label className={`map-upload${busy ? " map-upload--busy" : ""}`}>
+        {scene.mapUrl ? (
+          <img className="map-upload-thumb" src={scene.mapUrl} alt="" draggable={false} />
+        ) : (
+          <span className="map-upload-ico" aria-hidden>
+            🖼
+          </span>
+        )}
+        <span className="map-upload-text">
+          {busy ? "Uploading…" : scene.mapUrl ? "Replace map image" : "Upload map image"}
+          <small>Click to choose a file</small>
+        </span>
         <input
           type="file"
           accept="image/*"

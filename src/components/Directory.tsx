@@ -24,13 +24,19 @@ type DirectoryProps = {
   /** Create a row, optionally directly inside a folder (the folder's ＋ button). */
   onCreate: (name: string, folderId?: string | null) => void;
   onCreateFolder: (name: string) => void;
+  /** Optional extra create action (Actors sidebar: "Create Player" → new slot). */
+  onCreatePlayer?: () => void;
   onRenameFolder: (folderId: string, name: string) => void;
+  /** Reorder a folder among its siblings (drag a folder header onto another). */
+  onMoveFolder?: (folderId: string, sortOrder: number) => void;
   onDeleteFolder: (folderId: string) => void;
   /** Row dropped into a folder (or root) and/or reordered. */
   onMoveRow: (rowId: string, folderId: string | null, sortOrder: number) => void;
   /** Row dropped outside the directory (the map, a sheet, …). */
   onExternalDrop?: (rowId: string, element: Element | null, clientX: number, clientY: number) => void;
   onRowClick?: (rowId: string) => void;
+  /** Bulk action for a multi-selection (marquee / ctrl-click). Enables the selection bar. */
+  onDeleteSelected?: (rowIds: string[]) => void;
   renderRowActions?: (rowId: string) => ReactNode;
   /** Inline expansion under a row (e.g. the item editor). */
   renderExpanded?: (rowId: string) => ReactNode;
@@ -72,11 +78,14 @@ export function Directory({
   createLabel,
   onCreate,
   onCreateFolder,
+  onCreatePlayer,
   onRenameFolder,
+  onMoveFolder,
   onDeleteFolder,
   onMoveRow,
   onExternalDrop,
   onRowClick,
+  onDeleteSelected,
   renderRowActions,
   renderExpanded,
   footer,
@@ -84,8 +93,65 @@ export function Directory({
   const [search, setSearch] = useState("");
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [sortAZ, setSortAZ] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [marquee, setMarquee] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const hoverRef = useRef<Element | null>(null);
+
+  const clearSelection = () => setSelected((cur) => (cur.size ? new Set() : cur));
+
+  /** Drag-select: rubber-band on empty directory space selects intersecting rows. */
+  const beginMarquee = (event: React.PointerEvent) => {
+    if (
+      event.button !== 0 ||
+      (event.target as Element).closest(
+        "[data-dir-row], [data-dir-drop], .dir-folder, button, input, textarea, select",
+      )
+    ) {
+      return;
+    }
+    const container = containerRef.current;
+    if (!container) return;
+    const additive = event.shiftKey || event.ctrlKey || event.metaKey;
+    const base = additive ? new Set(selected) : new Set<string>();
+    const startX = event.clientX;
+    const startY = event.clientY;
+    let moved = false;
+
+    const onMove = (ev: PointerEvent) => {
+      const left = Math.min(startX, ev.clientX);
+      const top = Math.min(startY, ev.clientY);
+      const w = Math.abs(ev.clientX - startX);
+      const h = Math.abs(ev.clientY - startY);
+      if (w > 3 || h > 3) moved = true;
+      const cRect = container.getBoundingClientRect();
+      // The marquee is absolutely-positioned inside the (scrollable) container, so add its
+      // scroll offset — otherwise the box drifts from the cursor once the list is scrolled.
+      setMarquee({
+        x: left - cRect.left + container.scrollLeft,
+        y: top - cRect.top + container.scrollTop,
+        w,
+        h,
+      });
+      const box = { left, top, right: left + w, bottom: top + h };
+      const next = new Set(base);
+      container.querySelectorAll("[data-dir-row]").forEach((el) => {
+        const r = el.getBoundingClientRect();
+        if (r.left < box.right && r.right > box.left && r.top < box.bottom && r.bottom > box.top) {
+          next.add(el.getAttribute("data-dir-row")!);
+        }
+      });
+      setSelected(next);
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      setMarquee(null);
+      if (!moved && !additive) clearSelection(); // a plain click on empty space clears
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  };
 
   const setDragging = (on: boolean) =>
     containerRef.current?.classList.toggle("dir--dragging", on);
@@ -108,19 +174,24 @@ export function Directory({
   const displayed = (list: DirectoryRowData[]) =>
     sortAZ ? [...list].sort((a, b) => a.name.localeCompare(b.name)) : list;
 
-  /** Resolve a pointer-drag release into a folder move, a reorder, or an external drop. */
-  const handleRowDrop = (rowId: string, drop: PointerDrop) => {
+  /** Resolve a pointer-drag release into a folder move, a reorder, or an external drop.
+   *  `rowIds` is >1 when a multi-selection is dragged together. */
+  const handleRowDrop = (rowIds: string[], drop: PointerDrop) => {
     const container = containerRef.current;
     const el = drop.element;
+    const dragSet = new Set(rowIds);
 
     const folderTarget = el?.closest("[data-dir-drop]");
     if (folderTarget && container?.contains(folderTarget)) {
       const value = folderTarget.getAttribute("data-dir-drop")!;
       const folderId = value === "root" ? null : value;
-      const group = groupRows(folderId).filter((row) => row.id !== rowId);
+      const group = groupRows(folderId).filter((row) => !dragSet.has(row.id));
       const effs = effectiveOrders(group);
-      const last = group.length > 0 ? effs.get(group[group.length - 1].id)! : 0;
-      onMoveRow(rowId, folderId, last + 1024);
+      let last = group.length > 0 ? effs.get(group[group.length - 1].id)! : 0;
+      for (const id of rowIds) {
+        last += 1024;
+        onMoveRow(id, folderId, last);
+      }
       return;
     }
 
@@ -128,11 +199,20 @@ export function Directory({
     if (rowTarget && container?.contains(rowTarget)) {
       const targetId = rowTarget.getAttribute("data-dir-row")!;
       const target = rows.find((row) => row.id === targetId);
-      if (!target || targetId === rowId) {
+      if (!target || dragSet.has(targetId)) {
         return;
       }
-      const group = groupRows(target.folderId).filter((row) => row.id !== rowId);
+      const group = groupRows(target.folderId).filter((row) => !dragSet.has(row.id));
       const effs = effectiveOrders(group);
+      if (rowIds.length > 1) {
+        // Multi: drop the whole selection into the target's folder, appended.
+        let last = group.length > 0 ? effs.get(group[group.length - 1].id)! : 0;
+        for (const id of rowIds) {
+          last += 1024;
+          onMoveRow(id, target.folderId, last);
+        }
+        return;
+      }
       const rect = rowTarget.getBoundingClientRect();
       const before = drop.clientY < rect.top + rect.height / 2;
       const targetIndex = group.findIndex((row) => row.id === targetId);
@@ -147,11 +227,49 @@ export function Directory({
             : next !== null
               ? next - 1024
               : 1024;
-      onMoveRow(rowId, target.folderId, sortOrder);
+      onMoveRow(rowIds[0], target.folderId, sortOrder);
       return;
     }
 
-    onExternalDrop?.(rowId, el, drop.clientX, drop.clientY);
+    // External drop (map / sheet inventory): fan multiples out so they don't stack.
+    rowIds.forEach((id, i) =>
+      onExternalDrop?.(id, el, drop.clientX + i * 28, drop.clientY + i * 28),
+    );
+  };
+
+  // Folders render in manual order (drag a folder header onto another to reorder).
+  const sortedFolders = [...folders].sort(
+    (a, b) =>
+      (a.sortOrder ?? Number.MAX_SAFE_INTEGER) - (b.sortOrder ?? Number.MAX_SAFE_INTEGER) ||
+      a.name.localeCompare(b.name),
+  );
+
+  /** Resolve a folder-header drag release into a reorder among sibling folders. */
+  const handleFolderDrop = (folderId: string, drop: PointerDrop) => {
+    const container = containerRef.current;
+    const targetEl = drop.element?.closest("[data-dir-drop]");
+    if (!targetEl || !container?.contains(targetEl)) return;
+    const targetId = targetEl.getAttribute("data-dir-drop")!;
+    if (targetId === "root" || targetId === folderId) return;
+    const siblings = sortedFolders.filter((f) => f.id !== folderId);
+    const targetIndex = siblings.findIndex((f) => f.id === targetId);
+    if (targetIndex < 0) return;
+    // Monotone effective orders (mirror row reordering).
+    const effs = new Map<string, number>();
+    let prev = 0;
+    for (const f of siblings) {
+      const eff = typeof f.sortOrder === "number" ? Math.max(f.sortOrder, prev + 1e-9) : prev + 1024;
+      effs.set(f.id, eff);
+      prev = eff;
+    }
+    const rect = targetEl.getBoundingClientRect();
+    const before = drop.clientY < rect.top + rect.height / 2;
+    const insertAt = before ? targetIndex : targetIndex + 1;
+    const p = insertAt > 0 ? effs.get(siblings[insertAt - 1].id)! : null;
+    const n = insertAt < siblings.length ? effs.get(siblings[insertAt].id)! : null;
+    const sortOrder =
+      p !== null && n !== null ? (p + n) / 2 : p !== null ? p + 1024 : n !== null ? n - 1024 : 1024;
+    onMoveFolder?.(folderId, sortOrder);
   };
 
   const query = search.trim().toLowerCase();
@@ -174,27 +292,43 @@ export function Directory({
 
   const glyph = kindGlyph(kind);
 
-  const renderRow = (row: DirectoryRowData) => (
+  const renderRow = (row: DirectoryRowData) => {
+    const isSelected = selected.has(row.id);
+    return (
     <div key={row.id}>
       <div
-        className="dir-row"
+        className={`dir-row${isSelected ? " dir-row--selected" : ""}`}
         data-dir-row={row.id}
         onPointerDown={(event) => {
           if ((event.target as Element).closest("button, input, textarea, select")) {
             return;
           }
+          // Dragging a row that's part of a multi-selection drags the whole selection.
+          const dragIds = isSelected && selected.size > 1 ? [...selected] : [row.id];
           startPointerDrag(event, {
-            label: row.name,
+            label: dragIds.length > 1 ? `${dragIds.length} selected` : row.name,
             onStart: () => setDragging(true),
             onHover: setHover,
-            onDrop: (drop) => handleRowDrop(row.id, drop),
+            onDrop: (drop) => handleRowDrop(dragIds, drop),
             onEnd: () => setDragging(false),
           });
         }}
-        onClick={() => {
-          if (!wasRecentDrag()) {
-            onRowClick?.(row.id);
+        onClick={(event) => {
+          if (wasRecentDrag()) return;
+          if (event.shiftKey || event.ctrlKey || event.metaKey) {
+            setSelected((cur) => {
+              const next = new Set(cur);
+              if (next.has(row.id)) {
+                next.delete(row.id);
+              } else {
+                next.add(row.id);
+              }
+              return next;
+            });
+            return;
           }
+          clearSelection();
+          onRowClick?.(row.id);
         }}
       >
         {row.iconUrl ? (
@@ -212,7 +346,15 @@ export function Directory({
       </div>
       {renderExpanded?.(row.id)}
     </div>
-  );
+    );
+  };
+
+  const marqueeBox = marquee ? (
+    <div
+      className="dir-marquee"
+      style={{ left: marquee.x, top: marquee.y, width: marquee.w, height: marquee.h }}
+    />
+  ) : null;
 
   /** The toolbar (create buttons + search) — shared by the flat and foldered views. */
   const toolbar = (
@@ -222,6 +364,12 @@ export function Directory({
           <span className="dir-create-ico">{glyph}</span>
           {createLabel}
         </button>
+        {onCreatePlayer ? (
+          <button className="dir-create" title="Create a player slot" onClick={onCreatePlayer}>
+            <span className="dir-create-ico">🧑</span>
+            Create Player
+          </button>
+        ) : null}
         <button
           className="dir-create dir-create--folder"
           title="Create a folder"
@@ -231,30 +379,51 @@ export function Directory({
           Create Folder
         </button>
       </div>
-      <div className="dir-search">
-        <span className="dir-search-ico">🔍</span>
-        <input
-          value={search}
-          placeholder={`Search ${kind}s`}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-        <button
-          className={`dir-icon-btn${sortAZ ? " dir-icon-btn--on" : ""}`}
-          title={sortAZ ? "Sorting A–Z (click for manual order)" : "Sort A–Z"}
-          onClick={() => setSortAZ((v) => !v)}
-        >
-          ⇅
-        </button>
-        {folders.length > 0 ? (
+      {/* When rows are multi-selected, this row becomes the action bar (same slot → the
+          folders below don't shift). Otherwise it's the search + sort/collapse controls. */}
+      {selected.size > 0 ? (
+        <div className="dir-search dir-selbar">
+          <span className="dir-selcount">{selected.size} selected</span>
+          <span style={{ flex: 1 }} />
+          {onDeleteSelected ? (
+            <button
+              className="btn-danger"
+              onClick={() => {
+                onDeleteSelected([...selected]);
+                setSelected(new Set());
+              }}
+            >
+              🗑 Delete
+            </button>
+          ) : null}
+          <button onClick={clearSelection}>Clear</button>
+        </div>
+      ) : (
+        <div className="dir-search">
+          <span className="dir-search-ico">🔍</span>
+          <input
+            value={search}
+            placeholder={`Search ${kind}s`}
+            onChange={(e) => setSearch(e.target.value)}
+          />
           <button
-            className="dir-icon-btn"
-            title={allCollapsed ? "Expand all folders" : "Collapse all folders"}
-            onClick={toggleAllFolders}
+            className={`dir-icon-btn${sortAZ ? " dir-icon-btn--on" : ""}`}
+            title={sortAZ ? "Sorting A–Z (click for manual order)" : "Sort A–Z"}
+            onClick={() => setSortAZ((v) => !v)}
           >
-            {allCollapsed ? "⊞" : "⊟"}
+            ⇅
           </button>
-        ) : null}
-      </div>
+          {folders.length > 0 ? (
+            <button
+              className="dir-icon-btn"
+              title={allCollapsed ? "Expand all folders" : "Collapse all folders"}
+              onClick={toggleAllFolders}
+            >
+              {allCollapsed ? "⊞" : "⊟"}
+            </button>
+          ) : null}
+        </div>
+      )}
     </>
   );
 
@@ -264,13 +433,14 @@ export function Directory({
     return (
       <div className="panel-body dir" ref={containerRef}>
         {toolbar}
-        <div className="dir-list">
+        <div className="dir-list" onPointerDown={beginMarquee}>
           {found.length === 0 ? (
             <span className="muted dir-empty">No matches.</span>
           ) : (
             found.map(renderRow)
           )}
         </div>
+        {marqueeBox}
       </div>
     );
   }
@@ -281,19 +451,47 @@ export function Directory({
     <div className="panel-body dir" ref={containerRef}>
       {toolbar}
 
-      <div className="dir-list">
+      <div className="dir-list" onPointerDown={beginMarquee}>
         {folders.length > 0 ? (
           <div className="dir-root-drop" data-dir-drop="root">
             ⤒ Root — drop here to move out of a folder
           </div>
         ) : null}
 
-        {folders.map((folder) => {
+        {sortedFolders.map((folder) => {
           const memberRows = displayed(rows.filter((row) => row.folderId === folder.id));
           const isCollapsed = collapsed.has(folder.id);
           return (
             <div className="dir-group" key={folder.id}>
-              <div className="dir-folder" data-dir-drop={folder.id}>
+              <div
+                className="dir-folder"
+                data-dir-drop={folder.id}
+                onPointerDown={(event) => {
+                  if (!onMoveFolder) return;
+                  const target = event.target as HTMLElement;
+                  // Buttons act on click. The name field drags too — UNLESS it's already
+                  // focused for editing (then let it handle the caret / text selection).
+                  // A plain click never moves past the drag threshold, so it still focuses
+                  // the name to rename.
+                  if (
+                    target.closest("button") ||
+                    (target.tagName === "INPUT" && target === document.activeElement)
+                  ) {
+                    return;
+                  }
+                  startPointerDrag(event, {
+                    label: `📁 ${folder.name}`,
+                    onStart: () => {
+                      setDragging(true);
+                      // Don't leave the name field focused while dragging.
+                      (document.activeElement as HTMLElement | null)?.blur?.();
+                    },
+                    onHover: setHover,
+                    onDrop: (drop) => handleFolderDrop(folder.id, drop),
+                    onEnd: () => setDragging(false),
+                  });
+                }}
+              >
                 <button
                   className="dir-folder-toggle"
                   title={isCollapsed ? "Expand" : "Collapse"}
@@ -307,6 +505,14 @@ export function Directory({
                   key={folder.id + folder.name}
                   defaultValue={folder.name}
                   title="Folder name (edit to rename)"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.currentTarget.blur();
+                    } else if (e.key === "Escape") {
+                      e.currentTarget.value = folder.name;
+                      e.currentTarget.blur();
+                    }
+                  }}
                   onBlur={(e) => {
                     const name = e.target.value.trim();
                     if (name && name !== folder.name) {
@@ -341,6 +547,7 @@ export function Directory({
         {rows.length === 0 ? <span className="muted dir-empty">Nothing here yet.</span> : null}
         {footer}
       </div>
+      {marqueeBox}
     </div>
   );
 }
