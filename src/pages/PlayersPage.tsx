@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { SheetCards } from "./SheetCards";
+import { PageSwitcher, type PageId } from "./PageSwitcher";
 import type { PanelContext } from "../panels/registry";
 
 /// <summary>
@@ -10,7 +11,15 @@ import type { PanelContext } from "../panels/registry";
 /// hover ✕ removes it; ＋ Add creates "Player N". The compact Party dock tab
 /// remains for quick in-play glances.
 /// </summary>
-export function PlayersPage({ ctx }: { ctx: PanelContext }) {
+export function PlayersPage({
+  ctx,
+  activePage,
+  onNavigate,
+}: {
+  ctx: PanelContext;
+  activePage: PageId;
+  onNavigate: (id: PageId) => void;
+}) {
   const { state, dm } = ctx;
   const [openIds, setOpenIds] = useState<string[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -39,6 +48,8 @@ export function PlayersPage({ ctx }: { ctx: PanelContext }) {
   return (
     <div className="players-page">
       <div className="chip-tabs player-tabs">
+        <PageSwitcher active={activePage} onSelect={onNavigate} className="page-switcher--inline" />
+        <span className="page-topbar-sep" aria-hidden />
         {state.playerSlots.map((slot) => (
           <div
             key={slot.id}

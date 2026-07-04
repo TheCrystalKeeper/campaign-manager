@@ -11,7 +11,7 @@ import type { MapTool, ToolRuntime } from "./types";
 /// </summary>
 
 type FogDraft = {
-  /** Committed samples (decimated). */
+  /** Committed samples (decimated). Empty = hover-only draft (brush-size preview ring). */
   points: number[];
   /** The current cursor, kept as a trailing point so the preview tracks it smoothly. */
   live: [number, number];
@@ -57,7 +57,9 @@ export const fogTool: MapTool = {
   },
   onMove: (event, rt) => {
     const draft = rt.draft as FogDraft | null;
-    if (!draft) {
+    if (!draft || draft.points.length === 0) {
+      // Not painting: keep a hover-only draft so the brush-size ring previews at the cursor.
+      rt.setDraft({ points: [], live: [event.world.x, event.world.y] } satisfies FogDraft);
       return;
     }
     const pts = draft.points;
@@ -95,6 +97,13 @@ export const fogTool: MapTool = {
         ? [...pts, event.world.x, event.world.y].slice(0, MAX_FOG_BRUSH_POINTS)
         : pts;
     commitStroke(rt, points);
+  },
+  onLeave: (rt) => {
+    // Clear the hover ring when the cursor leaves the board; a mid-drag stroke survives.
+    const draft = rt.draft as FogDraft | null;
+    if (draft && draft.points.length === 0) {
+      rt.setDraft(null);
+    }
   },
   renderDraft: (draft, rt) => {
     const d = draft as FogDraft | null;

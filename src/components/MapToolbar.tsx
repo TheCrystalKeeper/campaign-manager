@@ -1,10 +1,20 @@
 import type { ReactNode } from "react";
 import type { MapTool } from "../map/tools/types";
 import type { LightPreset } from "../map/tools/lights";
+import type { LightBlendMode } from "../lib/types";
 import type { History } from "../lib/history";
 
 const DRAW_COLORS = ["#ffd166", "#ff6b6b", "#7cc4ff", "#8ce99a", "#f3f0ff"];
 const DRAW_WIDTHS = [2, 4, 7];
+/** CSP-style labels for the light tint blend modes (+ the tint-off escape hatch). */
+const LIGHT_BLEND_OPTIONS: Array<{ id: LightBlendMode; label: string }> = [
+  { id: "screen", label: "Screen" },
+  { id: "overlay", label: "Overlay" },
+  { id: "soft-light", label: "Soft Light" },
+  { id: "multiply", label: "Multiply" },
+  { id: "plus-lighter", label: "Add (Glow)" },
+  { id: "none", label: "None (fog only)" },
+];
 const LIGHT_PRESET_LIST: Array<{ id: LightPreset; label: string }> = [
   { id: "candle", label: "Candle" },
   { id: "torch", label: "Torch" },
@@ -46,6 +56,9 @@ type MapToolbarProps = {
   /** Phase 6.6: per-frame light animations (client toggle / low-end escape hatch). */
   lightAnimations: boolean;
   onToggleLightAnimations: () => void;
+  /** Phase 6.6b: how colored-light tint composites over the scene (per-scene, synced). */
+  lightBlendMode: LightBlendMode;
+  onLightBlendMode: (mode: LightBlendMode) => void;
   visionPreview: boolean;
   onToggleVisionPreview: () => void;
   wallKind: "wall" | "door";
@@ -128,6 +141,8 @@ export function MapToolbar({
   onDarknessCommit,
   lightAnimations,
   onToggleLightAnimations,
+  lightBlendMode,
+  onLightBlendMode,
   visionPreview,
   onToggleVisionPreview,
   wallKind,
@@ -202,6 +217,18 @@ export function MapToolbar({
             >
               ✨ Animations {lightAnimations ? "on" : "off"}
             </OptBtn>
+            <select
+              className="map-blend-select"
+              value={lightBlendMode}
+              title="How colored light blends with the map & tokens (like paint-app blending modes)"
+              onChange={(e) => onLightBlendMode(e.target.value as LightBlendMode)}
+            >
+              {LIGHT_BLEND_OPTIONS.map((option) => (
+                <option key={option.id} value={option.id}>
+                  Blend: {option.label}
+                </option>
+              ))}
+            </select>
           </Row>
         </>
       ) : null}
@@ -429,7 +456,8 @@ export function MapToolbar({
             </OptBtn>
           </Row>
           <span className="map-toolbar-hint">
-            Click to place · drag to move · double-click to edit · right-click to delete
+            Click to place · drag to move · drag a ring to resize · double-click to edit ·
+            right-click to delete
           </span>
         </div>
       ) : null}

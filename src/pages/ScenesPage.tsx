@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MapCanvas } from "../components/MapCanvas";
 import { SceneSettings } from "../components/SceneSettings";
+import { PageSwitcher, type PageId } from "./PageSwitcher";
 import { readLocalFlag, writeLocalFlag } from "../lib/localFlags";
 import { applySceneMessage, sceneMessageSceneId } from "../lib/sceneMessages";
 import { createEmptyScene, fitViewportToScene } from "../lib/sceneUtils";
@@ -32,7 +33,17 @@ type Draft = { scene: Scene; baselineJson: string };
 /// scene in one UPDATE_SCENE. "Set Live on Board" applies any dirty draft, then
 /// switches the table to this scene.
 /// </summary>
-export function ScenesPage({ ctx, active }: { ctx: PanelContext; active: boolean }) {
+export function ScenesPage({
+  ctx,
+  active,
+  activePage,
+  onNavigate,
+}: {
+  ctx: PanelContext;
+  active: boolean;
+  activePage: PageId;
+  onNavigate: (id: PageId) => void;
+}) {
   const { state, dm, room } = ctx;
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [liveUpdates, setLiveUpdatesState] = useState(() => readLocalFlag(LIVE_KEY, true));
@@ -179,6 +190,8 @@ export function ScenesPage({ ctx, active }: { ctx: PanelContext; active: boolean
   return (
     <div className="scene-editor">
       <div className="chip-tabs scene-tabs">
+        <PageSwitcher active={activePage} onSelect={onNavigate} className="page-switcher--inline" />
+        <span className="page-topbar-sep" aria-hidden />
         {state.scenes.map((scene) => {
           const isLive = scene.id === state.activeSceneId;
           const isSelected = scene.id === selectedSceneId;

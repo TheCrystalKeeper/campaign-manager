@@ -11,6 +11,7 @@ import { dockPanelsForRole, PANELS, type PanelContext, type PanelId } from "./pa
 import { PlayersPage } from "./pages/PlayersPage";
 import { NpcsPage } from "./pages/NpcsPage";
 import { ScenesPage } from "./pages/ScenesPage";
+import { PageSwitcher, type PageId } from "./pages/PageSwitcher";
 import { useDiceOverlay } from "./dice/useDiceOverlay";
 import { useDmActions, useGameRoom, type JoinParams } from "./hooks/useGameRoom";
 import { buildInverse, useHistory } from "./lib/history";
@@ -19,16 +20,6 @@ import { fitViewportToScene } from "./lib/sceneUtils";
 import { DEFAULT_VIEWPORT, TOKEN_ENEMY_COLOR, type Viewport } from "./lib/types";
 
 type SessionParams = JoinParams & { roomId: string };
-
-/** DM-only prep pages; the Board stays the play surface (players are board-only). */
-type PageId = "board" | "players" | "npcs" | "scenes";
-
-const DM_PAGES: Array<{ id: PageId; label: string }> = [
-  { id: "board", label: "Board" },
-  { id: "players", label: "Players" },
-  { id: "npcs", label: "NPCs" },
-  { id: "scenes", label: "Scenes" },
-];
 
 const SNAP_KEY = "cm-map-snap";
 const TOASTS_KEY = "cm-log-toasts";
@@ -501,17 +492,9 @@ export default function App() {
           })}
         </FloatingCluster>
 
-        {isDm ? (
+        {isDm && onBoard ? (
           <div className="page-switcher">
-            {DM_PAGES.map((entry) => (
-              <button
-                key={entry.id}
-                className={activePage === entry.id ? "btn-active" : ""}
-                onClick={() => setPage(entry.id)}
-              >
-                {entry.label}
-              </button>
-            ))}
+            <PageSwitcher active={activePage} onSelect={setPage} />
           </div>
         ) : null}
 
@@ -540,13 +523,18 @@ export default function App() {
         {isDm ? (
           <>
             <div className={`page${activePage === "players" ? " page--active" : ""}`}>
-              <PlayersPage ctx={panelContext} />
+              <PlayersPage ctx={panelContext} activePage={activePage} onNavigate={setPage} />
             </div>
             <div className={`page${activePage === "npcs" ? " page--active" : ""}`}>
-              <NpcsPage ctx={panelContext} />
+              <NpcsPage ctx={panelContext} activePage={activePage} onNavigate={setPage} />
             </div>
             <div className={`page${activePage === "scenes" ? " page--active" : ""}`}>
-              <ScenesPage ctx={panelContext} active={activePage === "scenes"} />
+              <ScenesPage
+                ctx={panelContext}
+                active={activePage === "scenes"}
+                activePage={activePage}
+                onNavigate={setPage}
+              />
             </div>
           </>
         ) : null}

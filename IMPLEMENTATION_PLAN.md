@@ -1073,9 +1073,74 @@ Live-OFF staged edits, Set Live flow, hotkey isolation, Players tabs.
 > `src/components/MapToolbar.tsx`, **new** `src/components/LightConfigPanel.tsx`,
 > `src/map/tools/{lights.tsx,types.ts}`, `src/index.css`, `tests/unit-scene-editor.test.ts`.
 
+> **Phase 6.6b addendum (2026-07-03, user feedback round):** the color tint originally drew
+> *inside* the vision-mask layer's canvas — Konva layers are separate `<canvas>` elements, so
+> the additive gCO only blended against the (mostly erased) black mask and stacked over the
+> scene as a Normal-mode film painted over token art/labels ("muddy"). Rebuilt on Foundry's
+> illumination/coloration buffer split (per the user's attached Illumination Buffer doc):
+> tint now lives in a dedicated **`LightTintLayer`** whose canvas element gets **CSS
+> `mix-blend-mode`** — real cross-layer blending against map+tokens. Mounted tokens → tint →
+> fog → mask, so hidden/unexplored areas still cover it. New `Scene.lightBlendMode`
+> (`screen` default ≈ Foundry's Adaptive Luminance · `overlay` · `soft-light` · `multiply` ·
+> `plus-lighter` = Add/Glow), whitelist-sanitized in `normalizeScene`, exposed as a CSP-style
+> "Blend" dropdown in the lighting toolbar (per-scene, rides `UPDATE_SCENE`). Foundry's
+> per-light background saturation/contrast/shadows need per-region pixel filters — out of
+> scope for 2D canvas. Same round: **fog brush hover preview** — the brush-size ring now shows
+> on hover, not just mid-drag (hover-only draft in `fog.tsx` + a generic `MapTool.onLeave`
+> hook cleared on pointer-leave). Verified: `unit-scene-editor.test.ts` 41/41 (3 new
+> lightBlendMode checks), tsc + build clean.
+>
+> Visual polish round (same day): editor reach rings now render ONLY while the lights tool is
+> active (they read as a mystery outline otherwise) and are neutral gold, not light-colored;
+> tint falloff is a continuous hot-center curve (the old constant-alpha plateau = muddy disc)
+> and the erase fade is smoothstep-eased (the plateau→linear kink drew a mach-band ring at the
+> bright radius); the tint layer moved BELOW grid/annotations/tokens (directly over the map
+> image, grid split out of the base layer) so grid lines, token art, and name labels stay
+> crisp and untinted.
+>
+> Interaction round (same day): **Blend "None (fog only)"** — a sixth `lightBlendMode` value
+> that skips the tint layer entirely, so lights purely carve visibility out of the darkness;
+> and **drag-to-resize on the reach rings** — with the lights tool active, dragging the solid
+> ring sets the bright radius and the dashed ring the dim radius (pinned via `dragBoundFunc`,
+> pointer distance → feet snapped to 5 ft, live "bright / dim ft" label, committed as one
+> `UPDATE_LIGHT` on release; ring drags are `map-handle`-named so the tool doesn't place a
+> new light, and the group move handler ignores bubbled ring drags). Tests 42/42.
+>
+> **Two-client browser verification (2026-07-03):** after a "players don't see blend modes"
+> report, a WS check confirmed `lightBlendMode`/`darkness` reach player frames, and a headless
+> two-client Playwright run (DM bot + real player join) screenshot-diffed the player view per
+> mode: all five modes + "none" render distinctly for players; "None (fog only)" is confirmed
+> zero-color. Also relevant: on a scene with NO map art (black background),
+> multiply/overlay/soft-light of black are mathematically black and screen ≈ add — most modes
+> are invisible by nature there; with real map art they differ clearly.
+>
+> **DM/player parity bug — found & fixed (same day, second report with side-by-side
+> screenshot):** the player mask replayed EVERY light's erase once per vision-enabled viewer
+> token (each token's LOS group contained all `LightReveal`s), and `destination-out`
+> compounds — with N vision tokens the falloff fringe kept (1−a)^N darkness instead of
+> (1−a), so player pools rendered fatter/brighter/flatter than the DM's (washed-out "cream
+> blobs" that made blend modes look wrong/different). Fix in `VisionMaskLayer`: ambient +
+> per-light erases now run ONCE inside a clip of the UNION of all viewer LOS polygons
+> (`polygonsClip`, multi-subpath nonzero winding); darkvision stays per-token in its own LOS
+> clip. Each light is also clipped to its own wall-coverage polygon now, closing the
+> documented "lamp shines through a wall between it and the lit area" gap — player pool
+> geometry now matches the DM overlay exactly (verified: two-window Playwright run, DM view
+> vs player view screenshots of the same walls/lights/two-vision-token scene are visually
+> identical inside pools, incl. wall shadows). Perf side-benefit: lights erase once, not
+> N× per viewer token.
+>
+> **Join flash fix (2026-07-03):** players briefly saw the whole lit map before the darkness
+> overlay "faded in" on join. Reproduced with a pixel-timeline probe (composited map-center
+> pixel decayed on the `useEased` exponential curve from lit→dark over ~300ms after join).
+> Cause: `displayDarkness` initialized from a lit first frame, then eased up to the real dark
+> value. Fix: `useEased` now takes a `snapKey` (the active scene id) and jumps instantly to
+> target when it changes — join and scene-switch load darkness in place; same-scene day/night
+> changes still ease. Verified: same probe now reads steady dark from frame 1, zero bright
+> frames.
+
 **Still deferred (into Phase 7+):** lights casting their *own* wall shadows (reach is gated by the
 viewer's LOS, not the light's), server-side LOS redaction, "is darkness source" negative lights, and
-the richer color-blending/coloration techniques Foundry offers.
+per-light background saturation/contrast/shadow adjustments (needs per-region pixel filters).
 
 ---
 

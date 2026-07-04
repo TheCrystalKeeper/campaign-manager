@@ -49,6 +49,8 @@ export type MapTool = {
   onDown?: (event: ToolPointerEvent, rt: ToolRuntime) => void;
   onMove?: (event: ToolPointerEvent, rt: ToolRuntime) => void;
   onUp?: (event: ToolPointerEvent, rt: ToolRuntime) => void;
+  /** Pointer left the stage — clear hover-only previews (mid-drag drafts should survive). */
+  onLeave?: (rt: ToolRuntime) => void;
   /** Konva nodes visualizing the in-progress draft. */
   renderDraft?: (draft: unknown, rt: ToolRuntime) => ReactNode;
 };

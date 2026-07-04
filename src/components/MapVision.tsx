@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { Circle, Group, Label, Layer, Line, Rect, Tag, Text, Wedge } from "react-konva";
 import type Konva from "konva";
 import type { Light, Scene, Token } from "../lib/types";
@@ -17,6 +17,14 @@ import { computeVisibility, wallsToSegments, type Point } from "../lib/visibilit
 /// continuous 0..1 darkness level (day↔night) rather than a binary on/off.
 /// </summary>
 
+/**
+ * dragBoundFunc for ring resize handles: pins the node at its parent group's position so a
+ * "drag" never moves the ring — we read the pointer's distance from center instead.
+ */
+function pinToParentCenter(this: Konva.Node): Konva.Vector2d {
+  return this.getParent()!.getAbsolutePosition();
+}
+
 /** Builds a Konva clip path from a visibility polygon (world coords). */
 function polygonClip(poly: Point[]): (ctx: Konva.Context) => void {
   return (ctx) => {
@@ -28,6 +36,24 @@ function polygonClip(poly: Point[]): (ctx: Konva.Context) => void {
       }
     }
     ctx.closePath();
+  };
+}
+
+/**
+ * Clip to the UNION of several polygons (multiple subpaths + nonzero winding — the sweep
+ * outputs consistently-wound polys, so overlaps union rather than cancel).
+ */
+function polygonsClip(polys: Point[][]): (ctx: Konva.Context) => void {
+  return (ctx) => {
+    ctx.beginPath();
+    for (const poly of polys) {
+      if (poly.length < 3) continue;
+      ctx.moveTo(poly[0].x, poly[0].y);
+      for (let i = 1; i < poly.length; i += 1) {
+        ctx.lineTo(poly[i].x, poly[i].y);
+      }
+      ctx.closePath();
+    }
   };
 }
 
@@ -60,19 +86,35 @@ function radialFill(radiusPx: number, stops: Array<number | string>) {
 
 /**
  * Erase stops for a `destination-out` reveal. Source alpha = how much darkness is removed:
- * 1 (fully lit) through the bright core, then — with gradual illumination — a smooth ramp to
- * 0 (dark) at the dim edge. `peak` (≤1) lets an animation dim the whole light.
+ * 1 (fully lit) through the bright core, then — with gradual illumination — a smoothstep
+ * ramp to 0 (dark) at the dim edge. The eased intermediate stops matter: a plateau kinking
+ * into a linear fade produces a visible mach-band ring at the bright radius.
+ * `peak` (≤1) lets an animation dim the whole light.
  */
 function eraseStops(brightFrac: number, gradual: boolean, peak: number) {
   const a = clamp01(peak);
-  const solid = `rgba(0,0,0,${a})`;
+  const at = (alpha: number) => `rgba(0,0,0,${(a * alpha).toFixed(3)})`;
   const bf = Math.min(Math.max(brightFrac, 0), 0.98);
-  return gradual
-    ? [0, solid, bf, solid, 1, "rgba(0,0,0,0)"]
-    : [0, solid, 0.985, solid, 1, "rgba(0,0,0,0)"];
+  if (!gradual) {
+    return [0, at(1), 0.985, at(1), 1, "rgba(0,0,0,0)"];
+  }
+  // smoothstep(1→0) over the bright→dim span.
+  const span = (f: number) => bf + (1 - bf) * f;
+  return [
+    0, at(1),
+    bf, at(1),
+    span(0.25), at(0.84),
+    span(0.5), at(0.5),
+    span(0.75), at(0.16),
+    1, "rgba(0,0,0,0)",
+  ];
 }
 
-/** Additive color stops for the tint pass (same falloff shape as the erase). */
+/**
+ * Color stops for the tint pass: a CONTINUOUS falloff from a hot center — deliberately NOT
+ * the erase's flat plateau. Constant alpha across the bright radius reads as a muddy colored
+ * disc; light glows from its source.
+ */
 function tintStops(
   rgb: { r: number; g: number; b: number },
   brightFrac: number,
@@ -80,10 +122,21 @@ function tintStops(
   strength: number,
 ) {
   const a = clamp01(strength);
-  const solid = `rgba(${rgb.r},${rgb.g},${rgb.b},${a})`;
+  const at = (alpha: number) => `rgba(${rgb.r},${rgb.g},${rgb.b},${(a * alpha).toFixed(3)})`;
   const clear = `rgba(${rgb.r},${rgb.g},${rgb.b},0)`;
   const bf = Math.min(Math.max(brightFrac, 0), 0.98);
-  return gradual ? [0, solid, bf, solid, 1, clear] : [0, solid, 0.985, solid, 1, clear];
+  if (!gradual) {
+    return [0, at(1), 0.985, at(1), 1, clear];
+  }
+  const span = (f: number) => bf + (1 - bf) * f;
+  return [
+    0, at(1),
+    bf * 0.55, at(0.8),
+    bf, at(0.55),
+    span(0.35), at(0.26),
+    span(0.7), at(0.09),
+    1, clear,
+  ];
 }
 
 /** Per-frame radius/brightness modulation for a light's animation (cheap trig, no sweep). */
@@ -156,34 +209,28 @@ function LightReveal({ light, ftToPx, time }: { light: Light; ftToPx: number; ti
   const brightFrac = light.dimR > 0 ? Math.min(light.brightR / light.dimR, 1) : 1;
   const gradual = light.gradual !== false;
   const angle = light.angle ?? 360;
-  const rgb = light.color ? hexToRgb(light.color) : null;
-  const tintStrength = (light.colorIntensity ?? 0.5) * peak;
-
+  const fill = radialFill(dimPx, eraseStops(brightFrac, gradual, peak));
   // A Wedge for directed lights, a Circle for full-circle ones — same gradient either way.
-  const renderShape = (op: "destination-out" | "lighter", stops: Array<number | string>) => {
-    const fill = radialFill(dimPx, stops);
-    return angle < 360 ? (
-      <Wedge
-        x={light.x}
-        y={light.y}
-        radius={dimPx}
-        angle={angle}
-        rotation={(light.rotation ?? 0) - angle / 2}
-        globalCompositeOperation={op}
-        {...fill}
-      />
-    ) : (
-      <Circle x={light.x} y={light.y} radius={dimPx} globalCompositeOperation={op} {...fill} />
-    );
-  };
-
-  return (
-    <>
-      {renderShape("destination-out", eraseStops(brightFrac, gradual, peak))}
-      {rgb && tintStrength > 0.01
-        ? renderShape("lighter", tintStops(rgb, brightFrac, gradual, tintStrength))
-        : null}
-    </>
+  // Color tint is NOT drawn here: it lives in LightTintLayer (a separate canvas composited
+  // with a real CSS blend mode), so light color blends with the art instead of painting over it.
+  return angle < 360 ? (
+    <Wedge
+      x={light.x}
+      y={light.y}
+      radius={dimPx}
+      angle={angle}
+      rotation={(light.rotation ?? 0) - angle / 2}
+      globalCompositeOperation="destination-out"
+      {...fill}
+    />
+  ) : (
+    <Circle
+      x={light.x}
+      y={light.y}
+      radius={dimPx}
+      globalCompositeOperation="destination-out"
+      {...fill}
+    />
   );
 }
 
@@ -212,7 +259,7 @@ export const VisionMaskLayer = memo(function VisionMaskLayer({
   animationsEnabled?: boolean;
 }) {
   const segments = useMemo(() => wallsToSegments(scene.walls), [scene.walls]);
-  const enabledLights = useMemo(() => scene.lights.filter((light) => light.enabled), [scene.lights]);
+  const coverage = useLightCoverage(scene, ftToPx);
   const time = useAnimationClock(animationsEnabled && sceneHasAnimatedLight(scene));
   const dark = sceneDarkness(scene, darkness);
   const ambientReveal = 1 - dark; // how much the map shows in a viewer's LOS before lights
@@ -231,42 +278,55 @@ export const VisionMaskLayer = memo(function VisionMaskLayer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [tokenKey, segments, halfExtent],
   );
+  const visiblePolys = useMemo(() => polys.filter((p) => p && p.length >= 3), [polys]);
 
   return (
     <Layer listening={false}>
       <Rect x={-2000} y={-2000} width={scene.width + 4000} height={scene.height + 4000} fill="#04050a" />
+      {/* Ambient + lit areas: erased ONCE inside the UNION of all viewer LOS polygons.
+          (The old per-token replay compounded destination-out in the falloff fringe —
+          (1-a)^N with N vision tokens — so player pools rendered fatter/brighter than the
+          DM's view of the same lights.) Each light is additionally clipped to its own
+          wall coverage, so a lamp no longer shines through a wall between it and the area
+          it lights — matching the DM overlay's geometry exactly. */}
+      {visiblePolys.length > 0 ? (
+        <Group clipFunc={polygonsClip(visiblePolys)}>
+          {ambientReveal > 0.001 ? (
+            <Rect
+              x={-2000}
+              y={-2000}
+              width={scene.width + 4000}
+              height={scene.height + 4000}
+              fill="#000"
+              opacity={ambientReveal}
+              globalCompositeOperation="destination-out"
+            />
+          ) : null}
+          {coverage.map(({ light, poly }) =>
+            poly.length < 3 ? null : (
+              <Group key={light.id} clipFunc={polygonClip(poly)}>
+                <LightReveal light={light} ftToPx={ftToPx} time={time} />
+              </Group>
+            ),
+          )}
+        </Group>
+      ) : null}
+      {/* Darkvision: per token, clipped to that token's OWN line of sight. */}
       {tokens.map((token, index) => {
         const poly = polys[index];
-        if (!poly || poly.length < 3) {
+        const darkvisionR = (token.vision?.rangeFt ?? 0) * ftToPx;
+        if (!poly || poly.length < 3 || darkvisionR <= 0) {
           return null;
         }
-        const darkvisionR = (token.vision?.rangeFt ?? 0) * ftToPx;
-        // Within this viewer's line of sight: ambient day-light ∪ its darkvision ∪ every lit area.
         return (
           <Group key={token.id} clipFunc={polygonClip(poly)}>
-            {ambientReveal > 0.001 ? (
-              <Rect
-                x={-2000}
-                y={-2000}
-                width={scene.width + 4000}
-                height={scene.height + 4000}
-                fill="#000"
-                opacity={ambientReveal}
-                globalCompositeOperation="destination-out"
-              />
-            ) : null}
-            {darkvisionR > 0 ? (
-              <Circle
-                x={token.x}
-                y={token.y}
-                radius={darkvisionR}
-                globalCompositeOperation="destination-out"
-                {...radialFill(darkvisionR, eraseStops(0.75, true, 1))}
-              />
-            ) : null}
-            {enabledLights.map((light) => (
-              <LightReveal key={light.id} light={light} ftToPx={ftToPx} time={time} />
-            ))}
+            <Circle
+              x={token.x}
+              y={token.y}
+              radius={darkvisionR}
+              globalCompositeOperation="destination-out"
+              {...radialFill(darkvisionR, eraseStops(0.75, true, 1))}
+            />
           </Group>
         );
       })}
@@ -294,6 +354,82 @@ function useLightCoverage(scene: Scene, ftToPx: number): Array<{ light: Light; p
     [key, segments, ftToPx, scene.gridSize],
   );
 }
+
+/// <summary>
+/// Phase 6.6b coloration pass (modeled on Foundry's illumination/coloration buffer split):
+/// colored lights draw their tint gradients into THIS dedicated layer, whose canvas element
+/// is composited over the scene with a real CSS mix-blend-mode (default "screen" ≈ Foundry's
+/// Adaptive Luminance). Mounted above tokens but BELOW fog and the darkness mask, so hidden
+/// areas still cover it. Uncolored lights render nothing here.
+/// </summary>
+export const LightTintLayer = memo(function LightTintLayer({
+  scene,
+  ftToPx,
+  animationsEnabled = true,
+}: {
+  scene: Scene;
+  ftToPx: number;
+  animationsEnabled?: boolean;
+}) {
+  const layerRef = useRef<Konva.Layer>(null);
+  const blendMode = scene.lightBlendMode ?? "screen";
+  const coverage = useLightCoverage(scene, ftToPx);
+  const coloredLights = coverage.filter(({ light }) => light.color && hexToRgb(light.color));
+  const time = useAnimationClock(
+    animationsEnabled &&
+      coloredLights.some(
+        ({ light }) =>
+          light.animation && light.animation.type !== "none" && (light.animation.speed ?? 1) > 0,
+      ),
+  );
+
+  // The whole point: blend this layer's canvas against everything painted beneath it.
+  // ("none" = fog-of-war only; MapCanvas doesn't mount us then, but guard anyway.)
+  useEffect(() => {
+    const el = layerRef.current?.getCanvas()._canvas;
+    if (el) {
+      el.style.mixBlendMode = blendMode === "none" ? "" : blendMode;
+    }
+    return () => {
+      if (el) {
+        el.style.mixBlendMode = "";
+      }
+    };
+  }, [blendMode]);
+
+  return (
+    <Layer ref={layerRef} listening={false}>
+      {coloredLights.map(({ light, poly }) => {
+        if (poly.length < 3) return null;
+        const rgb = hexToRgb(light.color!);
+        if (!rgb) return null;
+        const { radiusMul, peak } = animModulation(light, time);
+        const dimPx = Math.max(0, light.dimR * ftToPx * radiusMul);
+        const strength = (light.colorIntensity ?? 0.5) * peak;
+        if (dimPx <= 0 || strength <= 0.01) return null;
+        const brightFrac = light.dimR > 0 ? Math.min(light.brightR / light.dimR, 1) : 1;
+        const angle = light.angle ?? 360;
+        const fill = radialFill(dimPx, tintStops(rgb, brightFrac, light.gradual !== false, strength));
+        return (
+          <Group key={light.id} clipFunc={polygonClip(poly)}>
+            {angle < 360 ? (
+              <Wedge
+                x={light.x}
+                y={light.y}
+                radius={dimPx}
+                angle={angle}
+                rotation={(light.rotation ?? 0) - angle / 2}
+                {...fill}
+              />
+            ) : (
+              <Circle x={light.x} y={light.y} radius={dimPx} {...fill} />
+            )}
+          </Group>
+        );
+      })}
+    </Layer>
+  );
+});
 
 /// <summary>
 /// The DM's dynamic-lighting overview (shown when a scene has dynamic lighting on and the
@@ -399,6 +535,8 @@ export const WallsLightsEditor = memo(function WallsLightsEditor({
 }) {
   // Hover hint: shows the "double-click / right-click / drag" affordances above a marker.
   const [hoveredLightId, setHoveredLightId] = useState<string | null>(null);
+  // Live ring-resize draft: radii shown while dragging a reach ring; committed on release.
+  const [resize, setResize] = useState<{ id: string; brightR: number; dimR: number } | null>(null);
 
   return (
     <Layer listening={wallsActive || lightsActive}>
@@ -432,11 +570,47 @@ export const WallsLightsEditor = memo(function WallsLightsEditor({
 
       {scene.lights.map((light) => {
         const angle = light.angle ?? 360;
-        const dimPx = light.dimR * ftToPx;
-        const brightPx = light.brightR * ftToPx;
+        // Radii come from the live resize draft while a ring is being dragged.
+        const shown = resize?.id === light.id ? resize : light;
+        const dimPx = shown.dimR * ftToPx;
+        const brightPx = shown.brightR * ftToPx;
         const directed = angle < 360;
         const wedgeRot = (light.rotation ?? 0) - angle / 2;
-        const ringStroke = light.color ?? "#ffd166";
+        // Neutral gold so the rings read as edit-UI, not as part of the light itself.
+        const ringStroke = "#ffd166";
+
+        // Ring drag = resize: the ring is pinned in place (dragBoundFunc) and we read the
+        // pointer's distance from the light center instead, snapped to 5 ft.
+        const ringResizeProps = (kind: "bright" | "dim") => ({
+          name: "map-handle", // the stage's tool handler skips map-handles (no new light placed)
+          draggable: true,
+          dragBoundFunc: pinToParentCenter,
+          hitStrokeWidth: 12,
+          onDragStart: (e: Konva.KonvaEventObject<DragEvent>) => {
+            e.cancelBubble = true;
+            setResize({ id: light.id, brightR: light.brightR, dimR: light.dimR });
+          },
+          onDragMove: (e: Konva.KonvaEventObject<DragEvent>) => {
+            e.cancelBubble = true;
+            const p = e.target.getStage()?.getRelativePointerPosition();
+            if (!p) return;
+            const ft = Math.round(Math.hypot(p.x - light.x, p.y - light.y) / ftToPx / 5) * 5;
+            setResize(
+              kind === "bright"
+                ? { id: light.id, brightR: Math.max(0, ft), dimR: Math.max(light.dimR, ft) }
+                : { id: light.id, brightR: light.brightR, dimR: Math.max(5, light.brightR, ft) },
+            );
+          },
+          onDragEnd: (e: Konva.KonvaEventObject<DragEvent>) => {
+            e.cancelBubble = true;
+            e.target.position({ x: 0, y: 0 });
+            if (resize && resize.id === light.id) {
+              onMoveLight({ ...light, brightR: resize.brightR, dimR: resize.dimR });
+            }
+            setResize(null);
+          },
+        });
+
         return (
           <Group
             key={light.id}
@@ -445,49 +619,64 @@ export const WallsLightsEditor = memo(function WallsLightsEditor({
             draggable={lightsActive}
             onMouseEnter={() => lightsActive && setHoveredLightId(light.id)}
             onMouseLeave={() => setHoveredLightId((id) => (id === light.id ? null : id))}
-            onDragEnd={(e) => onMoveLight({ ...light, x: e.target.x(), y: e.target.y() })}
+            onDragEnd={(e) => {
+              // Ring drags bubble here too — only commit a MOVE for the group itself.
+              if (e.target !== e.currentTarget) return;
+              onMoveLight({ ...light, x: e.target.x(), y: e.target.y() });
+            }}
             onDblClick={() => onConfigureLight?.(light)}
             onContextMenu={(e) => {
               e.evt.preventDefault();
               onDeleteLight(light.id);
             }}
           >
-            {/* Faint reach rings (or wedges) so the DM sees a light's coverage + facing. */}
-            {directed ? (
-              <>
-                <Wedge
-                  radius={brightPx}
-                  angle={angle}
-                  rotation={wedgeRot}
-                  stroke={ringStroke}
-                  strokeWidth={1}
-                  opacity={0.35}
-                  listening={false}
-                />
-                <Wedge
-                  radius={dimPx}
-                  angle={angle}
-                  rotation={wedgeRot}
-                  stroke={ringStroke}
-                  strokeWidth={1}
-                  opacity={0.18}
-                  dash={[8, 8]}
-                  listening={false}
-                />
-              </>
-            ) : (
-              <>
-                <Circle radius={brightPx} stroke={ringStroke} strokeWidth={1} opacity={0.35} listening={false} />
-                <Circle
-                  radius={dimPx}
-                  stroke={ringStroke}
-                  strokeWidth={1}
-                  opacity={0.18}
-                  dash={[8, 8]}
-                  listening={false}
-                />
-              </>
-            )}
+            {/* Reach rings (or wedges): coverage feedback + drag-to-resize handles —
+                only while the lights tool is active (otherwise they read as a rendering
+                artifact: a mystery outline around every light). Solid = bright radius,
+                dashed = dim radius. */}
+            {lightsActive ? (
+              directed ? (
+                <>
+                  <Wedge
+                    radius={brightPx}
+                    angle={angle}
+                    rotation={wedgeRot}
+                    stroke={ringStroke}
+                    strokeWidth={1}
+                    opacity={0.35}
+                    {...ringResizeProps("bright")}
+                  />
+                  <Wedge
+                    radius={dimPx}
+                    angle={angle}
+                    rotation={wedgeRot}
+                    stroke={ringStroke}
+                    strokeWidth={1}
+                    opacity={0.18}
+                    dash={[8, 8]}
+                    {...ringResizeProps("dim")}
+                  />
+                </>
+              ) : (
+                <>
+                  <Circle
+                    radius={brightPx}
+                    stroke={ringStroke}
+                    strokeWidth={1}
+                    opacity={0.35}
+                    {...ringResizeProps("bright")}
+                  />
+                  <Circle
+                    radius={dimPx}
+                    stroke={ringStroke}
+                    strokeWidth={1}
+                    opacity={0.18}
+                    dash={[8, 8]}
+                    {...ringResizeProps("dim")}
+                  />
+                </>
+              )
+            ) : null}
             <Circle
               name="map-handle"
               radius={9}
@@ -496,11 +685,23 @@ export const WallsLightsEditor = memo(function WallsLightsEditor({
               strokeWidth={1.5}
               hitStrokeWidth={lightsActive ? 14 : 0}
             />
-            {hoveredLightId === light.id ? (
-              <Label y={-30} offsetX={112} listening={false}>
+            {resize?.id === light.id ? (
+              <Label y={-30} offsetX={60} listening={false}>
                 <Tag fill="#1a1408" opacity={0.92} cornerRadius={3} />
                 <Text
-                  text="Dbl-click: edit · R-click: delete · drag: move"
+                  text={`${resize.brightR} / ${resize.dimR} ft`}
+                  fontSize={11}
+                  padding={5}
+                  fill="#ffd166"
+                  width={120}
+                  align="center"
+                />
+              </Label>
+            ) : hoveredLightId === light.id ? (
+              <Label y={-42} offsetX={112} listening={false}>
+                <Tag fill="#1a1408" opacity={0.92} cornerRadius={3} />
+                <Text
+                  text={"Dbl-click: edit · R-click: delete\nDrag: move · Drag a ring: resize"}
                   fontSize={11}
                   padding={5}
                   fill="#ffd166"

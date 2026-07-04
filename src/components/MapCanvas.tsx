@@ -25,7 +25,7 @@ import { RulerShape } from "../map/tools/measure";
 import type { ToolPointerEvent, ToolRuntime } from "../map/tools/types";
 import { MapToolbar } from "./MapToolbar";
 import { FogLayer } from "./MapFog";
-import { DmLightingOverlay, VisionMaskLayer, WallsLightsEditor } from "./MapVision";
+import { DmLightingOverlay, LightTintLayer, VisionMaskLayer, WallsLightsEditor } from "./MapVision";
 import { LightConfigPanel } from "./LightConfigPanel";
 import { readLocalFlag, writeLocalFlag } from "../lib/localFlags";
 import {
@@ -51,10 +51,19 @@ function sceneDarkness(scene: { darkness?: number; globalIllumination: boolean }
 /**
  * Eases a displayed value toward `target`, scheduling frames only while they differ — so a
  * settled value costs nothing. Drives the smooth day↔night darkness transition for everyone.
+ * When `snapKey` changes (scene id — i.e. join or scene switch) the value jumps instantly to
+ * `target` with no animation, so darkness/fog loads in place rather than flashing the map.
  */
-function useEased(target: number, rate = 2.5): number {
+function useEased(target: number, snapKey: string, rate = 2.5): number {
   const [value, setValue] = useState(target);
   const valueRef = useRef(target);
+  const snapRef = useRef(snapKey);
+  if (snapRef.current !== snapKey) {
+    // Set-during-render (guarded) — React re-renders with the snapped value before painting.
+    snapRef.current = snapKey;
+    valueRef.current = target;
+    setValue(target);
+  }
   useEffect(() => {
     let raf = 0;
     let last = performance.now();
@@ -413,7 +422,10 @@ export function MapCanvas({
   // ---- Ambient darkness 0..1 + smooth day↔night tween (Phase 6.6) ----
   const committedDarkness = scene ? sceneDarkness(scene) : 0;
   const sliderDarkness = darknessDraft ?? committedDarkness;
-  const displayDarkness = useEased(sliderDarkness);
+  // Snap (no ease) when the scene identity changes — joining a room or switching scenes loads
+  // the darkness state instantly instead of animating in from a lit first frame (which flashed
+  // the whole map before the darkness/fog settled). Same-scene changes (day/night) still ease.
+  const displayDarkness = useEased(sliderDarkness, scene?.id ?? "none");
   // Drop the DM's local draft once the committed value catches up (post round-trip).
   useEffect(() => {
     if (darknessDraft !== null && Math.abs(committedDarkness - darknessDraft) < 0.005) {
@@ -948,6 +960,10 @@ export function MapCanvas({
         onPointerLeave={() => {
           if (drawingArrow.current) {
             commitArrow();
+            return;
+          }
+          if (toolActive) {
+            activeTool.onLeave?.(runtime);
           }
         }}
       >
@@ -956,6 +972,19 @@ export function MapCanvas({
           {mapImg ? (
             <KonvaImage image={mapImg} x={0} y={0} width={scene.width} height={scene.height} />
           ) : null}
+        </Layer>
+
+        {/* Colored-light tint (coloration pass): its canvas is CSS-blended (default screen)
+            directly over the MAP ART ONLY — below the grid, annotations, token art, and
+            name labels, so UI elements stay crisp and untinted. Below fog + the darkness
+            mask, so hidden areas still cover it. Blend "none" = fog-of-war only (no tint). */}
+        {(maskActive || dmLightingActive) && scene.lightBlendMode !== "none" ? (
+          <LightTintLayer scene={scene} ftToPx={ftToPx} animationsEnabled={lightAnimations} />
+        ) : null}
+
+        {/* Grid + annotations: above the light tint, under tokens; annotations erasable
+            (right-click) while the draw tool is active. */}
+        <Layer listening={activeTool.id === "draw"}>
           {gridLines.map((points, index) => (
             <Line
               key={index}
@@ -963,12 +992,9 @@ export function MapCanvas({
               stroke={scene.gridColor}
               opacity={scene.gridOpacity}
               strokeWidth={1}
+              listening={false}
             />
           ))}
-        </Layer>
-
-        {/* Annotations: under tokens; erasable (right-click) while the draw tool is active. */}
-        <Layer listening={activeTool.id === "draw"}>
           {scene.annotations.map((annotation) =>
             // Our own just-committed arrow is hidden until the preview hands off to it.
             annotation.id === pendingArrowId ? null : annotation.kind === "arrow" ? (
@@ -1133,6 +1159,10 @@ export function MapCanvas({
         onDarknessCommit={commitDarkness}
         lightAnimations={lightAnimations}
         onToggleLightAnimations={toggleLightAnimations}
+        lightBlendMode={scene.lightBlendMode ?? "screen"}
+        onLightBlendMode={(mode) =>
+          send({ type: "UPDATE_SCENE", scene: { ...scene, lightBlendMode: mode } })
+        }
         visionPreview={visionPreview}
         onToggleVisionPreview={() => setVisionPreview((v) => !v)}
         wallKind={wallKind}

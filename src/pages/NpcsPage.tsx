@@ -2,6 +2,7 @@ import { useState } from "react";
 import { ActorsPanel } from "../components/ActorsPanel";
 import { SheetCards } from "./SheetCards";
 import { PageShell } from "./PageShell";
+import { PageSwitcher, type PageId } from "./PageSwitcher";
 import type { PanelContext } from "../panels/registry";
 
 /// <summary>
@@ -11,7 +12,15 @@ import type { PanelContext } from "../panels/registry";
 /// and in place side by side (section-reveal eyes included). Kept separate from
 /// the Players page: administration and authoring are different workloads.
 /// </summary>
-export function NpcsPage({ ctx }: { ctx: PanelContext }) {
+export function NpcsPage({
+  ctx,
+  activePage,
+  onNavigate,
+}: {
+  ctx: PanelContext;
+  activePage: PageId;
+  onNavigate: (id: PageId) => void;
+}) {
   const { state, dm } = ctx;
   const [openIds, setOpenIds] = useState<string[]>([]);
 
@@ -23,33 +32,40 @@ export function NpcsPage({ ctx }: { ctx: PanelContext }) {
     .filter((record): record is NonNullable<typeof record> => Boolean(record));
 
   return (
-    <PageShell
-      roster={
-        <ActorsPanel
-          state={state}
-          dm={dm}
-          // On this page, "open" adds the sheet to the side-by-side main area.
-          openSheet={open}
-          dropActorAt={ctx.dropActorAt}
-          filterKind="npc"
-        />
-      }
-    >
-      <SheetCards
-        records={records}
-        isDm
-        roomId={state.roomId}
-        onClose={close}
-        onChange={(id, sheet) => ctx.updateSheet(id, sheet)}
-        onToggleReveal={(id, section, revealed) => dm.setSheetReveal(id, section, revealed)}
-        onRoll={(id, label, modifier, adv) =>
-          ctx.rollDice(`1d20${modifier >= 0 ? `+${modifier}` : modifier}`, {
-            context: { sheetId: id, label },
-            adv,
-          })
-        }
-        emptyHint="Pick an actor from the directory — or create an NPC — to edit its sheet. Open several to compare side by side."
-      />
-    </PageShell>
+    <div className="npcs-page">
+      <div className="chip-tabs npcs-topbar">
+        <PageSwitcher active={activePage} onSelect={onNavigate} className="page-switcher--inline" />
+      </div>
+      <div className="npcs-page-body">
+        <PageShell
+          roster={
+            <ActorsPanel
+              state={state}
+              dm={dm}
+              // On this page, "open" adds the sheet to the side-by-side main area.
+              openSheet={open}
+              dropActorAt={ctx.dropActorAt}
+              filterKind="npc"
+            />
+          }
+        >
+          <SheetCards
+            records={records}
+            isDm
+            roomId={state.roomId}
+            onClose={close}
+            onChange={(id, sheet) => ctx.updateSheet(id, sheet)}
+            onToggleReveal={(id, section, revealed) => dm.setSheetReveal(id, section, revealed)}
+            onRoll={(id, label, modifier, adv) =>
+              ctx.rollDice(`1d20${modifier >= 0 ? `+${modifier}` : modifier}`, {
+                context: { sheetId: id, label },
+                adv,
+              })
+            }
+            emptyHint="Pick an actor from the directory — or create an NPC — to edit its sheet. Open several to compare side by side."
+          />
+        </PageShell>
+      </div>
+    </div>
   );
 }

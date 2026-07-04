@@ -62,6 +62,22 @@ export type Wall = {
   open?: boolean;
 };
 
+/**
+ * How the colored-light tint layer composites over the scene (CSS mix-blend-mode values).
+ * Screen ≈ Foundry's default "Adaptive Luminance": brightens + tints while preserving the
+ * underlying art. plus-lighter = Add (Glow). "none" disables the tint entirely — lights
+ * then only carve visibility out of the darkness (fog-of-war only).
+ */
+export const LIGHT_BLEND_MODES = [
+  "screen",
+  "overlay",
+  "soft-light",
+  "multiply",
+  "plus-lighter",
+  "none",
+] as const;
+export type LightBlendMode = (typeof LIGHT_BLEND_MODES)[number];
+
 /** Per-light animation (Phase 6.6). Only runs while the light is enabled + type !== "none". */
 export type LightAnimation = {
   type: "none" | "flicker" | "pulse";
@@ -142,6 +158,8 @@ export type Scene = {
    * overlay opacity when dynamic lighting is on. Migrated from `globalIllumination` when absent.
    */
   darkness?: number;
+  /** How colored-light tint composites over the scene (default "screen"). Phase 6.6b. */
+  lightBlendMode?: LightBlendMode;
 };
 
 export type TokenKind = "player" | "enemy";
@@ -1341,6 +1359,9 @@ export function normalizeScene(scene: Partial<Scene> & Record<string, unknown>):
         : scene.globalIllumination === false
           ? 1
           : 0,
+    lightBlendMode: LIGHT_BLEND_MODES.includes(scene.lightBlendMode as LightBlendMode)
+      ? (scene.lightBlendMode as LightBlendMode)
+      : "screen",
   };
 }
 

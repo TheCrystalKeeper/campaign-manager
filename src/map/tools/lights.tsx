@@ -17,21 +17,21 @@ export const LIGHT_PRESETS = {
     brightR: 5,
     dimR: 10,
     color: "#ffb765",
-    colorIntensity: 0.55,
+    colorIntensity: 0.5,
     animation: { type: "flicker", speed: 0.8, intensity: 0.35 },
   },
   torch: {
     brightR: 20,
     dimR: 40,
     color: "#ff9d5c",
-    colorIntensity: 0.6,
+    colorIntensity: 0.5,
     animation: { type: "flicker", speed: 1, intensity: 0.5 },
   },
   lantern: {
     brightR: 30,
     dimR: 60,
     color: "#ffd9a0",
-    colorIntensity: 0.4,
+    colorIntensity: 0.35,
   },
 } as const;
 

@@ -206,6 +206,13 @@ function check(name: string, ok: boolean, detail = "") {
 
   const day = normalizeScene({ id: "d", globalIllumination: true });
   check("globalIllumination true → darkness 0", day.darkness === 0);
+  check("lightBlendMode defaults to screen", day.lightBlendMode === "screen");
+  const blended = normalizeScene({ id: "b", lightBlendMode: "plus-lighter" } as never);
+  check("lightBlendMode round-trips", blended.lightBlendMode === "plus-lighter");
+  const badBlend = normalizeScene({ id: "bb", lightBlendMode: "difference" } as never);
+  check("invalid lightBlendMode falls back to screen", badBlend.lightBlendMode === "screen");
+  const fogOnly = normalizeScene({ id: "fo", lightBlendMode: "none" } as never);
+  check("lightBlendMode none (fog-only) round-trips", fogOnly.lightBlendMode === "none");
   const night = normalizeScene({ id: "n", globalIllumination: false });
   check("globalIllumination false → darkness 1", night.darkness === 1);
   const explicit = normalizeScene({ id: "e", globalIllumination: false, darkness: 0.35 } as never);
