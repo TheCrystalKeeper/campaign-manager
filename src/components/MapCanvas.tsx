@@ -206,15 +206,18 @@ function useCrispImage(
   radius: number,
 ): HTMLImageElement | HTMLCanvasElement | null {
   const dpr = typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
-  // Cover-fit crops to the token's SHORTER image side, so scale the target up by the aspect
-  // ratio to keep that side well-resolved. Round UP to a 64px step: `ceil` never undershoots
-  // the max on-screen size (rounding to nearest could land below it and upscale → blur); the
-  // step keeps small radius tweaks from churning the cached copy.
+  // Target the token's largest on-screen size × a SUPERSAMPLE factor: a ~1:1 copy drawn with
+  // smoothing at a subpixel position looks soft, so we render at 2× and let it downsample to
+  // a clean, sharp result. Cover-fit crops to the shorter image side, so also scale by the
+  // aspect ratio to keep that side well-resolved. Round UP to a 64px step: `ceil` never
+  // undershoots (nearest could land below and upscale → blur); the step keeps small radius
+  // tweaks from churning the cached copy.
+  const SUPERSAMPLE = 2;
   const aspect = img ? (img.naturalWidth || img.width) / (img.naturalHeight || img.height) : 1;
   const longSide = Number.isFinite(aspect) && aspect > 0 ? Math.max(aspect, 1 / aspect) : 1;
   const maxSide = Math.min(
     2048,
-    Math.max(128, Math.ceil((radius * 2 * MAX_VIEWPORT_SCALE * dpr * longSide) / 64) * 64),
+    Math.max(128, Math.ceil((radius * 2 * MAX_VIEWPORT_SCALE * dpr * longSide * SUPERSAMPLE) / 64) * 64),
   );
   return useMemo(() => (img ? downscaleImage(img, maxSide) : null), [img, maxSide]);
 }

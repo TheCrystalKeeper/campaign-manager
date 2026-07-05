@@ -1462,20 +1462,42 @@ the fixed recipe (GameState field → normalize → message → redaction → ca
 > players free via `redactStateFor`'s `...state` spread. Covered by `smoke-phase7.mjs` (+3 checks:
 > player can't toggle, move rejected when off, arrow rejected when off).
 > - **Crisp token images (**`sceneUtils.ts` + `MapCanvas.tsx`**).** Uploaded token portraits
-> looked soft/low-res on the board: the full-size source was minified into a ~50px token in one
-> pass, and Chrome's default `imageSmoothingQuality: "low"` yields a blurry downsample. New
-> `downscaleImage(source, maxSide)` pre-shrinks via **stepped halving** with `"high"` smoothing;
-> a `useCrispImage(img, radius)` hook (in `TokenNode`) sizes the copy to the token's largest
-> on-screen footprint (`radius·2 × MAX_VIEWPORT_SCALE × devicePixelRatio`, 64px-stepped, ≤2048)
-> so it stays sharp to max zoom without re-rendering while zooming, and feeds it to both the
-> framed (`fillPatternImage`) and raw (`KonvaImage`) paths. Source-authored art (upload/R2) is
-> unchanged — this is purely a client render-quality fix. *(Follow-ups: the step rounds **up**
-> (`Math.ceil`, floor 128) — nearest-rounding could land below the token's max-zoom size and
-> upscale → blur when zoomed in; and every Konva layer's context is set to
-> `imageSmoothingQuality: "high"` on mount + resize, since the browser default `"low"` softens
-> downscaled images even at normal zoom. Verified: uploads are stored **uncompressed** — dev
-> writes raw bytes to disk, prod `UPLOADS.put(bytes)` to R2; the client sends the original file
-> via `readAsDataURL`, no re-encode.)*
+> looked soft/low-res on the board. Root causes, fixed in layers:
+>   1. **Framed tokens rendered via a Konva fill pattern** (`fillPatternImage`) — which both
+>      *stretched* non-square images (non-uniform `fillPatternScale`) and *ignored*
+>      `imageSmoothingQuality`, so no quality setting could reach them. Rewrote them as a
+>      **clipped `KonvaImage` with cover-fit** (`clipTokenShape` + `TokenShapePrimitive` in
+>      `TokenShapeNode`): `drawImage` (honors smoothing, preserves aspect, crops overflow) with
+>      the outline + glow drawn on top. Raw tokens already used `KonvaImage`.
+>   2. **Chrome defaults `imageSmoothingQuality` to `"low"`.** A `useEffect` sets it to `"high"`
+>      on every layer's scene canvas **and the stage's shared `bufferCanvas`** (a token has
+>      fill+stroke, so Konva downsamples it through that buffer, not the scene canvas) — re-applied
+>      on stage resize, which resets context state.
+>   3. **Sub-pixel ~1:1 draws smoothed soft.** `useCrispImage(img, radius)` makes a
+>      high-quality **stepped-halving** copy (`downscaleImage`) sized to the token's max on-screen
+>      footprint (`radius·2 × MAX_VIEWPORT_SCALE × devicePixelRatio × aspect`) times a
+>      **`SUPERSAMPLE`** factor (2×), rounded **up** to a 64px step (`ceil`, floor 128, ≤2048) so
+>      it never undershoots (→ upscale blur) and downsamples cleanly. Source art (upload/R2) is
+>      untouched — uploads are stored **uncompressed** (dev writes raw bytes to disk; prod
+>      `UPLOADS.put(bytes)` to R2; client sends the original via `readAsDataURL`).
+>
+>   **Tuning knobs (all client-render only; dev hot-reloads on save — no re-upload needed):**
+>   - **Sharpness / supersampling** — `useCrispImage` in `MapCanvas.tsx`, `const SUPERSAMPLE = 2`.
+>     Renders the portrait at N× its on-screen size then downsamples. **Sharper →** raise to `3`/`4`
+>     (crisper edges, ~N² more memory/GPU per token; diminishing returns past ~3–4).
+>   - **Large/zoomed-token resolution cap** — the `Math.min(2048, Math.max(128, …))` on the line
+>     below SUPERSAMPLE. `2048` = max longest side of the copy (raise to `3072`/`4096` if big
+>     tokens look capped, more memory); `128` = floor.
+>   - **How far you can zoom in** — `MAX_VIEWPORT_SCALE` in `src/lib/sceneUtils.ts` (`= 2`). Caps
+>     board zoom; a token is small on screen, so this bounds how much 4K detail you can ever see.
+>     **See more detail →** raise to `3`/`4` (**trade-off:** map images may soften if zoomed past
+>     their own resolution; tokens stay sharp because `useCrispImage` reads this same constant, so
+>     the copy's resolution scales up with it). `MIN_VIEWPORT_SCALE` above it caps zoom-out.
+>
+>   **Quick guidance:**
+>   - "Soft — make it crisp at normal zoom" → bump **SUPERSAMPLE** to `3`.
+>   - "I want to zoom in and inspect the 4K detail" → raise **MAX_VIEWPORT_SCALE** to `3`–`4`.
+>   - "Big tokens still look capped" → raise the **2048** cap.
 > - **Coin flip arc (**`src/dice/engine.ts`**).** The dice scene's camera is orthographic
 > top-down, so a coin rising in world-Y was invisible ("stays the same size/z"). A coin-only
 > cue in `applyTrackFrame` fakes the depth: it **grows** toward the camera and **lifts
