@@ -1765,6 +1765,12 @@ body.pointer-dragging * {
   flex-wrap: wrap;
   gap: 0.2rem;
 }
+.map-opt-btn--square {
+  flex: 0 0 auto;
+  width: 1.9rem;
+  padding: 0;
+  font-size: 1rem;
+}
 .map-opt-slider {
   width: 100%;
   margin: 0.15rem 0 0.1rem;

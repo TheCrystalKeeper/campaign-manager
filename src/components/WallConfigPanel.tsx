@@ -27,6 +27,7 @@ const RESTRICTIONS: Array<{ id: WallRestriction; label: string }> = [
   { id: "none", label: "None" },
   { id: "normal", label: "Block" },
   { id: "limited", label: "Limited" },
+  { id: "proximity", label: "Prox" },
 ];
 const MOVE_OPTIONS: Array<{ id: WallRestriction; label: string }> = [
   { id: "none", label: "None" },
@@ -132,13 +133,29 @@ export function WallConfigPanel({
           <Seg value={wall.light} options={RESTRICTIONS} onChange={(v) => onChange({ light: v, preset: "custom" })} />
         </div>
         <div className="field">
-          <label title="Blocks token movement (players; the DM always passes).">Movement</label>
+          <label title="Blocks token movement (players; the DM always passes). Proximity/Limited block like a wall.">
+            Movement
+          </label>
           <Seg
-            value={wall.move === "limited" ? "normal" : wall.move}
+            value={wall.move === "normal" || wall.move === "none" ? wall.move : "normal"}
             options={MOVE_OPTIONS}
             onChange={(v) => onChange({ move: v, preset: "custom" })}
           />
         </div>
+        {wall.sight === "proximity" || wall.light === "proximity" ? (
+          <div className="field">
+            <label title="A 'window': sight/light pass only when the source is within this range.">
+              Proximity range (ft)
+            </label>
+            <input
+              type="number"
+              min={0}
+              step={5}
+              value={wall.threshold ?? 10}
+              onChange={(e) => onChange({ threshold: Math.max(0, Number(e.target.value) || 0) })}
+            />
+          </div>
+        ) : null}
 
         <div className="field">
           <label title="One-way: block only when the source is on the arrow's side.">Direction</label>

@@ -32,14 +32,22 @@ const LIGHT_PRESET_LIST: Array<{ id: LightPreset; label: string }> = [
   { id: "torch", label: "Torch" },
   { id: "lantern", label: "Lantern" },
 ];
-/** Labels for the walls tool's draw brushes (channel presets + a plain door). */
-const WALL_BRUSH_LABELS: Record<WallBrush, string> = {
-  normal: "🧱 Wall (blocks all)",
-  terrain: "🌿 Terrain (see past one)",
-  invisible: "🪟 Invisible (blocks movement)",
-  ethereal: "👻 Ethereal (blocks sight)",
-  window: "🔲 Window (partial sight)",
-  door: "🚪 Door",
+/** Icon-only button glyphs for the walls tool's draw brushes (full names live in the tooltip). */
+const WALL_BRUSH_ICONS: Record<WallBrush, string> = {
+  normal: "🧱",
+  terrain: "🌿",
+  invisible: "🪟",
+  ethereal: "👻",
+  window: "🔲",
+  door: "🚪",
+};
+const WALL_BRUSH_TITLES: Record<WallBrush, string> = {
+  normal: "Wall — blocks sight, light, and movement",
+  terrain: "Terrain — see/light past one, blocked by two (foliage, fog)",
+  invisible: "Invisible — blocks movement only (glass, force fields)",
+  ethereal: "Ethereal — blocks sight & light, not movement (curtains, veils)",
+  window: "Window — partial sight, light and movement pass",
+  door: "Door — openable; blocks everything while closed",
 };
 
 type MapToolbarProps = {
@@ -87,11 +95,12 @@ type MapToolbarProps = {
   onLightBlendMode: (mode: LightBlendMode) => void;
   visionPreview: boolean;
   onToggleVisionPreview: () => void;
-  /** Walls tool (Phase 6.9): draw vs select mode, the draw brush, clone + movement toggle. */
-  wallMode: "draw" | "select";
-  onWallMode: (mode: "draw" | "select") => void;
+  /** Walls tool (Phase 6.9b): the draw brush (channel preset / door), clone + movement toggle. */
   wallBrush: WallBrush;
   onWallBrush: (brush: WallBrush) => void;
+  /** DM toggle: show wall lines while the walls tool is inactive (persisted per client). */
+  showWalls: boolean;
+  onToggleShowWalls: () => void;
   wallCount: number;
   wallSelectionCount: number;
   onCloneWalls: () => void;
@@ -109,23 +118,25 @@ type MapToolbarProps = {
   history?: History;
 };
 
-/** A uniform option button (equal-width within its row). */
+/** A uniform option button (equal-width within its row; `square` = fixed-size icon button). */
 function OptBtn({
   active,
   onClick,
   title,
   disabled,
+  square,
   children,
 }: {
   active?: boolean;
   onClick: () => void;
   title: string;
   disabled?: boolean;
+  square?: boolean;
   children: ReactNode;
 }) {
   return (
     <button
-      className={`map-opt-btn${active ? " btn-active" : ""}`}
+      className={`map-opt-btn${square ? " map-opt-btn--square" : ""}${active ? " btn-active" : ""}`}
       title={title}
       disabled={disabled}
       onClick={onClick}
@@ -183,10 +194,10 @@ export function MapToolbar({
   onLightBlendMode,
   visionPreview,
   onToggleVisionPreview,
-  wallMode,
-  onWallMode,
   wallBrush,
   onWallBrush,
+  showWalls,
+  onToggleShowWalls,
   wallCount,
   wallSelectionCount,
   onCloneWalls,
@@ -470,50 +481,38 @@ export function MapToolbar({
       {activeToolId === "walls" && isDm ? (
         <div className="map-toolbar-options">
           {lightingRow}
-          <Label>Mode</Label>
+          <Label>Draw type</Label>
+          <div className="map-opt-row map-opt-swatches">
+            {WALL_BRUSHES.map((b) => (
+              <OptBtn
+                key={b}
+                square
+                active={wallBrush === b}
+                title={WALL_BRUSH_TITLES[b]}
+                onClick={() => onWallBrush(b)}
+              >
+                {WALL_BRUSH_ICONS[b]}
+              </OptBtn>
+            ))}
+          </div>
           <Row>
             <OptBtn
-              active={wallMode === "draw"}
-              title="Draw new walls — click to chain segments, drag for one; Esc ends the chain"
-              onClick={() => onWallMode("draw")}
+              title="Duplicate the selected walls (Ctrl+D)"
+              disabled={wallSelectionCount === 0}
+              onClick={onCloneWalls}
             >
-              ✏️ Draw
-            </OptBtn>
-            <OptBtn
-              active={wallMode === "select"}
-              title="Select & edit walls — box-select, drag endpoints/body, double-click to configure"
-              onClick={() => onWallMode("select")}
-            >
-              ⟐ Select
+              ⧉ Clone{wallSelectionCount ? ` (${wallSelectionCount})` : ""}
             </OptBtn>
           </Row>
-          {wallMode === "draw" ? (
-            <Row>
-              <select
-                className="map-blend-select"
-                value={wallBrush}
-                title="What a fresh wall is drawn as"
-                onChange={(e) => onWallBrush(e.target.value as WallBrush)}
-                style={{ flex: 1 }}
-              >
-                {WALL_BRUSHES.map((b) => (
-                  <option key={b} value={b}>
-                    {WALL_BRUSH_LABELS[b]}
-                  </option>
-                ))}
-              </select>
-            </Row>
-          ) : (
-            <Row>
-              <OptBtn
-                title="Duplicate the selected walls (Ctrl+D)"
-                disabled={wallSelectionCount === 0}
-                onClick={onCloneWalls}
-              >
-                ⧉ Clone{wallSelectionCount ? ` (${wallSelectionCount})` : ""}
-              </OptBtn>
-            </Row>
-          )}
+          <Row>
+            <OptBtn
+              active={showWalls}
+              title="Show wall lines on the board while the walls tool is inactive (always shown while editing)"
+              onClick={onToggleShowWalls}
+            >
+              {showWalls ? "👁 Walls shown off-tool" : "🚫 Walls hidden off-tool"}
+            </OptBtn>
+          </Row>
           <Row>
             <OptBtn
               active={wallsBlockMovement}
@@ -533,9 +532,8 @@ export function MapToolbar({
             </OptBtn>
           </Row>
           <span className="map-toolbar-hint">
-            {wallMode === "draw"
-              ? "Click to chain segments · drag for a single · endpoints snap · Esc ends the chain"
-              : "Click or box-select · drag endpoints/body to move · dbl-click to configure · right-click deletes · Ctrl+D clones"}
+            Click empty to draw · drag dots/line to move · click to select · Shift +select · Alt run ·
+            Shift = precise · right-click/Esc ends · X deletes · Ctrl+D clones · dbl-click configures
           </span>
         </div>
       ) : null}

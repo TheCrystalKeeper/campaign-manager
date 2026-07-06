@@ -60,8 +60,10 @@ export type SceneFog = {
  * - `normal` — fully blocks.
  * - `limited` — "terrain" semantics: sight/light passes ONE limited wall but is blocked by a
  *   second limited (or any normal) wall behind it. For movement, `limited` is treated as `normal`.
+ * - `proximity` — "window": blocks only when the source is BEYOND the wall's `threshold` distance
+ *   (sight/light only; movement treats it as a normal block). Binary — no attenuation yet.
  */
-export const WALL_RESTRICTIONS = ["none", "normal", "limited"] as const;
+export const WALL_RESTRICTIONS = ["none", "normal", "limited", "proximity"] as const;
 export type WallRestriction = (typeof WALL_RESTRICTIONS)[number];
 
 /** One-way occlusion: `both` sides, or only when the source is on the wall's `left`/`right`
@@ -104,9 +106,14 @@ export type Wall = {
   door?: WallDoor;
   /** Door state; default `closed`. Only meaningful when `door !== "none"`. */
   state?: WallDoorState;
+  /** Proximity range in FEET for `proximity` channels (window walls). Default ~10. */
+  threshold?: number;
   /** UI tag only — channels are authoritative. */
   preset?: WallPreset;
 };
+
+/** Micro-snap: each grid cell subdivides into this many steps when placing wall endpoints. */
+export const WALL_SNAP_SUBDIVISIONS = 8;
 
 /** Preset → channel bundle (single source of truth for the config panel + toolbar). */
 export const WALL_PRESETS: Record<
@@ -117,19 +124,35 @@ export const WALL_PRESETS: Record<
   terrain: { sight: "limited", light: "limited", move: "none", dir: "both" }, // foliage/fog: see past one
   invisible: { sight: "none", light: "none", move: "normal", dir: "both" }, // glass: blocks movement only
   ethereal: { sight: "normal", light: "normal", move: "none", dir: "both" }, // curtain: blocks senses only
-  window: { sight: "limited", light: "normal", move: "normal", dir: "both" }, // partly see-through barrier
+  window: { sight: "proximity", light: "proximity", move: "normal", dir: "both" }, // see/light through only up close
 };
+
+/** Default proximity range (feet) a freshly drawn window wall gets. */
+export const DEFAULT_WALL_THRESHOLD = 10;
 
 /** What the walls tool draws — a channel preset or a plain door. */
 export const WALL_BRUSHES = ["normal", "terrain", "invisible", "ethereal", "window", "door"] as const;
 export type WallBrush = (typeof WALL_BRUSHES)[number];
 
+/** Display color per brush (mirrors `wallVisual` in MapVision — used by the draw preview). */
+export const WALL_BRUSH_COLORS: Record<WallBrush, string> = {
+  normal: "#f2e9a0",
+  terrain: "#81b90c",
+  invisible: "#5bc8e6",
+  ethereal: "#b98cf0",
+  window: "#c7d8ff",
+  door: "#5b9bf0",
+};
+
 /** Channel/door fields for a freshly drawn wall of the given brush (merged onto endpoints). */
 export function wallFromBrush(
   brush: WallBrush,
-): Pick<Wall, "sight" | "light" | "move" | "dir" | "door" | "state" | "preset"> {
+): Pick<Wall, "sight" | "light" | "move" | "dir" | "door" | "state" | "preset" | "threshold"> {
   if (brush === "door") {
     return { ...WALL_PRESETS.normal, door: "door", state: "closed" };
+  }
+  if (brush === "window") {
+    return { ...WALL_PRESETS.window, preset: "window", threshold: DEFAULT_WALL_THRESHOLD };
   }
   return { ...WALL_PRESETS[brush], preset: brush };
 }
@@ -2291,6 +2314,12 @@ export function sanitizeWall(wall: unknown): Wall | null {
   if (door !== "none") {
     result.door = door;
     result.state = state;
+  }
+  // Proximity range (only meaningful when a channel is `proximity`, but keep it if provided).
+  if (typeof w.threshold === "number" && Number.isFinite(w.threshold)) {
+    result.threshold = Math.min(Math.max(w.threshold, 0), 1000);
+  } else if (sight === "proximity" || light === "proximity") {
+    result.threshold = DEFAULT_WALL_THRESHOLD;
   }
   if (preset !== "custom") result.preset = preset;
   return result;

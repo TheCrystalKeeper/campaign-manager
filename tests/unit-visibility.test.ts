@@ -142,6 +142,20 @@ function canSee(origin: Point, walls: BlockingSegment[], target: Point, halfExte
 }
 
 // ---------------------------------------------------------------------------
+// 6b. Proximity "window" walls: block a far source, pass a near one (sight/light only).
+// ---------------------------------------------------------------------------
+{
+  // Window wall at x=100 (y −50..50) with a 60px proximity range (ftToPx = 1, threshold = 60).
+  const win = [mkWall({ x1: 100, y1: -50, x2: 100, y2: 50, sight: "proximity", light: "proximity", threshold: 60 })];
+  const sightSegs = wallsToSegments(win, "sight", 1);
+  check("proximity emits a normal segment tagged with proximityPx", sightSegs.length === 1 && sightSegs[0].proximityPx === 60);
+  check("far source is blocked by a window (beyond range)", !canSee({ x: 0, y: 0 }, sightSegs, { x: 200, y: 0 }));
+  check("near source sees through a window (within range)", canSee({ x: 50, y: 0 }, sightSegs, { x: 200, y: 0 }));
+  // Windows still block movement (proximity is sight/light only).
+  check("window blocks movement", movementSegments(win).length === 1);
+}
+
+// ---------------------------------------------------------------------------
 // 7. Corridor: two collinear segments leaving a doorway gap.
 // ---------------------------------------------------------------------------
 {

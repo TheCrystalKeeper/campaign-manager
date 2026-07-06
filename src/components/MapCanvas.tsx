@@ -30,6 +30,8 @@ import {
   type Viewport,
   type Wall,
   type WallBrush,
+  type WallDoorState,
+  WALL_SNAP_SUBDIVISIONS,
 } from "../lib/types";
 import {
   clampViewportScale,
@@ -820,23 +822,26 @@ export function MapCanvas({
   /** Fog brush: paint direction + size (radius = gridSize × scale). */
   const [fogMode, setFogMode] = useState<"reveal" | "cover">("reveal");
   const [fogBrushScale, setFogBrushScale] = useState(0.75);
-  /** Walls tool: draw vs select/edit; and what a fresh segment is drawn as. */
-  const [wallMode, setWallMode] = useState<"draw" | "select">("draw");
+  /** Walls tool: what a fresh segment is drawn as (modeless — no Draw/Select toggle). */
   const [wallBrush, setWallBrush] = useState<WallBrush>("normal");
-  /** Selected wall ids (select mode) + which wall's config panel is open. */
+  /** Selected wall ids + which wall's config panel is open. */
   const [selectedWallIds, setSelectedWallIds] = useState<string[]>([]);
   const [editingWallId, setEditingWallId] = useState<string | null>(null);
 
-  /** Snap a world point to a nearby wall endpoint (so chains connect), else the grid corner. */
+  /**
+   * Snap a world point for wall placement/editing: first to a nearby existing endpoint (so chains
+   * join gap-free), else — unless `free` (Shift) — to the grid corner (🧲 Force-snap) or the micro
+   * sub-grid (default).
+   */
   const snapWallPoint = useCallback(
-    (x: number, y: number, excludeId?: string): { x: number; y: number } => {
+    (x: number, y: number, opts?: { excludeId?: string; free?: boolean }): { x: number; y: number } => {
       const walls = sceneWalls ?? [];
       const g = scene?.gridSize ?? 0;
       const thr = Math.max(g * 0.35, 8);
       let best: { x: number; y: number } | null = null;
       let bestD = thr;
       for (const w of walls) {
-        if (w.id === excludeId) continue;
+        if (w.id === opts?.excludeId) continue;
         for (const p of [
           { x: w.x1, y: w.y1 },
           { x: w.x2, y: w.y2 },
@@ -849,26 +854,58 @@ export function MapCanvas({
         }
       }
       if (best) return best;
-      if (snap && scene && g > 0) {
-        return {
-          x: Math.round((x - scene.gridOffsetX) / g) * g + scene.gridOffsetX,
-          y: Math.round((y - scene.gridOffsetY) / g) * g + scene.gridOffsetY,
-        };
-      }
-      return { x, y };
+      if (opts?.free || !scene || g <= 0) return { x, y };
+      // 🧲 Force-snap → grid corners; otherwise micro-snap to the sub-grid.
+      const step = snap ? g : g / WALL_SNAP_SUBDIVISIONS;
+      return {
+        x: Math.round((x - scene.gridOffsetX) / step) * step + scene.gridOffsetX,
+        y: Math.round((y - scene.gridOffsetY) / step) * step + scene.gridOffsetY,
+      };
     },
     [sceneWalls, scene, snap],
   );
-  /** Single-wall click select (Shift toggles it in/out of the selection). */
-  const onSelectWall = useCallback((id: string, additive: boolean) => {
-    setSelectedWallIds((cur) =>
-      additive ? (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]) : [id],
-    );
-  }, []);
-  /** Marquee / empty-click select (replace, or add with Shift). */
-  const onWallSelect = useCallback((ids: string[], additive: boolean) => {
-    setSelectedWallIds((cur) => (additive ? Array.from(new Set([...cur, ...ids])) : ids));
-  }, []);
+  /** Ids of walls transitively joined to `startId` at shared endpoints (Alt-select a run). */
+  const contiguousWallIds = useCallback(
+    (startId: string): string[] => {
+      const walls = sceneWalls ?? [];
+      const key = (x: number, y: number) => `${Math.round(x * 2)},${Math.round(y * 2)}`; // ~0.5px
+      const byPoint = new Map<string, string[]>();
+      for (const w of walls) {
+        for (const k of [key(w.x1, w.y1), key(w.x2, w.y2)]) {
+          (byPoint.get(k) ?? byPoint.set(k, []).get(k)!).push(w.id);
+        }
+      }
+      const wallById = new Map(walls.map((w) => [w.id, w]));
+      const seen = new Set<string>([startId]);
+      const queue = [startId];
+      while (queue.length) {
+        const w = wallById.get(queue.shift()!);
+        if (!w) continue;
+        for (const k of [key(w.x1, w.y1), key(w.x2, w.y2)]) {
+          for (const id of byPoint.get(k) ?? []) {
+            if (!seen.has(id)) {
+              seen.add(id);
+              queue.push(id);
+            }
+          }
+        }
+      }
+      return [...seen];
+    },
+    [sceneWalls],
+  );
+  /** Click-select a wall: Alt = its whole connected run, Shift = add/remove, else replace. */
+  const onSelectWall = useCallback(
+    (id: string, mods: { additive?: boolean; contiguous?: boolean }) => {
+      const ids = mods.contiguous ? contiguousWallIds(id) : [id];
+      setSelectedWallIds((cur) => {
+        if (mods.additive) return Array.from(new Set([...cur, ...ids]));
+        if (mods.contiguous) return ids;
+        return cur.includes(id) && cur.length === 1 ? cur : [id];
+      });
+    },
+    [contiguousWallIds],
+  );
   const onConfigureWall = useCallback((id: string) => setEditingWallId(id), []);
   /** Apply a config-panel field patch to the edited wall (or the whole multi-selection). */
   const applyWallPatch = useCallback(
@@ -916,6 +953,18 @@ export function MapCanvas({
     onUpdateWalls(clones);
     setSelectedWallIds(clones.map((w) => w.id));
   }, [sceneWalls, selectedWallIds, scene, onUpdateWalls]);
+  /** Delete every selected wall (X / Delete). */
+  const deleteSelectedWalls = useCallback(() => {
+    if (selectedWallIds.length === 0) return;
+    for (const id of selectedWallIds) send({ type: "REMOVE_WALL", sceneId, wallId: id });
+    setSelectedWallIds([]);
+    setEditingWallId(null);
+  }, [selectedWallIds, send, sceneId]);
+  /** DM sets a door's exact state (right-click a door glyph to lock/unlock). */
+  const onSetDoorState = useCallback(
+    (id: string, state: WallDoorState) => send({ type: "SET_DOOR_STATE", sceneId, wallId: id, state }),
+    [send, sceneId],
+  );
   // Clear wall selection / config when leaving the walls tool or changing scene.
   useEffect(() => {
     setSelectedWallIds([]);
@@ -932,6 +981,10 @@ export function MapCanvas({
   /** Client toggle: run per-frame light animations (off = low-end escape hatch). */
   const [lightAnimations, setLightAnimations] = useState(() =>
     readCampaignFlag(state.roomId, "light-anim", true, "lightAnimations"),
+  );
+  /** DM toggle: show wall lines while NOT in the walls tool (always shown while editing). */
+  const [showWalls, setShowWalls] = useState(() =>
+    readCampaignFlag(state.roomId, "show-walls", true, "showWalls"),
   );
   /** DM-only: preview dynamic vision as a player would see it. */
   const [visionPreview, setVisionPreview] = useState(false);
@@ -968,6 +1021,12 @@ export function MapCanvas({
   const toggleLightAnimations = useCallback(() => {
     setLightAnimations((on) => {
       writeCampaignFlag(state.roomId, "light-anim", !on);
+      return !on;
+    });
+  }, [state.roomId]);
+  const toggleShowWalls = useCallback(() => {
+    setShowWalls((on) => {
+      writeCampaignFlag(state.roomId, "show-walls", !on);
       return !on;
     });
   }, [state.roomId]);
@@ -1162,7 +1221,7 @@ export function MapCanvas({
       ) {
         return;
       }
-      // Ctrl/Cmd+D clones the selected walls (walls tool, select mode).
+      // Ctrl/Cmd+D clones the selected walls.
       if (
         (event.ctrlKey || event.metaKey) &&
         event.key.toLowerCase() === "d" &&
@@ -1179,6 +1238,16 @@ export function MapCanvas({
       if (event.key === "Escape") {
         setActiveToolId("select");
         setDraft(null);
+        return;
+      }
+      // X / Delete removes the selected wall(s) (walls tool).
+      if (
+        activeToolId === "walls" &&
+        selectedWallIds.length > 0 &&
+        (event.key === "x" || event.key === "X" || event.key === "Delete" || event.key === "Backspace")
+      ) {
+        event.preventDefault();
+        deleteSelectedWalls();
         return;
       }
       // Rotate the selected token's facing: [ / ] nudge 15°, { / } (shift) 45°.
@@ -1215,6 +1284,7 @@ export function MapCanvas({
     activeToolId,
     selectedWallIds,
     onCloneWalls,
+    deleteSelectedWalls,
   ]);
 
   const gridLines = useMemo(() => {
@@ -1259,15 +1329,16 @@ export function MapCanvas({
     snap,
     fogMode,
     fogBrushR,
-    wallMode,
     wallBrush,
-    selectedWallIds,
-    onWallSelect,
     snapWallPoint,
     lightRadii: LIGHT_PRESETS[lightPreset],
     templateKind,
     templatePin,
   };
+
+  // A wall chain is being drawn (walls tool + a placed first vertex) — walls go inert so the next
+  // click lands as a chain vertex instead of grabbing an existing wall.
+  const chainActive = activeTool.id === "walls" && Boolean((draft as { last?: unknown } | null)?.last);
 
   /** Snaps a world point to the nearest grid cell center when snap is on. */
   const snapPoint = (x: number, y: number): { x: number; y: number } => {
@@ -1527,6 +1598,15 @@ export function MapCanvas({
         onWheel={handleWheel}
         onClick={handleStageClick}
         onTap={handleStageClick}
+        onContextMenu={(e) => {
+          // Right-click while drawing a wall chain ends the chain (like Esc) WITHOUT deleting the
+          // wall just placed. Handled on contextmenu (not pointerdown) so the chain is still active
+          // here — walls stay non-interactive, so this right-click can't also trigger a wall delete.
+          if (chainActive) {
+            e.evt.preventDefault();
+            setDraft(null);
+          }
+        }}
         onPointerDown={(e) => {
           if (e.evt.button === 1) {
             startMiddlePan(e);
@@ -1560,7 +1640,10 @@ export function MapCanvas({
             commitArrow();
             return;
           }
-          if (toolActive) {
+          // Only the LEFT button commits a tool gesture — a right-click's pointerup must not
+          // finish a wall segment (it should only end the chain via onContextMenu). onDown is
+          // already left-only, so gate onUp to match.
+          if (toolActive && e.evt.button === 0) {
             toolPointer(activeTool.onUp)(e);
           }
         }}
@@ -1709,7 +1792,8 @@ export function MapCanvas({
             scene={scene}
             ftToPx={ftToPx}
             wallsActive={wallsActive}
-            wallMode={wallMode}
+            chainActive={chainActive}
+            showWalls={showWalls}
             lightsActive={lightsActive}
             selectedWallIds={selectedWallIds}
             onSelectWall={onSelectWall}
@@ -1726,7 +1810,7 @@ export function MapCanvas({
 
         {/* Door controls (all clients — players open unlocked doors; secret doors DM-only). */}
         {scene.walls.some((w) => w.door && w.door !== "none") ? (
-          <DoorLayer scene={scene} isDm={isDm} onToggleDoor={onToggleDoor} />
+          <DoorLayer scene={scene} isDm={isDm} onToggleDoor={onToggleDoor} onSetDoorState={onSetDoorState} />
         ) : null}
 
         {/* Topmost overlay: everyone's live rulers + templates + the active tool's draft. */}
@@ -1817,10 +1901,10 @@ export function MapCanvas({
         }
         visionPreview={visionPreview}
         onToggleVisionPreview={() => setVisionPreview((v) => !v)}
-        wallMode={wallMode}
-        onWallMode={setWallMode}
         wallBrush={wallBrush}
         onWallBrush={setWallBrush}
+        showWalls={showWalls}
+        onToggleShowWalls={toggleShowWalls}
         wallCount={scene.walls.length}
         wallSelectionCount={selectedWallIds.length}
         onCloneWalls={onCloneWalls}

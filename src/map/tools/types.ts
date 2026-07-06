@@ -33,16 +33,10 @@ export type ToolRuntime = {
   fogMode: "reveal" | "cover";
   /** Fog brush radius in world px (already grid-scaled by MapCanvas). */
   fogBrushR: number;
-  /** Walls tool: draw new segments vs select/edit existing ones. */
-  wallMode: "draw" | "select";
   /** Walls tool: what a fresh segment is drawn as (channel preset or a door). */
   wallBrush: WallBrush;
-  /** Currently selected wall ids (marquee / click multi-select). */
-  selectedWallIds: string[];
-  /** Replace/extend the wall selection (used by the marquee + empty-canvas click). */
-  onWallSelect: (ids: string[], additive: boolean) => void;
-  /** Snap a world point to a nearby wall endpoint, else the grid corner (shared with the editor). */
-  snapWallPoint: (x: number, y: number, excludeId?: string) => ToolPoint;
+  /** Snap a world point to a nearby wall endpoint, else micro/grid snap (`free` = Shift-precise). */
+  snapWallPoint: (x: number, y: number, opts?: { excludeId?: string; free?: boolean }) => ToolPoint;
   /** Lights tool: the preset a freshly placed light gets (radii in feet + Phase 6.6 style). */
   lightRadii: Omit<Light, "id" | "x" | "y" | "enabled">;
   /** Templates tool: which area shape to draw. */

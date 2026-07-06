@@ -13,12 +13,16 @@
 export type Point = { x: number; y: number };
 export type Segment = { x1: number; y1: number; x2: number; y2: number };
 
+type WallChannel = "none" | "normal" | "limited" | "proximity";
+
 /** A wall reduced to what the sweep needs on one channel. */
 export type BlockingSegment = Segment & {
   /** "normal" stops the ray outright; "limited" only stops the 2nd-in-a-row. */
   restriction: "normal" | "limited";
   /** One-way occlusion: "both", or blocks only when the origin is on that side. */
   dir: "both" | "left" | "right";
+  /** Proximity ("window"): if set, the wall only blocks when the origin is BEYOND this distance (px). */
+  proximityPx?: number;
 };
 
 /** Minimal wall shape (structural) so this module needn't import the full types. */
@@ -27,12 +31,13 @@ type WallLike = {
   y1: number;
   x2: number;
   y2: number;
-  sight: "none" | "normal" | "limited";
-  light: "none" | "normal" | "limited";
-  move: "none" | "normal" | "limited";
+  sight: WallChannel;
+  light: WallChannel;
+  move: WallChannel;
   dir?: "both" | "left" | "right";
   door?: "none" | "door" | "secret";
   state?: "closed" | "open" | "locked";
+  threshold?: number;
 };
 
 /** Angular nudge (radians) so rays slip just past a corner on either side. */
@@ -47,17 +52,33 @@ function isOpenDoor(w: WallLike): boolean {
 
 /// <summary>
 /// Blocking segments for one occlusion channel ("sight" or "light"). Skips walls that don't
-/// restrict the channel and skips open doors. Each segment carries its restriction + direction
-/// so the sweep can apply "limited" and one-way logic.
+/// restrict the channel and skips open doors. Each segment carries its restriction + direction so
+/// the sweep can apply "limited" and one-way logic. `proximity` walls block as "normal" but carry a
+/// `proximityPx` gate (needs `ftToPx` to convert the wall's feet threshold to world px).
 /// </summary>
-export function wallsToSegments(walls: WallLike[], channel: "sight" | "light"): BlockingSegment[] {
+export function wallsToSegments(
+  walls: WallLike[],
+  channel: "sight" | "light",
+  ftToPx = 1,
+): BlockingSegment[] {
   const out: BlockingSegment[] = [];
   for (const w of walls) {
     const r = w[channel];
     if (r === "none" || isOpenDoor(w)) {
       continue;
     }
-    out.push({ x1: w.x1, y1: w.y1, x2: w.x2, y2: w.y2, restriction: r, dir: w.dir ?? "both" });
+    const seg: BlockingSegment = {
+      x1: w.x1,
+      y1: w.y1,
+      x2: w.x2,
+      y2: w.y2,
+      restriction: r === "limited" ? "limited" : "normal",
+      dir: w.dir ?? "both",
+    };
+    if (r === "proximity") {
+      seg.proximityPx = Math.max(0, (w.threshold ?? 10) * ftToPx);
+    }
+    out.push(seg);
   }
   return out;
 }
@@ -114,6 +135,30 @@ function directionBlocks(seg: BlockingSegment, ox: number, oy: number): boolean 
   return seg.dir === "left" ? cross > 0 : cross < 0;
 }
 
+/// <summary>Shortest distance from a point to a segment (clamped to the segment's ends).</summary>
+export function pointSegmentDistance(px: number, py: number, seg: Segment): number {
+  const vx = seg.x2 - seg.x1;
+  const vy = seg.y2 - seg.y1;
+  const len2 = vx * vx + vy * vy;
+  const t = len2 > 0 ? Math.max(0, Math.min(1, ((px - seg.x1) * vx + (py - seg.y1) * vy) / len2)) : 0;
+  return Math.hypot(px - (seg.x1 + t * vx), py - (seg.y1 + t * vy));
+}
+
+/**
+ * Whether a segment actively occludes a source at (ox, oy) this frame — combines the one-way test
+ * with the proximity ("window") gate: a proximity wall is transparent when the source is within
+ * `proximityPx`, opaque beyond it.
+ */
+function segmentActive(seg: BlockingSegment, ox: number, oy: number): boolean {
+  if (!directionBlocks(seg, ox, oy)) {
+    return false;
+  }
+  if (seg.proximityPx !== undefined && pointSegmentDistance(ox, oy, seg) <= seg.proximityPx) {
+    return false; // window is "open" — source is close enough to see/light through
+  }
+  return true;
+}
+
 /// <summary>
 /// The visibility polygon seen from `origin`, occluded by `walls`, bounded by a square
 /// of half-width `halfExtent` centered on the origin (so unobstructed rays terminate at
@@ -147,11 +192,11 @@ export function computeVisibility(
     { x1: bx0, y1: by1, x2: bx0, y2: by0, restriction: "normal", dir: "both" },
   ];
 
-  // Directional prefilter: a one-way wall the origin can "see through" is dropped entirely
-  // (from both occlusion AND angle seeding) so it leaves no silhouette.
+  // Per-origin prefilter: a one-way wall the origin can "see through", or a proximity window the
+  // origin is close enough to, is dropped entirely (from occlusion AND angle seeding) — no silhouette.
   const active: BlockingSegment[] = [];
   for (const s of walls) {
-    if (directionBlocks(s, ox, oy)) {
+    if (segmentActive(s, ox, oy)) {
       active.push(s);
     }
   }

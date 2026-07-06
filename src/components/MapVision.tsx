@@ -258,7 +258,7 @@ export const VisionMaskLayer = memo(function VisionMaskLayer({
   /** Client toggle (low-end escape hatch): when false, no per-frame light animation. */
   animationsEnabled?: boolean;
 }) {
-  const segments = useMemo(() => wallsToSegments(scene.walls, "sight"), [scene.walls]);
+  const segments = useMemo(() => wallsToSegments(scene.walls, "sight", ftToPx), [scene.walls, ftToPx]);
   const coverage = useLightCoverage(scene, ftToPx);
   const time = useAnimationClock(animationsEnabled && sceneHasAnimatedLight(scene));
   const dark = sceneDarkness(scene, darkness);
@@ -339,7 +339,7 @@ export const VisionMaskLayer = memo(function VisionMaskLayer({
 /// (lights, walls) signature — the sweep is the expensive bit.
 /// </summary>
 function useLightCoverage(scene: Scene, ftToPx: number): Array<{ light: Light; poly: Point[] }> {
-  const segments = useMemo(() => wallsToSegments(scene.walls, "light"), [scene.walls]);
+  const segments = useMemo(() => wallsToSegments(scene.walls, "light", ftToPx), [scene.walls, ftToPx]);
   const enabledLights = useMemo(() => scene.lights.filter((light) => light.enabled), [scene.lights]);
   const key = enabledLights
     .map((l) => `${l.id}:${Math.round(l.x)}:${Math.round(l.y)}:${l.dimR}`)
@@ -455,7 +455,7 @@ export const DmLightingOverlay = memo(function DmLightingOverlay({
   animationsEnabled?: boolean;
 }) {
   const coverage = useLightCoverage(scene, ftToPx);
-  const segments = useMemo(() => wallsToSegments(scene.walls, "sight"), [scene.walls]);
+  const segments = useMemo(() => wallsToSegments(scene.walls, "sight", ftToPx), [scene.walls, ftToPx]);
   const time = useAnimationClock(animationsEnabled && sceneHasAnimatedLight(scene));
   // Keep the DM's map readable during setup: dim scales with darkness but never fully blacks out.
   const baseOpacity = Math.min(0.62, sceneDarkness(scene, darkness));
@@ -511,25 +511,32 @@ export const DmLightingOverlay = memo(function DmLightingOverlay({
   );
 });
 
-/** Stroke color + dash for a wall, by door state or matched channel preset. */
+/** Endpoint-dot color (Foundry uses a uniform gold); selected/hovered walls glow orange. */
+const WALL_DOT_COLOR = "#ffce3a";
+const WALL_SELECT_COLOR = "#ff922b";
+
+/**
+ * Stroke color + dash for a wall, by door state or matched channel preset. Palette matches
+ * FoundryVTT's walls layer (confirmed with the user).
+ */
 function wallVisual(wall: Wall): { color: string; dash?: number[] } {
   if (wall.door && wall.door !== "none") {
-    if (wall.door === "secret") return { color: "#b197fc", dash: [4, 4] };
-    if (wall.state === "open") return { color: "#8ce99a", dash: [10, 8] };
-    if (wall.state === "locked") return { color: "#ff8787" };
-    return { color: "#ffd166" }; // closed door
+    if (wall.door === "secret") return { color: "#d048d0", dash: [4, 4] }; // magenta
+    if (wall.state === "open") return { color: "#7bd88f", dash: [10, 8] }; // green
+    if (wall.state === "locked") return { color: "#ff6b6b" }; // red
+    return { color: "#5b9bf0" }; // closed door — blue (per the reference screenshot)
   }
   switch (matchWallPreset(wall)) {
     case "terrain":
-      return { color: "#8ce99a", dash: [7, 6] };
+      return { color: "#81b90c", dash: [7, 6] }; // lime green
     case "invisible":
-      return { color: "#66d9e8", dash: [2, 6] };
+      return { color: "#5bc8e6", dash: [2, 6] }; // cyan
     case "ethereal":
-      return { color: "#e599f7", dash: [10, 6] };
+      return { color: "#b98cf0", dash: [10, 6] }; // purple
     case "window":
-      return { color: "#74c0fc", dash: [12, 4] };
+      return { color: "#c7d8ff", dash: [12, 4] }; // pale blue
     case "normal":
-      return { color: "#8fb7ff" };
+      return { color: "#f2e9a0" }; // light yellow
     default:
       return { color: "#ced4da" }; // custom
   }
@@ -549,131 +556,183 @@ function oneWayArrow(wall: Wall, len: number): number[] | null {
   return [mx, my, mx + nx * len, my + ny * len];
 }
 
+export type WallSelectMods = { additive?: boolean; contiguous?: boolean };
+
 /**
- * One wall in the DM editor. A plain interactive line when not selected; when selected (in
- * select mode) it becomes a draggable group (body-move) with two draggable endpoint handles.
- * Endpoint drags snap via `snapWallPoint`; every gesture commits exactly once on release.
+ * One wall in the modeless DM editor (Phase 6.9b). Whenever the tool is `interactive` (active and not
+ * mid-chain) it shows draggable endpoint dots + a draggable body: grab a dot to move an endpoint, grab
+ * the line to move the whole wall (auto-selecting it, or dragging the whole selection). Click selects
+ * (Shift adds, Alt selects the connected run); hover highlights. Commits once per gesture. `offset` is
+ * the live body-drag delta applied to OTHER selected walls so a whole run moves together.
  */
 function WallNode({
   wall,
   selected,
-  selectable,
+  active,
+  interactive,
+  offset,
   onSelect,
   onConfigure,
   onDelete,
   onUpdate,
+  onBodyDragMove,
   onBodyMove,
   snapWallPoint,
 }: {
   wall: Wall;
   selected: boolean;
-  selectable: boolean;
-  onSelect: (id: string, additive: boolean) => void;
+  /** The wall tool is active — show endpoint dots (even mid-chain, where they're non-interactive). */
+  active: boolean;
+  /** Active AND not mid-chain — walls respond to select/drag/config/delete. */
+  interactive: boolean;
+  offset?: { dx: number; dy: number };
+  onSelect: (id: string, mods: WallSelectMods) => void;
   onConfigure: (id: string) => void;
   onDelete: (id: string) => void;
   onUpdate: (wall: Wall) => void;
+  onBodyDragMove: (id: string, dx: number, dy: number) => void;
   onBodyMove: (id: string, dx: number, dy: number) => void;
-  snapWallPoint: (x: number, y: number, excludeId?: string) => Point;
+  snapWallPoint: (x: number, y: number, opts?: { excludeId?: string; free?: boolean }) => Point;
 }) {
-  const [drag, setDrag] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
-  const w: Wall = drag ? { ...wall, ...drag } : wall;
+  const [endpointDrag, setEndpointDrag] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
+  const [hovered, setHovered] = useState(false);
+  const off = offset ?? { dx: 0, dy: 0 };
+  const w: Wall = endpointDrag
+    ? { ...wall, ...endpointDrag }
+    : { ...wall, x1: wall.x1 + off.dx, y1: wall.y1 + off.dy, x2: wall.x2 + off.dx, y2: wall.y2 + off.dy };
   const vis = wallVisual(wall);
   const isDoor = wall.door !== undefined && wall.door !== "none";
-  const arrow = oneWayArrow(w, 16);
-  const lineProps = {
-    points: [w.x1, w.y1, w.x2, w.y2],
-    stroke: selected ? "#ffe066" : vis.color,
-    strokeWidth: selected ? 4 : isDoor ? 4 : 3,
-    dash: vis.dash,
-    opacity: 0.92,
-    hitStrokeWidth: selectable ? 16 : 0,
-  };
-
-  if (!selected) {
-    return (
-      <>
-        <Line
-          {...lineProps}
-          name="map-handle"
-          listening={selectable}
-          onClick={(e) => selectable && onSelect(wall.id, e.evt.shiftKey)}
-          onTap={() => selectable && onSelect(wall.id, false)}
-          onDblClick={() => selectable && onConfigure(wall.id)}
-          onContextMenu={(e) => {
-            e.evt.preventDefault();
-            if (selectable) onDelete(wall.id);
-          }}
-        />
-        {arrow ? (
-          <Arrow points={arrow} stroke={vis.color} fill={vis.color} strokeWidth={1.5} pointerLength={5} pointerWidth={5} listening={false} />
-        ) : null}
-      </>
-    );
-  }
+  const arrow = oneWayArrow(w, 18);
+  const hot = hovered && interactive;
+  const stroke = selected ? WALL_SELECT_COLOR : vis.color;
+  const lineWidth = (selected ? 6 : isDoor ? 5 : 4) + (hot && !selected ? 1 : 0);
+  const dotR = selected ? 9 : hot ? 8 : 6;
+  const dotFill = selected || hot ? WALL_SELECT_COLOR : WALL_DOT_COLOR;
+  const glow = selected
+    ? { shadowColor: WALL_SELECT_COLOR, shadowBlur: 12, shadowOpacity: 0.9 }
+    : hot
+      ? { shadowColor: vis.color, shadowBlur: 6, shadowOpacity: 0.85 }
+      : {};
+  const mods = (e: Konva.KonvaEventObject<MouseEvent>): WallSelectMods => ({
+    additive: e.evt.shiftKey,
+    contiguous: e.evt.altKey,
+  });
 
   const endpoint = (which: "a" | "b") => ({
     name: "map-handle",
-    draggable: true,
-    hitStrokeWidth: 12,
+    draggable: interactive,
+    hitStrokeWidth: 14,
+    onMouseEnter: () => interactive && setHovered(true),
+    onMouseLeave: () => setHovered(false),
+    onClick: (e: Konva.KonvaEventObject<MouseEvent>) => interactive && onSelect(wall.id, mods(e)),
     onDragStart: (e: Konva.KonvaEventObject<DragEvent>) => {
       e.cancelBubble = true;
-      setDrag({ x1: wall.x1, y1: wall.y1, x2: wall.x2, y2: wall.y2 });
+      if (!selected) onSelect(wall.id, {});
+      setEndpointDrag({ x1: wall.x1, y1: wall.y1, x2: wall.x2, y2: wall.y2 });
     },
     onDragMove: (e: Konva.KonvaEventObject<DragEvent>) => {
       e.cancelBubble = true;
-      const p = snapWallPoint(e.target.x(), e.target.y(), wall.id);
+      const p = snapWallPoint(e.target.x(), e.target.y(), { excludeId: wall.id, free: e.evt.shiftKey });
       e.target.position(p);
-      setDrag((cur) => {
-        const base = cur ?? { x1: wall.x1, y1: wall.y1, x2: wall.x2, y2: wall.y2 };
-        return which === "a" ? { ...base, x1: p.x, y1: p.y } : { ...base, x2: p.x, y2: p.y };
+      setEndpointDrag((cur) => {
+        const b = cur ?? { x1: wall.x1, y1: wall.y1, x2: wall.x2, y2: wall.y2 };
+        return which === "a" ? { ...b, x1: p.x, y1: p.y } : { ...b, x2: p.x, y2: p.y };
       });
     },
     onDragEnd: (e: Konva.KonvaEventObject<DragEvent>) => {
       e.cancelBubble = true;
-      if (drag) onUpdate({ ...wall, ...drag });
-      setDrag(null);
+      setEndpointDrag((cur) => {
+        if (cur) onUpdate({ ...wall, ...cur });
+        return null;
+      });
     },
   });
 
   return (
     <Group
-      draggable
+      draggable={interactive}
+      onMouseEnter={() => interactive && setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      onDragStart={(e) => {
+        if (e.target !== e.currentTarget) return; // endpoint drags cancelBubble; ignore any stray
+        if (!selected) onSelect(wall.id, {});
+      }}
+      onDragMove={(e) => {
+        if (e.target !== e.currentTarget) return;
+        onBodyDragMove(wall.id, e.target.x(), e.target.y());
+      }}
       onDragEnd={(e) => {
-        if (e.target !== e.currentTarget) return; // endpoint drags bubble here — ignore them
+        if (e.target !== e.currentTarget) return;
         const dx = e.target.x();
         const dy = e.target.y();
         e.target.position({ x: 0, y: 0 });
         if (dx !== 0 || dy !== 0) onBodyMove(wall.id, dx, dy);
+        else onBodyDragMove(wall.id, 0, 0); // no-op drag → clear any reported offset
       }}
-      onClick={(e) => onSelect(wall.id, e.evt.shiftKey)}
-      onDblClick={() => onConfigure(wall.id)}
+      onClick={(e) => interactive && onSelect(wall.id, mods(e))}
+      onDblClick={() => interactive && onConfigure(wall.id)}
       onContextMenu={(e) => {
         e.evt.preventDefault();
-        onDelete(wall.id);
+        if (interactive) onDelete(wall.id);
       }}
     >
-      <Line {...lineProps} name="map-handle" listening />
+      <Line
+        points={[w.x1, w.y1, w.x2, w.y2]}
+        stroke={stroke}
+        strokeWidth={lineWidth}
+        dash={vis.dash}
+        opacity={selected || hot ? 1 : 0.9}
+        name="map-handle"
+        listening={interactive}
+        hitStrokeWidth={interactive ? 16 : 0}
+        {...glow}
+      />
       {arrow ? (
-        <Arrow points={arrow} stroke="#ffe066" fill="#ffe066" strokeWidth={1.5} pointerLength={5} pointerWidth={5} listening={false} />
+        <Arrow points={arrow} stroke={stroke} fill={stroke} strokeWidth={2} pointerLength={6} pointerWidth={6} listening={false} />
       ) : null}
-      <Circle x={w.x1} y={w.y1} radius={6} fill="#ffe066" stroke="#1a1408" strokeWidth={1.5} {...endpoint("a")} />
-      <Circle x={w.x2} y={w.y2} radius={6} fill="#ffe066" stroke="#1a1408" strokeWidth={1.5} {...endpoint("b")} />
+      {active ? (
+        <>
+          <Circle
+            x={w.x1}
+            y={w.y1}
+            radius={dotR}
+            fill={dotFill}
+            stroke="#1a1408"
+            strokeWidth={1.5}
+            listening={interactive}
+            {...(interactive ? endpoint("a") : {})}
+          />
+          <Circle
+            x={w.x2}
+            y={w.y2}
+            radius={dotR}
+            fill={dotFill}
+            stroke="#1a1408"
+            strokeWidth={1.5}
+            listening={interactive}
+            {...(interactive ? endpoint("b") : {})}
+          />
+        </>
+      ) : null}
     </Group>
   );
 }
 
 /// <summary>
 /// Clickable door glyphs at door midpoints, shown to ALL clients (players open doors as they
-/// explore). Secret doors render only for the DM. Click toggles; the server enforces locked/secret.
+/// explore). Secret doors render only for the DM. Left-click toggles open/closed; the DM right-clicks
+/// to lock/unlock. The server enforces locked/secret.
 /// </summary>
 export const DoorLayer = memo(function DoorLayer({
   scene,
   isDm,
   onToggleDoor,
+  onSetDoorState,
 }: {
   scene: Scene;
   isDm: boolean;
   onToggleDoor: (id: string) => void;
+  onSetDoorState: (id: string, state: "closed" | "open" | "locked") => void;
 }) {
   const doors = scene.walls.filter(
     (w) => w.door && w.door !== "none" && (isDm || w.door !== "secret"),
@@ -686,12 +745,12 @@ export const DoorLayer = memo(function DoorLayer({
         const my = (d.y1 + d.y2) / 2;
         const color =
           d.door === "secret"
-            ? "#b197fc"
+            ? "#d048d0"
             : d.state === "open"
-              ? "#8ce99a"
+              ? "#7bd88f"
               : d.state === "locked"
-                ? "#ff8787"
-                : "#ffd166";
+                ? "#ff6b6b"
+                : "#5b9bf0";
         return (
           <Group
             key={d.id}
@@ -700,6 +759,11 @@ export const DoorLayer = memo(function DoorLayer({
             name="map-handle"
             onClick={() => onToggleDoor(d.id)}
             onTap={() => onToggleDoor(d.id)}
+            onContextMenu={(e) => {
+              e.evt.preventDefault();
+              // DM right-click toggles the lock; players can't lock/unlock.
+              if (isDm) onSetDoorState(d.id, d.state === "locked" ? "closed" : "locked");
+            }}
           >
             <Circle
               radius={10}
@@ -731,7 +795,8 @@ export const WallsLightsEditor = memo(function WallsLightsEditor({
   scene,
   ftToPx,
   wallsActive,
-  wallMode,
+  chainActive,
+  showWalls,
   lightsActive,
   selectedWallIds,
   onSelectWall,
@@ -747,15 +812,18 @@ export const WallsLightsEditor = memo(function WallsLightsEditor({
   scene: Scene;
   ftToPx: number;
   wallsActive: boolean;
-  wallMode: "draw" | "select";
+  /** A chain draw is in progress — walls go inert so clicks land as chain vertices. */
+  chainActive: boolean;
+  /** DM toggle: render wall lines while the walls tool is NOT active (always shown when it is). */
+  showWalls: boolean;
   lightsActive: boolean;
   selectedWallIds: string[];
-  onSelectWall: (id: string, additive: boolean) => void;
+  onSelectWall: (id: string, mods: WallSelectMods) => void;
   onDeleteWall: (id: string) => void;
   onUpdateWall: (wall: Wall) => void;
   onUpdateWalls: (walls: Wall[]) => void;
   onConfigureWall: (id: string) => void;
-  snapWallPoint: (x: number, y: number, excludeId?: string) => Point;
+  snapWallPoint: (x: number, y: number, opts?: { excludeId?: string; free?: boolean }) => Point;
   onMoveLight: (light: Light) => void;
   onDeleteLight: (id: string) => void;
   /** Open the per-light config panel (double-click). */
@@ -765,21 +833,21 @@ export const WallsLightsEditor = memo(function WallsLightsEditor({
   const [hoveredLightId, setHoveredLightId] = useState<string | null>(null);
   // Live ring-resize draft: radii shown while dragging a reach ring; committed on release.
   const [resize, setResize] = useState<{ id: string; brightR: number; dimR: number } | null>(null);
+  // Live body-drag delta so a whole multi-selection visibly moves together (not just on release).
+  const [bodyDrag, setBodyDrag] = useState<{ id: string; dx: number; dy: number } | null>(null);
 
-  // Walls are interactive (select / drag / config / delete) only in the walls tool's select mode.
-  const wallsSelectable = wallsActive && wallMode === "select";
+  // Modeless (Phase 6.9b): walls are selectable/draggable whenever the tool is active and we're not
+  // mid-chain (so chain clicks land as vertices instead of grabbing a wall).
+  const interactive = wallsActive && !chainActive;
   const selectedSet = useMemo(() => new Set(selectedWallIds), [selectedWallIds]);
-  const moveWallBody = (id: string, dx: number, dy: number) => {
+  const onBodyDragMove = (id: string, dx: number, dy: number) =>
+    setBodyDrag(dx === 0 && dy === 0 ? null : { id, dx, dy });
+  const commitBodyMove = (id: string, dx: number, dy: number) => {
+    setBodyDrag(null);
     if (selectedSet.has(id) && selectedSet.size > 1) {
       const moved = scene.walls
         .filter((wall) => selectedSet.has(wall.id))
-        .map((wall) => ({
-          ...wall,
-          x1: wall.x1 + dx,
-          y1: wall.y1 + dy,
-          x2: wall.x2 + dx,
-          y2: wall.y2 + dy,
-        }));
+        .map((wall) => ({ ...wall, x1: wall.x1 + dx, y1: wall.y1 + dy, x2: wall.x2 + dx, y2: wall.y2 + dy }));
       onUpdateWalls(moved);
     } else {
       const wall = scene.walls.find((item) => item.id === id);
@@ -789,22 +857,35 @@ export const WallsLightsEditor = memo(function WallsLightsEditor({
     }
   };
 
+  // Wall lines render while the tool is active (for editing) OR when the DM's "show walls" toggle
+  // is on; hidden otherwise so the board isn't cluttered during play.
+  const wallsVisible = wallsActive || showWalls;
+
   return (
     <Layer listening={wallsActive || lightsActive}>
-      {scene.walls.map((wall) => (
-        <WallNode
-          key={wall.id}
-          wall={wall}
-          selected={wallsSelectable && selectedSet.has(wall.id)}
-          selectable={wallsSelectable}
-          onSelect={onSelectWall}
-          onConfigure={onConfigureWall}
-          onDelete={onDeleteWall}
-          onUpdate={onUpdateWall}
-          onBodyMove={moveWallBody}
-          snapWallPoint={snapWallPoint}
-        />
-      ))}
+      {wallsVisible
+        ? scene.walls.map((wall) => (
+            <WallNode
+              key={wall.id}
+              wall={wall}
+              selected={selectedSet.has(wall.id)}
+              active={wallsActive}
+              interactive={interactive}
+              offset={
+                bodyDrag && bodyDrag.id !== wall.id && selectedSet.has(wall.id)
+                  ? { dx: bodyDrag.dx, dy: bodyDrag.dy }
+                  : undefined
+              }
+              onSelect={onSelectWall}
+              onConfigure={onConfigureWall}
+              onDelete={onDeleteWall}
+              onUpdate={onUpdateWall}
+              onBodyDragMove={onBodyDragMove}
+              onBodyMove={commitBodyMove}
+              snapWallPoint={snapWallPoint}
+            />
+          ))
+        : null}
 
       {scene.lights.map((light) => {
         const angle = light.angle ?? 360;

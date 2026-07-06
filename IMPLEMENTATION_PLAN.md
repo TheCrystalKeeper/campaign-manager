@@ -1327,6 +1327,46 @@ per-light background saturation/contrast/shadow adjustments (needs per-region pi
 >   clone, per-type vision behavior, locked/secret doors, movement toggle with DM bypass, undo/redo,
 >   live player sync). Follow-ups: per-door player-visibility gating of glyphs (currently always shown
 >   to players), proximity/attenuation walls, and the sound channel.
+>
+> **Phase 6.9b — modeless editing UX + door lock + hover + proximity windows (user round):** the
+> mode-based editor (a Draw/Select toggle; endpoint dots only on a selected wall in Select mode) didn't
+> read like FoundryVTT — it looked as if walls couldn't be moved. Reworked to a **single modeless wall
+> tool** matching `foundry_wall_basics_transcript.txt`:
+>
+> - **Always-visible endpoint dots** on every wall while the tool is active; drag a dot → move that
+>   endpoint; **drag the wall's line → move the whole wall** (auto-selects it). Endpoints/bodies go
+>   inert only while a chain draw is in progress (so clicks land as vertices).
+> - **Selection:** click → select (highlight); **Shift-click** → add/remove; **Alt-click** → select the
+>   whole **contiguous run** (walls joined at shared endpoints via `contiguousWallIds` BFS) and move
+>   them all at once (live multi-move via a shared `bodyDrag` offset in `WallsLightsEditor`).
+>   **`X` / Delete** removes the selection. Rectangle box-select was **removed** (superseded by
+>   Alt-run + Shift-click).
+> - **Micro-snap:** new endpoints snap to a sub-grid (`gridSize / WALL_SNAP_SUBDIVISIONS`, ≈1/8 cell) by
+>   default; **Shift** ignores it (precise); the 🧲 toggle still force-snaps to grid corners. Endpoint
+>   snapping (gap-free joins) always applies. `snapWallPoint(x, y, { excludeId?, free? })`.
+> - **Chaining:** **right-click *or* Esc ends** the chain (right-click on a wall still deletes when not
+>   drawing). The Draw/Select toggle + marquee draft were deleted from the tool, `ToolRuntime`,
+>   `MapCanvas`, and `MapToolbar`.
+> - **Hover-highlight:** the wall under the cursor brightens (+ enlarged dots) so you can tell which
+>   you'll grab, esp. at joints.
+> - **Doors:** DM **right-clicks** a door glyph to lock/unlock (`SET_DOOR_STATE`); left-click still
+>   opens/closes.
+> - **Visual polish (user round):** Foundry-matched palette in `wallVisual`/`DoorLayer` — normal =
+>   light-yellow `#f2e9a0`, terrain `#81b90c`, invisible cyan, ethereal purple `#b98cf0`, window pale
+>   blue `#c7d8ff`; doors closed=blue / open=green / locked=red / secret=magenta; uniform **gold**
+>   endpoint dots, **orange `#ff922b`** selection with a `shadowBlur` glow. Endpoint dots are bigger
+>   (r 6, hover 8, selected 9) and **always shown while the walls tool is active** (even mid-chain,
+>   where they're non-interactive); lines are thicker (4 / doors 5 / selected 6). New per-client DM
+>   toggle **"show walls off-tool"** (`showWalls`, persisted via `campaignStore`) gates wall-line
+>   rendering when the walls tool is inactive — walls always render while editing.
+> - **Proximity "window" walls:** new `"proximity"` value on the sight/light channels + a per-wall
+>   `threshold` (ft, default 10); the `window` preset uses it. A proximity wall blocks a channel only
+>   when the source is **beyond** the threshold (binary — reverse-proximity + attenuation deferred);
+>   movement is unaffected. Sweep: `wallsToSegments(walls, channel, ftToPx)` tags proximity segments
+>   with `proximityPx`, and `computeVisibility`'s per-origin prefilter drops them when the origin is
+>   within range (uses a new `pointSegmentDistance`). Config panel gains a "Proximity" option + a range
+>   input. **Files:** `src/lib/{types,visibility}.ts`, `src/components/{MapVision,MapCanvas,MapToolbar,WallConfigPanel}.tsx`,
+>   `src/map/tools/{types,walls}.tsx`, test `unit-visibility`.
 
 Phase 6's walls shipped a focused v1: a wall is `{ x1,y1,x2,y2, kind:"wall"|"door", open? }` that
 blocks **sight and light only**, with binary doors, an all-or-nothing vision sweep, and **no

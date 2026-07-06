@@ -4,6 +4,7 @@ import { SceneSettings } from "../components/SceneSettings";
 import { PageSwitcher, type PageId } from "./PageSwitcher";
 import { readCampaignFlag, writeCampaignFlag } from "../lib/campaignStore";
 import { applySceneMessage, sceneMessageSceneId } from "../lib/sceneMessages";
+import { buildInverse, useHistory } from "../lib/history";
 import { createEmptyScene, fitViewportToScene } from "../lib/sceneUtils";
 import {
   DEFAULT_VIEWPORT,
@@ -56,6 +57,8 @@ export function ScenesPage({
   const [viewport, setViewport] = useState<Viewport>(DEFAULT_VIEWPORT);
   const canvasBoxRef = useRef<HTMLDivElement>(null);
   const fittedSceneRef = useRef<string | null>(null);
+  // Undo/redo for scene-editor edits (independent of the board's history).
+  const history = useHistory();
 
   // Fall back to the live scene when nothing (or a removed scene) is selected.
   const selectedSceneId =
@@ -135,6 +138,56 @@ export function ScenesPage({
     },
     [liveUpdates, room, selectedSceneId, state.scenes],
   );
+
+  // `editorSend` wrapped to record undo/redo, mirroring App's board history: build the inverse from
+  // the state the editor currently sees (draft while staging, else live), record it, then forward.
+  // Undo/redo replay through the raw `editorSend`, so they re-fold into the draft or hit the room
+  // exactly like the original edit.
+  const editorStateRef = useRef(editorState);
+  editorStateRef.current = editorState;
+  const recordEdit = history.record;
+  const resetHistory = history.reset;
+  const historyEditorSend = useCallback(
+    (msg: ClientMessage) => {
+      const inverse = buildInverse(editorStateRef.current, msg);
+      if (inverse) {
+        recordEdit({ send: editorSend, undo: inverse.undo, redo: inverse.redo });
+      }
+      editorSend(msg);
+    },
+    [editorSend, recordEdit],
+  );
+  // A fresh editing context (different scene, or toggling live/staged) starts with a clean stack.
+  useEffect(() => {
+    resetHistory();
+  }, [selectedSceneId, liveUpdates, resetHistory]);
+  // Ctrl+Z / Ctrl+Shift+Z (+ Ctrl+Y) undo/redo while the Scenes page is visible.
+  const { undo: historyUndo, redo: historyRedo } = history;
+  useEffect(() => {
+    if (!active) {
+      return;
+    }
+    const onKey = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey)) {
+        return;
+      }
+      const t = event.target as HTMLElement | null;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) {
+        return;
+      }
+      const key = event.key.toLowerCase();
+      if (key === "z") {
+        event.preventDefault();
+        if (event.shiftKey) historyRedo();
+        else historyUndo();
+      } else if (key === "y") {
+        event.preventDefault();
+        historyRedo();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [active, historyUndo, historyRedo]);
 
   const applyDraft = useCallback(
     (sceneId: string) => {
@@ -264,11 +317,12 @@ export function ScenesPage({
               viewport={viewport}
               onViewportChange={setViewport}
               onMoveToken={(tokenId, x, y, facing) => room.send({ type: "MOVE_TOKEN", tokenId, x, y, ...(facing !== undefined ? { facing } : {}) })}
-              send={editorSend}
+              send={historyEditorSend}
               subscribeMeasure={room.subscribeMeasure}
               subscribeTemplate={room.subscribeTemplate}
               snap={ctx.snap}
               onToggleSnap={ctx.toggleSnap}
+              history={history}
               embedded
             />
           ) : null}
