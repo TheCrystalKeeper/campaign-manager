@@ -577,6 +577,7 @@ function WallNode({
   onUpdate,
   onBodyDragMove,
   onBodyMove,
+  onHover,
   snapWallPoint,
 }: {
   wall: Wall;
@@ -592,6 +593,8 @@ function WallNode({
   onUpdate: (wall: Wall) => void;
   onBodyDragMove: (id: string, dx: number, dy: number) => void;
   onBodyMove: (id: string, dx: number, dy: number) => void;
+  /** Reports hover in/out so the DM can delete the hovered wall with X without selecting it. */
+  onHover: (id: string, hovering: boolean) => void;
   snapWallPoint: (x: number, y: number, opts?: { excludeId?: string; free?: boolean }) => Point;
 }) {
   const [endpointDrag, setEndpointDrag] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
@@ -622,8 +625,15 @@ function WallNode({
     name: "map-handle",
     draggable: interactive,
     hitStrokeWidth: 14,
-    onMouseEnter: () => interactive && setHovered(true),
-    onMouseLeave: () => setHovered(false),
+    onMouseEnter: () => {
+      if (!interactive) return;
+      setHovered(true);
+      onHover(wall.id, true);
+    },
+    onMouseLeave: () => {
+      setHovered(false);
+      onHover(wall.id, false);
+    },
     onClick: (e: Konva.KonvaEventObject<MouseEvent>) => interactive && onSelect(wall.id, mods(e)),
     onDragStart: (e: Konva.KonvaEventObject<DragEvent>) => {
       e.cancelBubble = true;
@@ -651,8 +661,15 @@ function WallNode({
   return (
     <Group
       draggable={interactive}
-      onMouseEnter={() => interactive && setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+      onMouseEnter={() => {
+        if (!interactive) return;
+        setHovered(true);
+        onHover(wall.id, true);
+      }}
+      onMouseLeave={() => {
+        setHovered(false);
+        onHover(wall.id, false);
+      }}
       onDragStart={(e) => {
         if (e.target !== e.currentTarget) return; // endpoint drags cancelBubble; ignore any stray
         if (!selected) onSelect(wall.id, {});
@@ -804,6 +821,7 @@ export const WallsLightsEditor = memo(function WallsLightsEditor({
   onUpdateWall,
   onUpdateWalls,
   onConfigureWall,
+  onHoverWall,
   snapWallPoint,
   onMoveLight,
   onDeleteLight,
@@ -823,6 +841,8 @@ export const WallsLightsEditor = memo(function WallsLightsEditor({
   onUpdateWall: (wall: Wall) => void;
   onUpdateWalls: (walls: Wall[]) => void;
   onConfigureWall: (id: string) => void;
+  /** Which wall (if any) is currently hovered — lets X delete it without selecting first. */
+  onHoverWall: (id: string | null) => void;
   snapWallPoint: (x: number, y: number, opts?: { excludeId?: string; free?: boolean }) => Point;
   onMoveLight: (light: Light) => void;
   onDeleteLight: (id: string) => void;
@@ -882,6 +902,7 @@ export const WallsLightsEditor = memo(function WallsLightsEditor({
               onUpdate={onUpdateWall}
               onBodyDragMove={onBodyDragMove}
               onBodyMove={commitBodyMove}
+              onHover={(id, hovering) => onHoverWall(hovering ? id : null)}
               snapWallPoint={snapWallPoint}
             />
           ))

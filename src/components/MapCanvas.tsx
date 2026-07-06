@@ -827,6 +827,8 @@ export function MapCanvas({
   /** Selected wall ids + which wall's config panel is open. */
   const [selectedWallIds, setSelectedWallIds] = useState<string[]>([]);
   const [editingWallId, setEditingWallId] = useState<string | null>(null);
+  /** The wall currently under the cursor — lets X/Delete remove it without selecting first. */
+  const [hoveredWallId, setHoveredWallId] = useState<string | null>(null);
 
   /**
    * Snap a world point for wall placement/editing: first to a nearby existing endpoint (so chains
@@ -960,6 +962,19 @@ export function MapCanvas({
     setSelectedWallIds([]);
     setEditingWallId(null);
   }, [selectedWallIds, send, sceneId]);
+  /**
+   * X / Delete: if hovering a wall that ISN'T part of the current selection, delete just that one
+   * (no click-to-select needed first). Otherwise fall back to deleting the whole selection — so
+   * hovering a wall that IS selected still removes the entire multi-selection, as expected.
+   */
+  const deleteHoveredOrSelectedWalls = useCallback(() => {
+    if (hoveredWallId && !selectedWallIds.includes(hoveredWallId)) {
+      send({ type: "REMOVE_WALL", sceneId, wallId: hoveredWallId });
+      setHoveredWallId(null);
+      return;
+    }
+    deleteSelectedWalls();
+  }, [hoveredWallId, selectedWallIds, send, sceneId, deleteSelectedWalls]);
   /** DM sets a door's exact state (right-click a door glyph to lock/unlock). */
   const onSetDoorState = useCallback(
     (id: string, state: WallDoorState) => send({ type: "SET_DOOR_STATE", sceneId, wallId: id, state }),
@@ -969,7 +984,15 @@ export function MapCanvas({
   useEffect(() => {
     setSelectedWallIds([]);
     setEditingWallId(null);
+    setHoveredWallId(null);
   }, [activeToolId, sceneId]);
+  // Safety net: if the hovered wall was removed some other way (right-click, config panel), drop
+  // the stale hover id rather than letting a later X delete a wall that no longer exists.
+  useEffect(() => {
+    if (hoveredWallId && !(sceneWalls ?? []).some((w) => w.id === hoveredWallId)) {
+      setHoveredWallId(null);
+    }
+  }, [sceneWalls, hoveredWallId]);
   /** Movement-blocking wall segments for the token-drag collision test. */
   const movementSegs = useMemo(() => movementSegments(sceneWalls ?? []), [sceneWalls]);
   /** Lights tool: which preset a freshly placed light uses. */
@@ -1240,14 +1263,15 @@ export function MapCanvas({
         setDraft(null);
         return;
       }
-      // X / Delete removes the selected wall(s) (walls tool).
+      // X / Delete removes the selected wall(s), or — with nothing selected — whichever wall the
+      // cursor is hovering (no click-to-select needed first).
       if (
         activeToolId === "walls" &&
-        selectedWallIds.length > 0 &&
+        (selectedWallIds.length > 0 || hoveredWallId) &&
         (event.key === "x" || event.key === "X" || event.key === "Delete" || event.key === "Backspace")
       ) {
         event.preventDefault();
-        deleteSelectedWalls();
+        deleteHoveredOrSelectedWalls();
         return;
       }
       // Rotate the selected token's facing: [ / ] nudge 15°, { / } (shift) 45°.
@@ -1283,8 +1307,9 @@ export function MapCanvas({
     onMoveToken,
     activeToolId,
     selectedWallIds,
+    hoveredWallId,
     onCloneWalls,
-    deleteSelectedWalls,
+    deleteHoveredOrSelectedWalls,
   ]);
 
   const gridLines = useMemo(() => {
@@ -1801,6 +1826,7 @@ export function MapCanvas({
             onUpdateWall={onUpdateWall}
             onUpdateWalls={onUpdateWalls}
             onConfigureWall={onConfigureWall}
+            onHoverWall={setHoveredWallId}
             snapWallPoint={snapWallPoint}
             onMoveLight={onMoveLight}
             onDeleteLight={onDeleteLight}
