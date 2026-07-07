@@ -715,6 +715,18 @@ the top-left corner becomes a page switcher.
 > from `sheets[token.sheetId ?? token.ownerPlayerId].data.iconUrl` first, falling back to
 > the drop-time `token.imageUrl`, then the color — so uploading/changing a portrait
 > updates placed tokens immediately (previously only the drop-time snapshot).
+> - **Bugfix: players couldn't see NPC/item token art (2026-07-06).** The live-resolution
+> above never survived `redactStateFor` — an NPC sheet with any section unrevealed was
+> blanked to defaults (including `iconUrl`/`iconCrop`), and players got an empty item
+> catalog entirely, so NPC and item tokens rendered as plain colored circles for players
+> even though the DM saw full art. Fix: `redact.ts` now keeps a redacted NPC sheet's
+> `iconUrl`/`iconCrop` (identity/stats stay hidden), and ships icon-only item stubs
+> (`iconUrl`/`iconCrop` only — name/description stripped) for items referenced by tokens
+> on the player's active scene, never the DM's full catalog. `MapCanvas` also resolves
+> item-token art the same live way sheet-linked tokens already did. The server now
+> re-syncs a token's `imageUrl` snapshot on `UPDATE_SHEET`/`UPDATE_ITEM` for NPC- and
+> item-linked tokens too (previously only player-owned tokens re-synced), so the
+> fallback snapshot can't go stale. Covered by new checks in `tests/unit-redaction.test.ts`.
 > - **Visible resize grip.** `FloatingWindow`'s SE corner handle (`.win-rs--se`) now sits
 > fully inside the window and draws a diagonal-line grip (`::after`), so windows visibly
 > advertise resize; all other invisible edge/corner handles are unchanged.
@@ -1011,6 +1023,33 @@ within range only; (if built) LOS redaction verified at WS-frame level.
 > `Ctrl+Shift+Z` (or `Ctrl+Y`). **Scope: board (live) edits.** The scene editor's staged
 > changes aren't in this history — its **Discard** reverts the whole draft; fine-grained
 > staged undo is a follow-up. Covered by `tests/unit-history.test.ts`.
+>
+> **Fog selection tools + brush hotkey round (2026-07-06, user feedback):** two asks —
+> resize the fog brush without opening the toolbar, and Photoshop-style area selection
+> instead of only freehand painting.
+> - **Alt+scroll brush resize.** `MapCanvas`'s `handleWheel` now special-cases: fog tool
+> active, shape = brush, Alt held → adjusts `fogBrushScale` (±0.1 cell/notch, clamped to
+> the slider's [0.15, 3] range) instead of zooming the viewport; the brush-ring preview
+> resizes live since `renderDraft` is in the normal render path.
+> - **Three new fog shapes** alongside the brush, picked via a new toolbar **Shape** row
+> (`FogShape = "brush"|"rect"|"lasso"|"polygon"`, new `ToolRuntime.fogShape`): **Rect**
+> (drag a marquee, release fogs the box — reuses the existing `rect` `FogReveal` kind);
+> **Lasso** (drag a freehand outline, release closes+fills it); **Polygon** (click to drop
+> vertices with a rubber-band preview + vertex dots; finish via double-click — new
+> `MapTool.onDblClick` hook, wired on the Konva `Stage` — or by clicking back near the
+> first vertex, which grows/highlights within a `closeRadius`; right-click or Esc cancels
+> the in-progress draft). All three honor the existing Reveal/Cover mode.
+> - **New `poly` `FogReveal` kind** (`{kind:"poly", points, mode?}`, a filled auto-closed
+> polygon; `MAX_FOG_POLY_POINTS = 512`) covers rect-drag/lasso/polygon-lasso uniformly;
+> sanitizer requires ≥3 vertices (6 numbers), even length, finite. Rendered in `MapFog.tsx`
+> as a `closed`+`fill` Konva `Line` alongside the existing rect/circle/brush branches — no
+> new message type (rides the existing `FOG_REVEAL`).
+> - Switching fog shape (or right-clicking mid-polygon) clears the in-progress draft; the
+> toolbar's brush-size slider only shows in Brush mode, and the hint text is per-shape.
+> **Files:** `src/lib/types.ts` (poly kind + sanitizer + cap), `src/components/MapFog.tsx`,
+> `src/map/tools/{fog.tsx,types.ts}`, `src/components/{MapCanvas,MapToolbar}.tsx`,
+> `src/index.css` (shape-row wrap). Verified: `tsc --noEmit` + `npm run build` clean; no
+> new message types, no protocol change.
 
 User feedback round (2026-07-03) that pulled **Fog brush** and **Scenes-page map editor
 depth** forward from Phase 7 and reworked two pages. Decisions locked with the user:
@@ -1203,6 +1242,60 @@ Live-OFF staged edits, Set Live flow, hotkey isolation, Players tabs.
 > target when it changes — join and scene-switch load darkness in place; same-scene day/night
 > changes still ease. Verified: same probe now reads steady dark from frame 1, zero bright
 > frames.
+>
+> **Light-editor UX round (2026-07-06, user feedback):** five DM-workflow complaints while
+> placing/editing lights, all fixed together in `MapVision.tsx`/`LightConfigPanel.tsx`/
+> `MapToolbar.tsx`/`MapCanvas.tsx`/`index.css`.
+> - **Reach-ring hover feedback.** The faint dashed dim ring gave no sign it was the resize
+> handle. New `hoveredRing` state (`{id, kind:"bright"|"dim"}`) set from `ringResizeProps`'
+> `onMouseEnter`/`onMouseLeave`; the hovered ring thickens (1→2px) and brightens (dim
+> 0.18→0.5, bright 0.35→0.6). Same handlers flip the Konva stage container's CSS cursor
+> (`grab` over a ring, `move` over the light body, reverting to the tool's inherited
+> crosshair off both) — fixing "cursor never changes in lighting mode" for free.
+> - **Config panel vs. the right dock.** `.map-light-config` floated at `right:12px,
+> z-index:5`; the dock is `z-index:20`, so an open dock hid it and a closed dock's rail
+> still clipped its edge. Fixed by offsetting `right: dock-rail-w + 12px` (an added
+> `--dock-open` modifier pushes it further left by `--dock-panel-w` while the dock is
+> open, mirroring the existing `.log-toasts--dock-open` pattern) — `dockOpen` threads
+> App→MapCanvas→the panel wrapper. Same round: a `.panel` glass background
+> (`rgba(20,19,16,.55)` + `backdrop-filter: blur`) — the previously fully-transparent
+> panel was unreadable over busy map art.
+> - **Dim-radius input couldn't be raised.** The old `onChange` clamped
+> `Math.max(brightR, value)` on every keystroke, so typing "25" over a Bright of 20
+> collapsed to "20" after the first digit. Both inputs now hold free local draft text and
+> only commit (parse + validate) on blur/Enter; committing a Dim below Bright is
+> REJECTED (reverts + an inline "Dim must be ≥ Bright (N ft)" message in a fixed-height
+> `.light-field-note` slot so the panel never reflows).
+> - **Shrinking a light via the rings stalled.** The dim-ring drag clamped
+> `Math.max(5, brightR, ft)` — a floor at the CURRENT bright radius that refused to shrink
+> further once dim reached it. Fixed so Bright ≤ Dim holds symmetrically in both
+> directions: growing Bright past Dim already pulled Dim out; now shrinking Dim below
+> Bright pulls Bright in too (they clamp equal at the boundary and keep shrinking together,
+> down to a 5 ft floor) — matches growing-bright's existing behavior.
+> - **Shift-drag = unsnapped ring resize.** Holding Shift while dragging a ring uses the raw
+> pointer distance (rounded to 0.1 ft) instead of the 5 ft snap, for fine-tuning — same
+> `evt.shiftKey` idiom as free wall-point dragging.
+> - **Animation reliability + tuning.** `useAnimationClock` unconditionally honoured OS
+> `prefers-reduced-motion`, silently freezing flicker/pulse even with the ✨ toggle on and
+> giving no indication why. The ✨ toggle is now the sole authority (the reduce-motion
+> check was removed); a new `usePrefersReducedMotion` hook + toolbar hint ("⚠ overriding
+> system reduce-motion") surfaces when the override is active. Flicker amplitude was
+> tuned twice on user feedback — first punched up (0.1→0.14 radius, 0.3→0.45 brightness)
+> for visibility, then dialed back well below the ORIGINAL defaults (→0.06 / →0.2) once
+> live testing showed the punchier version was too strong.
+> - **Stale UI on tool-switch.** Two related bugs, both because Konva only fires
+> `onMouseLeave` on actual pointer movement, not on a hotkey switching tools: (a) the
+> light config panel stayed open after leaving lighting mode — fixed with a `useEffect`
+> in `MapCanvas` clearing `editingLightId` whenever `activeToolId !== "lights"`; (b) the
+> "Dbl-click: edit…" hover tooltip (and any ring highlight) stuck on screen after
+> pressing e.g. `V` while hovering a light — fixed with a `useEffect` in
+> `WallsLightsEditor` clearing `hoveredLightId`/`hoveredRing` whenever `lightsActive`
+> goes false.
+> - **Blend-mode dropdown reorder** (two small user requests): "None (fog only)" moved to
+> first, then "Overlay" moved to second — final order None → Overlay → Screen → Soft
+> Light → Multiply → Add (Glow) (`LIGHT_BLEND_OPTIONS` in `MapToolbar.tsx`).
+> All verified via `tsc --noEmit` after each change; no protocol/message changes
+> (client-only UX + one CSS/state fix each).
 
 
 
@@ -1367,6 +1460,43 @@ per-light background saturation/contrast/shadow adjustments (needs per-region pi
 >   within range (uses a new `pointSegmentDistance`). Config panel gains a "Proximity" option + a range
 >   input. **Files:** `src/lib/{types,visibility}.ts`, `src/components/{MapVision,MapCanvas,MapToolbar,WallConfigPanel}.tsx`,
 >   `src/map/tools/{types,walls}.tsx`, test `unit-visibility`.
+>
+> **Phase 6.9c — wall-tool bugfixes + door fog-of-war gating (user round):**
+>
+> - **Right-click while chaining no longer deletes the just-placed wall.** Root cause: ending the
+>   chain on `pointerdown` made the wall interactive again before the following `contextmenu` fired,
+>   so the right-click landed on the (now-live) wall and deleted it instead of just exiting the chain.
+>   Fixed by ending the chain in the Stage's `onContextMenu` handler instead, while the wall is still
+>   inert at that point.
+> - **Right-click during the between-clicks dotted preview no longer completes that segment.** A
+>   right-click still sends a `pointerup`; the Stage's `onPointerUp` was calling the tool's `onUp`
+>   regardless of button, so it committed the previewed segment a beat before `contextmenu` could end
+>   the chain. `onPointerUp` is now gated to the left button only, matching `onDown`.
+> - **Drag-to-draw shows the wall live instead of only appearing on release.** `walls.tsx`'s
+>   `renderDraft` now draws a SOLID line in the brush's actual color (new `WALL_BRUSH_COLORS` map in
+>   `types.ts`) while actively pressing/dragging, falling back to the dashed "next segment" preview
+>   only between chain clicks.
+> - **Hover + `X` deletes a wall without selecting it first.** Hover state is lifted out of `WallNode`
+>   through `WallsLightsEditor` (`onHoverWall`) into a `hoveredWallId` in `MapCanvas`; `X` / Delete now
+>   removes the hovered wall directly unless it's already part of a multi-selection (then the whole
+>   selection goes, as before). A safety effect clears a stale hover id if that wall was removed some
+>   other way (e.g. right-click delete).
+> - **Door icons now respect fog of war.** `DoorLayer` previously showed every door glyph to every
+>   client regardless of visibility. It now hides a door from players/DM-preview wherever it sits in
+>   unseen darkness — the same "in LOS AND lit (ambient / darkvision / a wall-clipped light)" rule
+>   already used for token name-label visibility. Extracted the generic `computeVisiblePointIds`
+>   helper (works on any `{id,x,y}`, not just tokens) out of `computeVisibleTokenIds` in
+>   `MapVision.tsx`; `MapCanvas` computes `visibleDoorIds` the same way it already computes
+>   `tokenLabelIds`. The DM's own (non-preview) overview still sees every door, including secret ones.
+> - **Scenes page gets undo/redo parity with the board.** `ScenesPage` owns its own `useHistory()`
+>   instance, wraps `editorSend` to record inverses via `buildInverse` (mirroring `App.tsx`'s board
+>   `historySend`), and passes `history` into its embedded `MapCanvas` so the same ↶/↷ rail buttons
+>   appear. Works in both Live and staged-draft mode (undo replays through `editorSend`, folding back
+>   into the draft or the room as appropriate); Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y while the page is
+>   visible; the stack resets on scene switch or the Live-updates toggle so undo stays scoped to the
+>   current editing context and can't replay into the wrong scene/mode.
+> - **Files:** `src/lib/types.ts` (`WALL_BRUSH_COLORS`), `src/map/tools/walls.tsx`,
+>   `src/components/{MapCanvas,MapVision}.tsx`, `src/pages/ScenesPage.tsx`.
 
 Phase 6's walls shipped a focused v1: a wall is `{ x1,y1,x2,y2, kind:"wall"|"door", open? }` that
 blocks **sight and light only**, with binary doors, an all-or-nothing vision sweep, and **no
@@ -1979,6 +2109,41 @@ URLs, never embed the images.
 attack appears; HP stepper clamps + logs in combat; fog brush paints/erases and survives
 restart under the cap; templates relay + expire; export→wipe→import round-trips a
 campaign byte-identically (minus connection fields).
+
+> **Map-pin revamp (2026-07-06, `revamp` branch — user feedback follow-up on the 7i pins;**
+> `tsc` **+** `npm run build` **clean;** `unit-scene-editor` **+** `smoke-phase5/7` **green):**
+> The Phase-7i pin (drop a `📍` via `window.prompt`, no editing/moving) grew into a proper
+> placeable annotation. All DM-only + player-stripped as before.
+> - **Inline note editor replaces `window.prompt` (**`PinNoteEditor` in `src/map/tools/pin.tsx`**).**
+> A DOM popover (a real `<input>` can't live in a Konva layer) anchored at the pin's screen
+> position (`.map-pin-editor` in `index.css`), autofocused, Enter/Save commits, Esc/Cancel
+> discards. Robustness: placing a pin fires a burst of canvas focus churn, so the editor
+> ignores blur until it has "settled" (250ms after mount) — a stray early blur just re-focuses
+> rather than closing/committing an empty pin out from under the user.
+> - **Edit + move placed pins.** With the pin tool active: **click the note label** (I-beam
+> cursor) or **double-click the marker** opens the editor seeded with the current text; **drag
+> the marker** moves the pin; **right-click** erases. Marker/label carry the `map-handle` name
+> so the stage's tool handler skips placing a fresh pin when one is grabbed (same pattern as
+> wall/light handles); `pin-marker`/`pin-label` names let `PinNode` tell a marker-grab (start a
+> move, vetoed by `onDragStart.stopDrag` if it began on the label) from a label-click (edit).
+> - **`UPDATE_ANNOTATION` now carries `text?` and/or `x?/y?`** (was text-only in the 7i plan) —
+> server handler in `partykit/server.ts` (DM/author-gated, 200-char cap, finite-number guards)
+> + the `applySceneMessage` mirror in `src/lib/sceneMessages.ts`, so pin edits/moves are
+> **undoable for free** (the DM history builder inverts any scene-shape message to an
+> `UPDATE_SCENE` restore) and staged-editor safe. Covered by new `unit-scene-editor` checks
+> (edit-in-place, move-leaves-text, 200 cap, missing-id no-op).
+> - **Vector glyph replaces the emoji (**`PinMarker`**).** A drawn teardrop (`PIN_PATH`) whose
+> **tip is at local (0,0)** so it points exactly at the drop point (the emoji couldn't be
+> pixel-anchored); shared by the placement preview and the committed pin. Sized `PIN_SCALE`
+> (1.4×) by scaling its Group from the origin (tip stays put). Hover **brightens + glows** the
+> marker and highlights the label border; cursor is a text I-beam over the note, a move cursor
+> over the draggable marker.
+> - **Pins render in their own top layer (**`MapCanvas.tsx`**).** Split out of the
+> grid+annotations layer (below tokens) into a dedicated Konva `Layer` **after**
+> `WallsLightsEditor`/`DoorLayer`, so pins sit **above tokens, walls, lights, fog, and doors**
+> and the DM's markers are never hidden.
+> - **Files:** `src/map/tools/pin.tsx`, `src/components/MapCanvas.tsx`, `src/index.css`,
+> `src/lib/{types,sceneMessages}.ts`, `partykit/server.ts`, `tests/unit-scene-editor.test.ts`.
 
 ---
 

@@ -20,6 +20,7 @@ import {
   playerTokenColorForSlot,
   type Annotation,
   type ClientMessage,
+  type FogShape,
   type GameState,
   type HitPoints,
   type IconCrop,
@@ -48,6 +49,7 @@ import { selectTool } from "../map/tools/select";
 import { LIGHT_PRESETS, type LightPreset } from "../map/tools/lights";
 import { RulerShape } from "../map/tools/measure";
 import { TemplateShapeView } from "../map/tools/template";
+import { commitPin, updatePin, movePin, PinMarker, PinNoteEditor, type PinDraft } from "../map/tools/pin";
 import type { ToolPointerEvent, ToolRuntime } from "../map/tools/types";
 import { MapToolbar } from "./MapToolbar";
 import { FogLayer } from "./MapFog";
@@ -865,6 +867,8 @@ export function MapCanvas({
   /** Fog brush: paint direction + size (radius = gridSize × scale). */
   const [fogMode, setFogMode] = useState<"reveal" | "cover">("reveal");
   const [fogBrushScale, setFogBrushScale] = useState(0.75);
+  /** Fog tool: freehand brush vs a rectangle / lasso / polygon-lasso area selection. */
+  const [fogShape, setFogShape] = useState<FogShape>("brush");
   /** Walls tool: what a fresh segment is drawn as (modeless — no Draw/Select toggle). */
   const [wallBrush, setWallBrush] = useState<WallBrush>("normal");
   /** Selected wall ids + which wall's config panel is open. */
@@ -1443,6 +1447,7 @@ export function MapCanvas({
     snap,
     fogMode,
     fogBrushR,
+    fogShape,
     wallBrush,
     snapWallPoint,
     lightRadii: LIGHT_PRESETS[lightPreset],
@@ -1646,6 +1651,14 @@ export function MapCanvas({
   };
 
   const handleWheel = (e: Konva.KonvaEventObject<WheelEvent>) => {
+    // Alt+scroll while the fog brush is active resizes the brush instead of zooming.
+    if (activeTool.id === "fog" && fogShape === "brush" && e.evt.altKey) {
+      e.evt.preventDefault();
+      const dir = e.evt.deltaY > 0 ? -1 : 1;
+      // Match the toolbar slider's [0.15, 3] range; ~0.1 cell per notch, snapped to its 0.05 step.
+      setFogBrushScale((s) => Math.min(3, Math.max(0.15, Math.round((s + dir * 0.1) * 20) / 20)));
+      return;
+    }
     if (!canControlView || !onViewportChange) return;
     e.evt.preventDefault();
     const stage = stageRef.current;
@@ -1720,6 +1733,19 @@ export function MapCanvas({
             e.evt.preventDefault();
             setDraft(null);
           }
+          // Right-click cancels an in-progress fog polygon-lasso (finish with dbl-click / start vertex).
+          if (activeTool.id === "fog" && (draft as { shape?: string } | null)?.shape === "polygon") {
+            e.evt.preventDefault();
+            setDraft(null);
+          }
+        }}
+        onDblClick={(e) => {
+          if (toolActive && activeTool.onDblClick) {
+            const pos = stageRef.current?.getRelativePointerPosition();
+            if (pos) {
+              activeTool.onDblClick({ world: pos, shiftKey: Boolean(e.evt.shiftKey) }, runtime);
+            }
+          }
         }}
         onPointerDown={(e) => {
           if (e.evt.button === 1) {
@@ -1731,8 +1757,8 @@ export function MapCanvas({
             startArrow();
             return;
           }
-          // Clicking an existing wall/light marker interacts with it (drag/toggle/delete)
-          // rather than placing a new one underneath.
+          // Clicking an existing wall/light marker or map pin interacts with it
+          // (drag/toggle/delete/edit) rather than placing a new one underneath.
           if (typeof e.target?.hasName === "function" && e.target.hasName("map-handle")) {
             return;
           }
@@ -1787,8 +1813,9 @@ export function MapCanvas({
         ) : null}
 
         {/* Grid + annotations: above the light tint, under tokens; annotations erasable
-            (right-click) while the draw tool is active. */}
-        <Layer listening={activeTool.id === "draw"}>
+            (right-click) while the draw or pin tool is active. Pins are NOT drawn here — they
+            get their own layer on top of tokens/walls/lights (see below). */}
+        <Layer listening={activeTool.id === "draw" || activeTool.id === "pin"}>
           {gridLines.map((points, index) => (
             <Line
               key={index}
@@ -1800,8 +1827,9 @@ export function MapCanvas({
             />
           ))}
           {scene.annotations.map((annotation) =>
-            // Our own just-committed arrow is hidden until the preview hands off to it.
-            annotation.id === pendingArrowId ? null : annotation.kind === "arrow" ? (
+            // Our own just-committed arrow is hidden until the preview hands off to it; pins
+            // render in the dedicated top layer instead of here.
+            annotation.id === pendingArrowId || annotation.kind === "pin" ? null : annotation.kind === "arrow" ? (
               // Solid while it exists; a client-local ghost fades it out on removal.
               <MapAnnotationArrow key={annotation.id} points={annotation.points ?? []} opacity={1} />
             ) : (
@@ -1963,6 +1991,38 @@ export function MapCanvas({
           />
         ) : null}
 
+        {/* Map pins (DM-only): drawn ABOVE tokens, walls, lights, fog, and doors so the DM's
+            markers are never hidden behind them. Interactive (edit/move/erase) with the pin
+            tool; erasable with the draw tool too, matching the other annotations. */}
+        <Layer listening={activeTool.id === "draw" || activeTool.id === "pin"}>
+          {scene.annotations.map((annotation) =>
+            annotation.kind === "pin" ? (
+              <AnnotationNode
+                key={annotation.id}
+                annotation={annotation}
+                now={fadeClock}
+                onErase={() => eraseAnnotation(annotation)}
+                onEdit={
+                  activeTool.id === "pin"
+                    ? () =>
+                        setDraft({
+                          x: annotation.x ?? 0,
+                          y: annotation.y ?? 0,
+                          id: annotation.id,
+                          text: annotation.text ?? "",
+                        } satisfies PinDraft)
+                    : undefined
+                }
+                onMove={
+                  activeTool.id === "pin"
+                    ? (x, y) => movePin(runtime, annotation.id, x, y)
+                    : undefined
+                }
+              />
+            ) : null,
+          )}
+        </Layer>
+
         {/* Topmost overlay: everyone's live rulers + templates + the active tool's draft. */}
         <Layer listening={false}>
           {sceneRulers.map(([clientId, ruler]) => (
@@ -1991,6 +2051,30 @@ export function MapCanvas({
         </Layer>
       </Stage>
 
+      {activeTool.id === "pin" && draft ? (
+        (() => {
+          const pin = draft as PinDraft;
+          return (
+            <PinNoteEditor
+              key={pin.id ?? "new"}
+              x={viewport.x + pin.x * viewport.scale + 12 * viewport.scale}
+              y={viewport.y + pin.y * viewport.scale - 10 * viewport.scale}
+              initialText={pin.text ?? ""}
+              onCommit={(text: string) => {
+                // `id` set → editing an existing pin in place; otherwise a fresh drop.
+                if (pin.id) {
+                  updatePin(runtime, pin.id, text);
+                } else {
+                  commitPin(runtime, pin, text);
+                }
+                setDraft(null);
+              }}
+              onCancel={() => setDraft(null)}
+            />
+          );
+        })()
+      ) : null}
+
       <MapToolbar
         isDm={isDm}
         tools={availableTools}
@@ -2014,6 +2098,11 @@ export function MapCanvas({
         onResetFog={() => send({ type: "FOG_RESET", sceneId: scene.id })}
         fogMode={fogMode}
         onFogMode={setFogMode}
+        fogShape={fogShape}
+        onFogShape={(shape) => {
+          setFogShape(shape);
+          setDraft(null); // drop any in-progress selection when switching shape
+        }}
         fogBrushScale={fogBrushScale}
         onFogBrushScale={setFogBrushScale}
         fogInverted={scene.fog.inverted}
@@ -2154,10 +2243,16 @@ function AnnotationNode({
   annotation,
   now,
   onErase,
+  onEdit,
+  onMove,
 }: {
   annotation: Annotation;
   now: number;
   onErase: () => void;
+  /** Pin-only: opens the note editor (provided only when the pin tool is active). */
+  onEdit?: () => void;
+  /** Pin-only: commits a drag-to-move to a new world position (pin tool active only). */
+  onMove?: (x: number, y: number) => void;
 }) {
   const opacity = annotation.ephemeral ? annotationOpacity(annotation.createdAt, now) : 1;
   const onContextMenu = (e: Konva.KonvaEventObject<PointerEvent>) => {
@@ -2216,16 +2311,110 @@ function AnnotationNode({
         />
       );
     case "pin":
-      return (
-        <Group x={annotation.x ?? 0} y={annotation.y ?? 0} onContextMenu={onContextMenu}>
-          <Text text="📍" fontSize={24} offsetX={12} offsetY={24} />
-          {annotation.text ? (
-            <>
-              <Rect x={12} y={-10} width={annotation.text.length * 7 + 12} height={20} cornerRadius={4} fill="rgba(10,12,16,0.85)" stroke={annotation.color} strokeWidth={1} />
-              <Text x={17} y={-6} text={annotation.text} fontSize={12} fill="#e6e6e8" />
-            </>
-          ) : null}
-        </Group>
-      );
+      return <PinNode annotation={annotation} onErase={onErase} onEdit={onEdit} onMove={onMove} />;
   }
+}
+
+/// <summary>
+/// A committed map pin: the shared teardrop glyph (tip anchored under its world point) plus an
+/// optional note label. Editing/moving is enabled only while the pin tool is active (the
+/// onEdit/onMove handlers are supplied then). Interactions:
+///   • drag the marker → move the pin (onDragStart vetoes a drag that began on the label);
+///   • click the note label, or double-click the marker → open the note editor;
+///   • right-click → erase.
+/// The marker/label shapes carry the "map-handle" name so the stage skips placing a fresh pin
+/// when one is grabbed (same pattern as wall/light handles). Hover brightens the pin and swaps
+/// the cursor: a text I-beam over the note, a move/grab cursor over the draggable marker.
+/// </summary>
+function PinNode({
+  annotation,
+  onErase,
+  onEdit,
+  onMove,
+}: {
+  annotation: Annotation;
+  onErase: () => void;
+  onEdit?: () => void;
+  onMove?: (x: number, y: number) => void;
+}) {
+  const [hovered, setHovered] = useState(false);
+  const editable = Boolean(onEdit);
+  // Records whether the in-flight drag began on the marker (vs the label), so onDragStart can
+  // veto a label drag — grabbing the note text should edit, not move.
+  const grabbedMarker = useRef(false);
+  const setCursor = (e: Konva.KonvaEventObject<Event>, cursor: string) => {
+    const container = e.target.getStage()?.container();
+    if (container) {
+      container.style.cursor = cursor;
+    }
+  };
+  const highlight = hovered && editable;
+  return (
+    <Group
+      x={annotation.x ?? 0}
+      y={annotation.y ?? 0}
+      draggable={editable}
+      onContextMenu={(e) => {
+        e.evt.preventDefault();
+        onErase();
+      }}
+      onMouseDown={(e) => {
+        grabbedMarker.current = e.target.hasName?.("pin-marker") ?? false;
+      }}
+      onDragStart={(e) => {
+        // Only a grab on the marker moves the pin; a drag that began on the note label is a
+        // mis-grab (the label is for editing) — cancel it so the pin stays put.
+        if (!grabbedMarker.current) {
+          e.target.stopDrag();
+        }
+      }}
+      onDragEnd={(e) => {
+        if (e.target !== e.currentTarget) {
+          return;
+        }
+        onMove?.(e.target.x(), e.target.y());
+      }}
+      onClick={(e) => {
+        // Clicking the note label edits it; a plain marker click is reserved for drag / dbl-click.
+        if (e.target.hasName?.("pin-label")) {
+          onEdit?.();
+        }
+      }}
+      onDblClick={() => onEdit?.()}
+      onDblTap={() => onEdit?.()}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={(e) => {
+        setHovered(false);
+        // Clear the override so the active tool's cursor (crosshair) shows through again.
+        setCursor(e, "");
+      }}
+      onMouseOver={(e) => {
+        // Cursor depends on the sub-part under the pointer: an I-beam over the editable note,
+        // a move cursor over the draggable marker.
+        if (!editable) {
+          return;
+        }
+        setCursor(e, e.target.hasName?.("pin-label") ? "text" : "move");
+      }}
+    >
+      <PinMarker highlighted={highlight} />
+      {annotation.text ? (
+        // Label sits just right of the (scaled) head, vertically centered on it.
+        <>
+          <Rect
+            name="map-handle pin-label"
+            x={15}
+            y={-35}
+            width={annotation.text.length * 7 + 12}
+            height={20}
+            cornerRadius={4}
+            fill="rgba(10,12,16,0.85)"
+            stroke={highlight ? "#ffe0a3" : annotation.color}
+            strokeWidth={1}
+          />
+          <Text name="map-handle pin-label" x={20} y={-31} text={annotation.text} fontSize={12} fill="#e6e6e8" />
+        </>
+      ) : null}
+    </Group>
+  );
 }

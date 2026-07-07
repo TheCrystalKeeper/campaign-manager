@@ -1181,6 +1181,29 @@ export default class GameServer implements Party.Server {
       return;
     }
 
+    if (parsed.type === "UPDATE_ANNOTATION") {
+      const scene = this.state.scenes.find((item) => item.id === parsed.sceneId);
+      const target = scene?.annotations.find((item) => item.id === parsed.annotationId);
+      if (!scene || !target) {
+        return;
+      }
+      if (!this.isDm(sender.id) && target.authorId !== meta.playerId) {
+        this.sendTo(sender, { type: "ERROR", message: "You can only edit your own annotations." });
+        return;
+      }
+      if (typeof parsed.text === "string") {
+        target.text = parsed.text.slice(0, 200);
+      }
+      if (typeof parsed.x === "number" && Number.isFinite(parsed.x)) {
+        target.x = parsed.x;
+      }
+      if (typeof parsed.y === "number" && Number.isFinite(parsed.y)) {
+        target.y = parsed.y;
+      }
+      void this.broadcastState();
+      return;
+    }
+
     // Door toggling is allowed for players (opening doors as they explore) — handled BEFORE the
     // DM-only map gate. Locked doors need a DM; secret doors are DM-only (players don't see them
     // as doors). Wall editing + SET_DOOR_STATE stay DM-only inside the gated switch below.

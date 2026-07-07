@@ -948,6 +948,15 @@ export const WallsLightsEditor = memo(function WallsLightsEditor({
   // Which reach ring the pointer is over — highlights it (esp. the faint dashed dim ring) so the
   // DM can see the drag-to-resize handle they're about to grab.
   const [hoveredRing, setHoveredRing] = useState<{ id: string; kind: "bright" | "dim" } | null>(null);
+  // Switching tools mid-hover (e.g. pressing V while the pointer sits over a light) never fires a
+  // Konva mouseleave, so the hover state would otherwise linger and leave the "Dbl-click: edit…"
+  // hint (and any ring highlight) stuck on screen after leaving lighting mode.
+  useEffect(() => {
+    if (!lightsActive) {
+      setHoveredLightId(null);
+      setHoveredRing(null);
+    }
+  }, [lightsActive]);
   // Live body-drag delta so a whole multi-selection visibly moves together (not just on release).
   const [bodyDrag, setBodyDrag] = useState<{ id: string; dx: number; dy: number } | null>(null);
 

@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import type { ClientMessage, Light, Scene, TemplateKind, WallBrush } from "../../lib/types";
+import type { ClientMessage, FogShape, Light, Scene, TemplateKind, WallBrush } from "../../lib/types";
 
 /// <summary>
 /// The plug-in interface every map tool implements (Phase 5 architecture; Phase 6
@@ -33,6 +33,8 @@ export type ToolRuntime = {
   fogMode: "reveal" | "cover";
   /** Fog brush radius in world px (already grid-scaled by MapCanvas). */
   fogBrushR: number;
+  /** Fog tool: freehand brush vs a rectangle / lasso / polygon-lasso area selection. */
+  fogShape: FogShape;
   /** Walls tool: what a fresh segment is drawn as (channel preset or a door). */
   wallBrush: WallBrush;
   /** Snap a world point to a nearby wall endpoint, else micro/grid snap (`free` = Shift-precise). */
@@ -55,6 +57,8 @@ export type MapTool = {
   onDown?: (event: ToolPointerEvent, rt: ToolRuntime) => void;
   onMove?: (event: ToolPointerEvent, rt: ToolRuntime) => void;
   onUp?: (event: ToolPointerEvent, rt: ToolRuntime) => void;
+  /** Double-click (e.g. finish a polygon-lasso selection). */
+  onDblClick?: (event: ToolPointerEvent, rt: ToolRuntime) => void;
   /** Pointer left the stage — clear hover-only previews (mid-drag drafts should survive). */
   onLeave?: (rt: ToolRuntime) => void;
   /** Konva nodes visualizing the in-progress draft. */

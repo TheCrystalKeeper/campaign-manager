@@ -42,6 +42,7 @@ export function sceneMessageSceneId(msg: ClientMessage): string | null {
     case "FOG_RESET":
     case "ADD_ANNOTATION":
     case "REMOVE_ANNOTATION":
+    case "UPDATE_ANNOTATION":
     case "CLEAR_ANNOTATIONS":
       return msg.sceneId;
     default:
@@ -189,6 +190,22 @@ export function applySceneMessage(scene: Scene, msg: ClientMessage): Scene {
       return {
         ...scene,
         annotations: scene.annotations.filter((item) => item.id !== msg.annotationId),
+      };
+    }
+    case "UPDATE_ANNOTATION": {
+      if (!scene.annotations.some((item) => item.id === msg.annotationId)) {
+        return scene;
+      }
+      const patch: Partial<Annotation> = {
+        ...(typeof msg.text === "string" ? { text: msg.text.slice(0, 200) } : {}),
+        ...(typeof msg.x === "number" && Number.isFinite(msg.x) ? { x: msg.x } : {}),
+        ...(typeof msg.y === "number" && Number.isFinite(msg.y) ? { y: msg.y } : {}),
+      };
+      return {
+        ...scene,
+        annotations: scene.annotations.map((item) =>
+          item.id === msg.annotationId ? { ...item, ...patch } : item,
+        ),
       };
     }
     case "CLEAR_ANNOTATIONS":

@@ -45,7 +45,12 @@ export type FogReveal =
   | { kind: "rect"; x: number; y: number; w: number; h: number; mode?: "reveal" | "cover" }
   | { kind: "circle"; x: number; y: number; r: number; mode?: "reveal" | "cover" }
   /** Freehand brush stroke: flat [x0,y0,x1,y1,…]; stroke width = 2r, round caps. */
-  | { kind: "brush"; points: number[]; r: number; mode?: "reveal" | "cover" };
+  | { kind: "brush"; points: number[]; r: number; mode?: "reveal" | "cover" }
+  /** Filled selection polygon (rectangle-drag / lasso / polygon-lasso): flat [x0,y0,…], auto-closed. */
+  | { kind: "poly"; points: number[]; mode?: "reveal" | "cover" };
+
+/** Which fog paint/selection shape the DM's fog tool uses (client-only, not persisted). */
+export type FogShape = "brush" | "rect" | "lasso" | "polygon";
 
 export type SceneFog = {
   enabled: boolean;
@@ -230,6 +235,8 @@ export const MAX_POINTER_ARROWS_PER_AUTHOR = 5;
 export const MAX_FOG_REVEALS = 300;
 /** Flat x,y numbers per fog brush stroke (60 samples) — 300×120 ≈ 290KB worst case. */
 export const MAX_FOG_BRUSH_POINTS = 120;
+/** Flat x,y numbers per fog selection polygon (lasso/polygon); freehand lassos need more vertices. */
+export const MAX_FOG_POLY_POINTS = 512;
 export const MAX_MEASURE_NUMBERS = 48; // flat x,y numbers → 24 ruler points
 
 /**
@@ -1319,6 +1326,8 @@ export type ClientMessage =
   | { type: "TEMPLATE"; sceneId: string; shape: TemplateShape | null }
   | { type: "ADD_ANNOTATION"; sceneId: string; annotation: Annotation }
   | { type: "REMOVE_ANNOTATION"; sceneId: string; annotationId: string }
+  /** Edit an existing annotation in place (pins): note text and/or position. */
+  | { type: "UPDATE_ANNOTATION"; sceneId: string; annotationId: string; text?: string; x?: number; y?: number }
   | { type: "CLEAR_ANNOTATIONS"; sceneId: string }
   | { type: "FOG_SET"; sceneId: string; enabled: boolean; inverted?: boolean }
   | { type: "FOG_REVEAL"; sceneId: string; shape: FogReveal }
@@ -2217,6 +2226,22 @@ export function sanitizeFogReveal(shape: unknown): FogReveal | null {
       kind: "brush",
       points: s.points.slice(0, MAX_FOG_BRUSH_POINTS).map((value) => numberOr(value, 0)),
       r: Math.min(Math.max(r, 4), 2000),
+      ...cover,
+    };
+  }
+  if (s.kind === "poly") {
+    // A filled selection polygon (≥3 vertices = 6 numbers); auto-closed on render.
+    if (
+      !Array.isArray(s.points) ||
+      s.points.length < 6 ||
+      s.points.length % 2 !== 0 ||
+      !s.points.every((value) => Number.isFinite(value))
+    ) {
+      return null;
+    }
+    return {
+      kind: "poly",
+      points: s.points.slice(0, MAX_FOG_POLY_POINTS).map((value) => numberOr(value, 0)),
       ...cover,
     };
   }

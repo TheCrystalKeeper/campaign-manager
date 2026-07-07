@@ -62,6 +62,18 @@ export const FogLayer = memo(function FogLayer({ scene, isDm }: { scene: Scene; 
             />
           );
         }
+        if (shape.kind === "poly") {
+          // Filled selection polygon (rect-drag / lasso / polygon-lasso), auto-closed.
+          return (
+            <Line
+              key={index}
+              points={shape.points}
+              closed
+              fill={fill}
+              globalCompositeOperation={op}
+            />
+          );
+        }
         return (
           <Line
             key={index}

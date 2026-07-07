@@ -4,6 +4,7 @@ import type { LightPreset } from "../map/tools/lights";
 import {
   TEMPLATE_KINDS,
   WALL_BRUSHES,
+  type FogShape,
   type LightBlendMode,
   type TemplateKind,
   type WallBrush,
@@ -11,6 +12,12 @@ import {
 import type { History } from "../lib/history";
 
 const DRAW_COLORS = ["#ffd166", "#ff6b6b", "#7cc4ff", "#8ce99a", "#f3f0ff"];
+const FOG_SHAPE_OPTIONS: Array<{ id: FogShape; label: string; title: string }> = [
+  { id: "brush", label: "🖌 Brush", title: "Freehand brush — paint fog (Alt+scroll resizes)" },
+  { id: "rect", label: "▭ Rect", title: "Rectangle select — drag a box to fog the area" },
+  { id: "lasso", label: "◠ Lasso", title: "Lasso — drag a freehand outline, release to fill" },
+  { id: "polygon", label: "⬟ Polygon", title: "Polygon lasso — click vertices; dbl-click or first point to finish" },
+];
 const TEMPLATE_ICON: Record<TemplateKind, string> = {
   circle: "○ Circle",
   cone: "◁ Cone",
@@ -72,6 +79,9 @@ type MapToolbarProps = {
   onResetFog: () => void;
   fogMode: "reveal" | "cover";
   onFogMode: (mode: "reveal" | "cover") => void;
+  /** Fog shape: freehand brush vs rectangle / lasso / polygon-lasso area selection. */
+  fogShape: FogShape;
+  onFogShape: (shape: FogShape) => void;
   /** Brush radius in grid cells (radius = gridSize × scale). */
   fogBrushScale: number;
   onFogBrushScale: (scale: number) => void;
@@ -151,7 +161,9 @@ function OptBtn({
 const Label = ({ children }: { children: ReactNode }) => (
   <span className="map-opt-label">{children}</span>
 );
-const Row = ({ children }: { children: ReactNode }) => <div className="map-opt-row">{children}</div>;
+const Row = ({ children, className }: { children: ReactNode; className?: string }) => (
+  <div className={`map-opt-row${className ? ` ${className}` : ""}`}>{children}</div>
+);
 
 /// <summary>
 /// Left-edge map toolbar: a vertical rail of tool buttons + the snap toggle, and a
@@ -178,6 +190,8 @@ export function MapToolbar({
   onResetFog,
   fogMode,
   onFogMode,
+  fogShape,
+  onFogShape,
   fogBrushScale,
   onFogBrushScale,
   fogInverted,
@@ -443,7 +457,7 @@ export function MapToolbar({
               ⇄ Invert
             </OptBtn>
           </Row>
-          <Label>Brush paints</Label>
+          <Label>{fogMode === "cover" ? "Paints fog in" : "Reveals area"}</Label>
           <Row>
             <OptBtn
               active={fogMode === "reveal"}
@@ -460,17 +474,34 @@ export function MapToolbar({
               🌫 Cover
             </OptBtn>
           </Row>
-          <Label>Brush size ({fogBrushScale.toFixed(2)} cells)</Label>
-          <input
-            className="map-opt-slider"
-            type="range"
-            min={0.15}
-            max={3}
-            step={0.05}
-            value={fogBrushScale}
-            title="Fog brush radius (in grid cells)"
-            onChange={(e) => onFogBrushScale(Number(e.target.value))}
-          />
+          <Label>Shape</Label>
+          <Row className="row-wrap">
+            {FOG_SHAPE_OPTIONS.map((option) => (
+              <OptBtn
+                key={option.id}
+                active={fogShape === option.id}
+                title={option.title}
+                onClick={() => onFogShape(option.id)}
+              >
+                {option.label}
+              </OptBtn>
+            ))}
+          </Row>
+          {fogShape === "brush" ? (
+            <>
+              <Label>Brush size ({fogBrushScale.toFixed(2)} cells)</Label>
+              <input
+                className="map-opt-slider"
+                type="range"
+                min={0.15}
+                max={3}
+                step={0.05}
+                value={fogBrushScale}
+                title="Fog brush radius (in grid cells) — Alt+scroll on the map also resizes"
+                onChange={(e) => onFogBrushScale(Number(e.target.value))}
+              />
+            </>
+          ) : null}
           <Row>
             <OptBtn
               title={fogInverted ? "Clear all painted fog" : "Re-cover the whole map"}
@@ -479,7 +510,15 @@ export function MapToolbar({
               ♻ {fogInverted ? "Clear fog" : "Re-cover"}
             </OptBtn>
           </Row>
-          <span className="map-toolbar-hint">Paint to {fogMode} · click for a single dab</span>
+          <span className="map-toolbar-hint">
+            {fogShape === "brush"
+              ? `Paint to ${fogMode} · click for a single dab · Alt+scroll = size`
+              : fogShape === "rect"
+                ? `Drag a box to ${fogMode} the area`
+                : fogShape === "lasso"
+                  ? `Drag a freehand outline to ${fogMode}; release to fill`
+                  : `Click to add points · dbl-click or first point to finish · right-click/Esc cancels`}
+          </span>
         </div>
       ) : null}
 

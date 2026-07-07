@@ -179,6 +179,29 @@ function check(name: string, ok: boolean, detail = "") {
     "duplicate annotation id ignored",
     applySceneMessage(annotated, { type: "ADD_ANNOTATION", sceneId: "sc", annotation: ann }) === annotated,
   );
+  const edited = applySceneMessage(annotated, {
+    type: "UPDATE_ANNOTATION", sceneId: "sc", annotationId: "a1", text: "trap here",
+  });
+  check("UPDATE_ANNOTATION edits text in place", edited.annotations[0].text === "trap here");
+  const moved = applySceneMessage(annotated, {
+    type: "UPDATE_ANNOTATION", sceneId: "sc", annotationId: "a1", x: 42, y: 99,
+  });
+  check(
+    "UPDATE_ANNOTATION moves the annotation, leaving text untouched",
+    moved.annotations[0].x === 42 && moved.annotations[0].y === 99 && moved.annotations[0].text === undefined,
+  );
+  check(
+    "UPDATE_ANNOTATION caps text at 200",
+    applySceneMessage(annotated, {
+      type: "UPDATE_ANNOTATION", sceneId: "sc", annotationId: "a1", text: "x".repeat(300),
+    }).annotations[0].text?.length === 200,
+  );
+  check(
+    "UPDATE_ANNOTATION on a missing id is a no-op",
+    applySceneMessage(annotated, {
+      type: "UPDATE_ANNOTATION", sceneId: "sc", annotationId: "nope", text: "x",
+    }) === annotated,
+  );
   const cleared = applySceneMessage(annotated, { type: "CLEAR_ANNOTATIONS", sceneId: "sc" });
   check("CLEAR_ANNOTATIONS empties", cleared.annotations.length === 0);
 
