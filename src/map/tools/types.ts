@@ -10,6 +10,14 @@ import type { ClientMessage, FogShape, Light, Scene, TemplateKind, WallBrush } f
 
 export type ToolPoint = { x: number; y: number };
 
+/**
+ * How the calibrate tool interprets a drag:
+ *  - "adjust" — the direct-manipulation gizmo: drag a reference-cell CORNER to resize, drag
+ *    anywhere else to move the grid. Move + resize with no mode switching.
+ *  - "box"    — drag a fresh box over one map square to set size + offset from scratch.
+ */
+export type CalibrateMode = "adjust" | "box";
+
 export type ToolPointerEvent = {
   /** Pointer position in map/world coordinates (through the stage transform). */
   world: ToolPoint;
@@ -45,6 +53,13 @@ export type ToolRuntime = {
   templateKind: TemplateKind;
   /** Templates tool: pin the shape as a persistent annotation instead of a fading relay. */
   templatePin: boolean;
+  /** Calibrate tool: the direct-manipulation "adjust" mode, or the box-a-cell gesture. */
+  calibrateMode: CalibrateMode;
+  /**
+   * Live viewport scale (world px → screen px). Lets tools size hit-thresholds and draw handles at
+   * a consistent SCREEN size regardless of zoom — used by the calibrate "adjust" grid-point handles.
+   */
+  viewportScale: number;
 };
 
 export type MapTool = {

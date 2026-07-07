@@ -166,7 +166,7 @@ export function useDiceOverlay(room: GameRoom, roomId: string | null): DiceOverl
                 });
               }
             },
-            onImpact: (strength) => audioRef.current?.impact(strength),
+            onImpact: (strength, coin) => audioRef.current?.impact(strength, coin),
             getSafeInsets: () => safeAreaRef.current?.() ?? { top: 24, right: 24, bottom: 24, left: 24 },
           });
           engine.setMapProjection(viewportRef.current);

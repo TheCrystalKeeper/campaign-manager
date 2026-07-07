@@ -66,7 +66,7 @@ import { LIGHT_PRESETS, type LightPreset } from "../map/tools/lights";
 import { RulerShape } from "../map/tools/measure";
 import { TemplateShapeView } from "../map/tools/template";
 import { commitPin, updatePin, movePin, PinMarker, PinNoteEditor, type PinDraft } from "../map/tools/pin";
-import type { ToolPointerEvent, ToolRuntime } from "../map/tools/types";
+import type { CalibrateMode, ToolPointerEvent, ToolRuntime } from "../map/tools/types";
 import { MapToolbar } from "./MapToolbar";
 import { FogLayer } from "./MapFog";
 import { computeVisiblePointIds, computeVisibleTokenIds, DmLightingOverlay, DoorLayer, LightTintLayer, VisionMaskLayer, WallsLightsEditor } from "./MapVision";
@@ -485,6 +485,7 @@ function TokenNode({
   onOpenSheet,
   onMove,
   onRotate,
+  onDragActive,
 }: {
   token: GameState["tokens"][number];
   /** Portrait to render on the token (resolved live from the linked sheet). */
@@ -509,6 +510,9 @@ function TokenNode({
   onMove: (x: number, y: number) => void;
   /** Rotate handle (selected + controllable): commit a new facing on pointer-up. */
   onRotate?: (facing: number) => void;
+  /** Fires true when a real move-drag starts, false when it ends — lets the board hide the
+   *  duplicate above-darkness name label for this token while it's being dragged. */
+  onDragActive?: (active: boolean) => void;
 }) {
   const img = useImage(imageUrl);
   // Render a crisp, size-appropriate copy so large uploads don't look soft in a small token.
@@ -652,9 +656,16 @@ function TokenNode({
         // Shift-drag draws a pointer arrow; grabbing the facing arrow rotates instead of moving.
         if (e.evt.shiftKey || rotatingRef.current) {
           e.target.stopDrag();
+          return;
         }
+        // A real move begins: let the board suppress the duplicate above-darkness name label,
+        // which is pinned to the (not-yet-updated) React position and would otherwise trail.
+        onDragActive?.(true);
       }}
-      onDragEnd={(e) => onMove(e.target.x(), e.target.y())}
+      onDragEnd={(e) => {
+        onDragActive?.(false);
+        onMove(e.target.x(), e.target.y());
+      }}
     >
       {isCurrentTurn ? (
         <Circle radius={radius + 4} stroke={CURRENT_TURN_COLOR} strokeWidth={2.5} listening={false} />
@@ -1128,6 +1139,8 @@ export function MapCanvas({
   /** Templates tool: which shape to draw, and whether to pin it as an annotation. */
   const [templateKind, setTemplateKind] = useState<TemplateKind>("circle");
   const [templatePin, setTemplatePin] = useState(false);
+  /** Calibrate tool: the direct-manipulation gizmo (move + resize), or the box-a-cell gesture. */
+  const [calibrateMode, setCalibrateMode] = useState<CalibrateMode>("adjust");
   /** Active middle-mouse pan: pointer start + the viewport frozen at press. */
   const panRef = useRef<{ x: number; y: number; vp: Viewport } | null>(null);
 
@@ -1163,6 +1176,51 @@ export function MapCanvas({
     const ftToPx = sc.gridSize / Math.max(sc.feetPerSquare, 1);
     return computeVisibleTokenIds(sc, viewers, scTokens, ftToPx, ambientLit ? 0 : 1);
   }, [state.scenes, state.tokens, sceneId, isDm, yourPlayerId, visionPreview, ambientLit]);
+
+  // The token currently being move-dragged, so the above-darkness label layer can skip its
+  // SECOND (bright) copy of that token's name. That copy is positioned from React state, which
+  // doesn't update mid-drag (moves are server-authoritative, applied on echo) — so without this
+  // it trails behind the live in-token label as a duplicate. Suppression is held past dragEnd
+  // (see `settleDrag`) until the committed position lands in state, so the copy never flashes
+  // back at the stale spot before the round-trip completes.
+  const [draggingLabelId, setDraggingLabelId] = useState<string | null>(null);
+  const dragSettleRef = useRef<{ id: string; x: number; y: number; timer: ReturnType<typeof setTimeout> } | null>(null);
+  const setTokenDragActive = useCallback(
+    (id: string, active: boolean) => {
+      if (active) {
+        if (dragSettleRef.current) {
+          clearTimeout(dragSettleRef.current.timer);
+          dragSettleRef.current = null;
+        }
+        setDraggingLabelId(id);
+        return;
+      }
+      // Drag ended: keep suppressing until the token's state position changes (the echo arrived)
+      // or a short fallback elapses (covers a no-op move that lands exactly where it started).
+      const current = state.tokens.find((t) => t.id === id);
+      const timer = setTimeout(() => {
+        dragSettleRef.current = null;
+        setDraggingLabelId((cur) => (cur === id ? null : cur));
+      }, 600);
+      dragSettleRef.current = { id, x: current?.x ?? 0, y: current?.y ?? 0, timer };
+    },
+    [state.tokens],
+  );
+  // Clear the post-drag suppression the moment the dragged token's committed position lands in
+  // state (in-token + bright copies now agree), so the bright label returns without a stale flash.
+  useEffect(() => {
+    const pending = dragSettleRef.current;
+    if (!pending) return;
+    const token = state.tokens.find((t) => t.id === pending.id);
+    if (token && (token.x !== pending.x || token.y !== pending.y)) {
+      clearTimeout(pending.timer);
+      dragSettleRef.current = null;
+      setDraggingLabelId((cur) => (cur === pending.id ? null : cur));
+    }
+  }, [state.tokens]);
+  useEffect(() => () => {
+    if (dragSettleRef.current) clearTimeout(dragSettleRef.current.timer);
+  }, []);
 
   // Which door icons are visible to the current viewer: same "at least a little lit" rule as
   // token labels, so a door isn't spottable through fog of war. `null` = show every door (lit
@@ -1462,17 +1520,45 @@ export function MapCanvas({
     deleteHoveredOrSelectedWalls,
   ]);
 
+  // A live calibrate drag previews the grid it's about to commit: "move" slides the offset, "resize"
+  // changes the cell size (pinned at the grabbed corner). Reduced to effective size/offset scalars so
+  // the grid memo below recomputes only when the grid actually changes — not on every frame of some
+  // other tool's draft (measure, wall chain, …).
+  const calPreview =
+    activeToolId === "calibrate"
+      ? (draft as { mode?: string; dx?: number; dy?: number; ox?: number; oy?: number; size?: number } | null)
+      : null;
+  const calMoving = calPreview?.mode === "move";
+  const calResizing = calPreview?.mode === "resize";
+  const gridPreviewing = Boolean(calMoving || calResizing);
+  const baseGridSize = scene?.gridSize ?? 0;
+  const modInto = (value: number, m: number) => (m > 0 ? ((value % m) + m) % m : 0);
+  const previewGridSize =
+    calResizing && baseGridSize > 0 ? Math.max(Math.round(calPreview?.size ?? baseGridSize), 1) : baseGridSize;
+  const previewOffsetX = calResizing
+    ? modInto(calPreview?.ox ?? 0, previewGridSize)
+    : (scene?.gridOffsetX ?? 0) + (calMoving ? calPreview?.dx ?? 0 : 0);
+  const previewOffsetY = calResizing
+    ? modInto(calPreview?.oy ?? 0, previewGridSize)
+    : (scene?.gridOffsetY ?? 0) + (calMoving ? calPreview?.dy ?? 0 : 0);
+
   const gridLines = useMemo(() => {
     const lines: number[][] = [];
-    if (!scene || !scene.showGrid || scene.gridSize <= 0) {
+    if (!scene || previewGridSize <= 0) {
       return lines;
     }
-    const { width, height, gridSize, gridOffsetX, gridOffsetY } = scene;
+    // While calibrating by drag, force the grid visible even if Show grid is off, so there's
+    // something to align against.
+    if (!scene.showGrid && !gridPreviewing) {
+      return lines;
+    }
+    const { width, height } = scene;
+    const gridSize = previewGridSize;
     if (width / gridSize + height / gridSize > 600) {
       return lines; // guard against pathological grid counts
     }
-    const startX = ((gridOffsetX % gridSize) + gridSize) % gridSize;
-    const startY = ((gridOffsetY % gridSize) + gridSize) % gridSize;
+    const startX = ((previewOffsetX % gridSize) + gridSize) % gridSize;
+    const startY = ((previewOffsetY % gridSize) + gridSize) % gridSize;
     for (let x = startX; x <= width; x += gridSize) {
       lines.push([x, 0, x, height]);
     }
@@ -1480,7 +1566,7 @@ export function MapCanvas({
       lines.push([0, y, width, y]);
     }
     return lines;
-  }, [scene]);
+  }, [scene, previewGridSize, previewOffsetX, previewOffsetY, gridPreviewing]);
 
   if (!scene) {
     return <div className={`map-root${embedded ? " map-root--embedded" : ""}`} ref={rootRef} />;
@@ -1514,6 +1600,8 @@ export function MapCanvas({
     lightRadii: LIGHT_PRESETS[lightPreset],
     templateKind,
     templatePin,
+    calibrateMode,
+    viewportScale: viewport.scale,
   };
 
   // A wall chain is being drawn (walls tool + a placed first vertex) — walls go inert so the next
@@ -1763,11 +1851,22 @@ export function MapCanvas({
     ([, tpl]) => tpl.sceneId === scene.id,
   );
 
+  // Calibrate "adjust" cursor: a resize cursor while a grid-point handle is hovered/dragged (so it
+  // reads as grabbable), else the move cursor (drag anywhere else slides the grid).
+  const calibrateDraftMode = (draft as { mode?: string } | null)?.mode;
+  const rootCursor = !toolActive
+    ? undefined
+    : activeTool.id === "calibrate" && calibrateMode === "adjust"
+      ? calibrateDraftMode === "hover" || calibrateDraftMode === "resize"
+        ? "nwse-resize"
+        : "move"
+      : activeTool.cursor;
+
   return (
     <div
       className={`map-root${embedded ? " map-root--embedded" : ""}`}
       ref={rootRef}
-      style={toolActive ? { cursor: activeTool.cursor } : undefined}
+      style={rootCursor ? { cursor: rootCursor } : undefined}
       // Right-click is a game gesture here (delete wall/light, etc.) — never the browser's
       // save/copy/inspect menu.
       onContextMenu={(e) => e.preventDefault()}
@@ -1963,6 +2062,7 @@ export function MapCanvas({
                   onMoveToken(token.id, target.x, target.y);
                 }}
                 onRotate={draggable ? (facing) => onMoveToken(token.id, token.x, token.y, facing) : undefined}
+                onDragActive={(active) => setTokenDragActive(token.id, active)}
               />
             );
           })}
@@ -2002,6 +2102,9 @@ export function MapCanvas({
           <Layer listening={false}>
             {sceneTokens.map((token) => {
               if (!tokenLabelIds.has(token.id)) return null;
+              // Skip the bright copy for a token being dragged: the in-token label carries it
+              // live meanwhile, so the two never separate into a trailing duplicate.
+              if (token.id === draggingLabelId) return null;
               const linkedSheetId = token.sheetId ?? token.ownerPlayerId;
               const sheet = linkedSheetId ? state.sheets[linkedSheetId] : undefined;
               const sheetHp = sheet?.data.hp;
@@ -2160,6 +2263,8 @@ export function MapCanvas({
         onTemplateKind={setTemplateKind}
         templatePin={templatePin}
         onToggleTemplatePin={() => setTemplatePin((v) => !v)}
+        calibrateMode={calibrateMode}
+        onCalibrateMode={setCalibrateMode}
         fogEnabled={scene.fog.enabled}
         onToggleFog={() => send({ type: "FOG_SET", sceneId: scene.id, enabled: !scene.fog.enabled })}
         onResetFog={() => send({ type: "FOG_RESET", sceneId: scene.id })}

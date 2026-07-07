@@ -125,6 +125,8 @@ interface RollInstance {
   k0: number;
   mode: RollMode;
   local: boolean;
+  /** Whole roll is coins — used to give impacts a metallic ring instead of a clack. */
+  coin: boolean;
   track: DiceTrack | null;
   trackStart: number | null;
   nextImpact: number;
@@ -157,8 +159,9 @@ export interface DiceEngineCallbacks {
   ) => void;
   /** The screen area dice must stay inside, sampled fresh at each throw. */
   getSafeInsets?: () => SafeInsets;
-  /** A die-on-surface impact, strength ~ relative speed, for sound effects. */
-  onImpact?: (strength: number) => void;
+  /** A die-on-surface impact, strength ~ relative speed, for sound effects. `coin` is set
+   * when the whole roll is coins, so audio can swap the clack for a metallic ring. */
+  onImpact?: (strength: number, coin: boolean) => void;
   /** A roll finished playing back its track. */
   onSettled?: (rollId: string) => void;
 }
@@ -970,6 +973,7 @@ export class DiceEngine {
       k0,
       mode,
       local,
+      coin: dice.length > 0 && dice.every((d) => d.spec.kind === "coin"),
       track: null,
       trackStart: null,
       nextImpact: 0,
@@ -1045,7 +1049,7 @@ export class DiceEngine {
     if (f > last) f = last;
     this.applyTrackFrame(roll, f);
     while (roll.nextImpact < track.impacts.length && track.impacts[roll.nextImpact].frame <= f) {
-      this.callbacks.onImpact?.(track.impacts[roll.nextImpact].strength);
+      this.callbacks.onImpact?.(track.impacts[roll.nextImpact].strength, roll.coin);
       roll.nextImpact += 1;
     }
     if (f >= last) {

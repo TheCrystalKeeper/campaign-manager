@@ -7,11 +7,17 @@ architecture reference — **historical**, describes the codebase before Phases 
 
 ## STATUS (2026-07-07) — read this first in a fresh session
 
-**Latest (2026-07-07): board render-quality round** — fixed pervasive text/image blur on the
-board (zoom-bucketed image caches, device-pixel-snapped text, smoothing-quality coverage for
-late-mounted layers, and a per-client "Hi-res board rendering" setting). Details in the
-**Render-quality round** note under Phase 7's as-built section; superseded sizing prose in the
-older "Crisp token images" note is annotated in place.
+**Latest (2026-07-07): map-interaction QoL round** — hover/drag affordances plus a
+direct-manipulation grid calibrator: pins are grabbable/editable in **select** mode (not just the
+pin tool); hovering a wall in the **walls** tool shows a move/grab cursor (not the crosshair); doors
+**highlight + show a pointer** cursor on hover in select mode; and the 🎯 grid-calibrate tool's
+default **"Adjust" mode** makes **every grid intersection a resize handle** — hover a grid point and
+a circle pops up; drag it to resize (the diagonally opposite corner pins), or drag anywhere else to
+move the grid (move + resize with no button switching). **Box a cell** is kept for from-scratch
+calibration. Live full-grid preview throughout. Details in the **Map-interaction QoL round** note at
+the end of Phase 7 (after the Map-pin revamp note). The prior **board render-quality round** is
+documented under Phase 7's as-built section (zoom-bucketed image caches, device-pixel-snapped text,
+a per-client "Hi-res board rendering" setting).
 
 **Phases 0–7 are SHIPPED and machine-verified** (plus several UX-feedback rounds and a
 3D-dice feedback round). **Phase 7 (game-content depth) just shipped** as sub-rounds
@@ -1300,9 +1306,10 @@ Live-OFF staged edits, Set Live flow, hotkey isolation, Players tabs.
 > pressing e.g. `V` while hovering a light — fixed with a `useEffect` in
 > `WallsLightsEditor` clearing `hoveredLightId`/`hoveredRing` whenever `lightsActive`
 > goes false.
-> - **Blend-mode dropdown reorder** (two small user requests): "None (fog only)" moved to
-> first, then "Overlay" moved to second — final order None → Overlay → Screen → Soft
-> Light → Multiply → Add (Glow) (`LIGHT_BLEND_OPTIONS` in `MapToolbar.tsx`).
+> - **Blend-mode dropdown reorder** (three small user requests, latest 2026-07-07): "None
+> (fog only)" moved to first, then "Overlay" moved to second, then **"Screen" moved to
+> second** (bumping Overlay down) — final order None → Screen → Overlay → Soft Light →
+> Multiply → Add (Glow) (`LIGHT_BLEND_OPTIONS` in `MapToolbar.tsx`).
 > All verified via `tsc --noEmit` after each change; no protocol/message changes
 > (client-only UX + one CSS/state fix each).
 
@@ -1895,6 +1902,31 @@ the fixed recipe (GameState field → normalize → message → redaction → ca
 >   launch gotchas (port collisions, stale `workerd` orphans holding :1999) and the exact
 >   selectors (`.dir-blank-chip`, `button[title="Actors"/"Settings"]`, the `ToggleRow` button
 >   pattern) so a future session doesn't re-derive them from scratch.
+>
+> **Duplicate token-name label on fast drag (2026-07-07, user feedback — same round).** On a
+> **dynamic-lighting ("Dark") scene** the token name is drawn twice: once inside the token's
+> Konva Group and once in the separate **above-darkness label layer** (`tokenLabelIds`) so a lit
+> token's name stays legible over the darkness sheet. Konva moves the in-token copy live during
+> a drag, but the top copy's Group is positioned from **React state** (`token.x/token.y`), which
+> doesn't update mid-drag — moves are server-authoritative (`send()` on `dragEnd`, applied on
+> echo; no optimistic local apply). So while dragging, the bright copy stays pinned at the
+> pre-drag spot and trails the live one as a **duplicate** (worst when whipping the token back
+> and forth; it "remains" until the round-trip lands). Not a canvas-clear bug (no layer sets
+> `clearBeforeDraw(false)` — a single layer always fully clears; the duplicate is inherent to
+> the two-copy design) and predates the render-quality work above. **Fix (`MapCanvas.tsx`):**
+> `TokenNode` fires a new `onDragActive(active)` on real move-drags (not the shift-arrow /
+> facing-rotate gestures, which already `stopDrag`); `MapCanvas` tracks the dragged token in
+> `draggingLabelId` and the above-darkness layer **skips the bright copy for that token** — the
+> in-token copy carries the name live meanwhile (on the DM overview it's dimmed ≤62%, still
+> readable; a player's own dragged token is inside their LOS, so bright anyway). Suppression is
+> **held past `dragEnd`** until the committed position lands in state (an effect watching
+> `state.tokens` for that token's x/y to change) or a 600ms fallback fires — so the bright copy
+> never flashes back at the stale spot during the echo window, and a rejected/clamped move
+> settles cleanly too. No per-frame re-renders (`draggingLabelId` changes only at drag
+> start/settle). **Runtime-verified headless** (Dark scene via the lights-tool 🌙 toggle, then a
+> mid-drag capture): with the suppression disabled the frame shows two "Token" labels (stale
+> origin copy + live one — the reported bug reproduced), with it enabled exactly one follows the
+> token and the post-release frame is clean. `npx tsc` + `npm run build` green.
 
 > **RESOLVED DESIGN (2026-07-04, user + exploration) — this block is the canonical build
 > spec; the prose below it is the layout/UX reference it was distilled from.** Two new
@@ -2227,6 +2259,54 @@ campaign byte-identically (minus connection fields).
 > and the DM's markers are never hidden.
 > - **Files:** `src/map/tools/pin.tsx`, `src/components/MapCanvas.tsx`, `src/index.css`,
 > `src/lib/{types,sceneMessages}.ts`, `partykit/server.ts`, `tests/unit-scene-editor.test.ts`.
+
+> **Map-interaction QoL round (2026-07-07, `revamp` branch — user feedback; `tsc -p` clean,
+> no server/protocol changes):** hover/drag affordances across the board plus a big upgrade to
+> grid calibration. All client-side; grid edits still ride the existing `UPDATE_SCENE`.
+> - **Pins are grabbable/editable in select (V) mode, not just the pin tool.** A
+> `pinsInteractive = activeTool.id === "pin" || (isDm && activeTool.id === "select")` flag
+> (`MapCanvas.tsx`) now gates the pin `Layer`'s `listening`, the `onEdit`/`onMove` handlers on each
+> `PinNode`, and the `PinNoteEditor` popover — so the DM can drag/edit/right-click-erase existing
+> pins during play without switching tools. Select mode still can't *drop* a fresh pin (that stays
+> the pin tool's job). Pins are DM-only, so it's gated on `isDm`.
+> - **Wall hover cursor (walls tool).** `WallNode` (`MapVision.tsx`) now swaps the stage cursor on
+> hover instead of leaving the tool crosshair over a grabbable wall — `move` over the draggable
+> body, `grab` over an endpoint handle, cleared back to the crosshair on leave (mirrors the existing
+> light-marker/ring cursor pattern).
+> - **Door hover highlight + cursor (select mode).** `DoorLayer` was split into a per-door
+> `DoorGlyph` with its own hover state and a new `interactive` prop (passed as
+> `activeTool.id === "select"`). Hovering a door in select mode brightens the glyph (bigger ring,
+> brighter stroke, colored glow) and shows a `pointer` cursor, signaling it's clickable to toggle
+> state. Click/right-click behavior is unchanged; feedback is off during wall/lights editing.
+> - **Grid calibration is now direct-manipulation on the grid POINTS** (answers "let the DM
+> move/resize the grid to match the map by dragging", then "make move+resize seamless — no switching
+> buttons", then "let me hover a grid point and drag that to resize"). `CalibrateMode = "adjust" |
+> "box"` on `ToolRuntime` (+ `runtime.viewportScale` for screen-consistent handles/thresholds); state
+> + preview + hover-aware cursor in `MapCanvas`, two buttons in `MapToolbar`. Used mainly on the
+> Scenes page but available wherever the DM has the 🎯 tool; each gesture commits one `UPDATE_SCENE`
+> on release (undoable + staged-editor safe via the Scenes-page history/draft path).
+>   - **Adjust** (default, `calibrate.tsx`) — **every grid intersection is a resize handle.** The
+>     tool's `onMove` runs even without a button, so hovering near a grid point (`nearestGridPoint`,
+>     within ~16 screen px) pops up a circle handle there (a transient `{mode:"hover"}` draft; updated
+>     only on change to avoid re-render churn). `onDown`: **near a point → resize; anywhere else →
+>     move** (manual hit-test since `renderDraft` sits in a `listening=false` layer).
+>     - *Resize* (`resizeGeom`): the pinned corner is the grid point one **original** cell (`g0`) away
+>       diagonally, on the side OPPOSITE the drag (`sx,sy` from the drag sign) — so pulling the point
+>       out grows the cell with **no collapse** (the point starts a full cell from its pivot). Size =
+>       dominant-axis distance from the pivot to the cursor; on commit `gridSize = size`,
+>       `offset = mod(pivot, size)` so that pivot stays a grid corner (grid resizes in place).
+>     - *Move* slides `gridOffsetX/Y` by the drag delta (a <1px drag is treated as a click, no-op).
+>     - Overlays are **screen-constant** (÷ `scale`): a pop-up handle on hover; on resize, the pinned
+>       corner dot + the dragged handle + the sized cell + a px readout. `onLeave` clears only a
+>       resting hover handle (a mid-drag gesture survives a brief exit).
+>   - **Box a cell** — drag a fresh square over one map cell → `gridSize` + offset from scratch
+>     (kept for initial calibration; it's a different intent you don't rapidly switch to).
+>   - **Live full-grid preview:** `MapCanvas.gridLines` reduces the active move/resize draft to effective
+>     `previewGridSize`/`previewOffsetX/Y` scalars (memo recomputes only when the grid actually changes,
+>     not on every unrelated tool draft or hover tick) and renders the *whole* grid at the pending
+>     values — forced visible even if Show grid is off, so there's something to align to.
+> - **Files:** `src/map/tools/{types,calibrate}.tsx`,
+> `src/components/{MapCanvas,MapVision,MapToolbar,SceneSettings}.tsx`.
 
 ---
 

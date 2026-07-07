@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import type { MapTool } from "../map/tools/types";
+import type { CalibrateMode, MapTool } from "../map/tools/types";
 import type { LightPreset } from "../map/tools/lights";
 import {
   TEMPLATE_KINDS,
@@ -28,8 +28,8 @@ const DRAW_WIDTHS = [2, 4, 7];
 /** CSP-style labels for the light tint blend modes (+ the tint-off escape hatch). */
 const LIGHT_BLEND_OPTIONS: Array<{ id: LightBlendMode; label: string }> = [
   { id: "none", label: "None (fog only)" },
-  { id: "overlay", label: "Overlay" },
   { id: "screen", label: "Screen" },
+  { id: "overlay", label: "Overlay" },
   { id: "soft-light", label: "Soft Light" },
   { id: "multiply", label: "Multiply" },
   { id: "plus-lighter", label: "Add (Glow)" },
@@ -74,6 +74,9 @@ type MapToolbarProps = {
   onTemplateKind: (kind: TemplateKind) => void;
   templatePin: boolean;
   onToggleTemplatePin: () => void;
+  /** Calibrate tool: box-over-one-square vs free-drag to slide the grid. */
+  calibrateMode: CalibrateMode;
+  onCalibrateMode: (mode: CalibrateMode) => void;
   fogEnabled: boolean;
   onToggleFog: () => void;
   onResetFog: () => void;
@@ -183,6 +186,8 @@ export function MapToolbar({
   onTemplateKind,
   templatePin,
   onToggleTemplatePin,
+  calibrateMode,
+  onCalibrateMode,
   drawWidth,
   onDrawWidth,
   fogEnabled,
@@ -524,7 +529,28 @@ export function MapToolbar({
 
       {activeToolId === "calibrate" && isDm ? (
         <div className="map-toolbar-options">
-          <span className="map-toolbar-hint">Drag a box over exactly one map square.</span>
+          <Label>Calibrate by</Label>
+          <Row>
+            <OptBtn
+              active={calibrateMode === "adjust"}
+              title="Direct-manipulate the grid: hover a grid point and drag it to resize, drag anywhere else to move"
+              onClick={() => onCalibrateMode("adjust")}
+            >
+              ✥⤢ Move + Resize
+            </OptBtn>
+            <OptBtn
+              active={calibrateMode === "box"}
+              title="Drag a fresh box over exactly one map square — sets the grid size and offset from scratch"
+              onClick={() => onCalibrateMode("box")}
+            >
+              ▦ Box a cell
+            </OptBtn>
+          </Row>
+          <span className="map-toolbar-hint">
+            {calibrateMode === "adjust"
+              ? "Hover a grid point and drag the handle to resize · drag anywhere else to move the grid."
+              : "Drag a box over exactly one map square."}
+          </span>
         </div>
       ) : null}
 

@@ -80,7 +80,8 @@ export function SceneSettings({ scene, roomId, onPatch, onSetFog, onResetFog }: 
 
       <div className="section-title">Grid calibration</div>
       <span className="muted" style={{ fontSize: "0.75rem" }}>
-        Tip: the 🎯 map tool (G) sets size + offset by dragging a box over one square.
+        Tip: the 🎯 map tool (G) calibrates the grid by dragging — hover a grid point and drag the
+        handle to resize, drag anywhere else to move it, or use “Box a cell” to set it from one square.
       </span>
       <div className="row">
         <div className="field" style={{ flex: 1 }}>
