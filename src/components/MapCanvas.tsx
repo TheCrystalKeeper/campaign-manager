@@ -1042,6 +1042,12 @@ export function MapCanvas({
   const [lightPreset, setLightPreset] = useState<LightPreset>("torch");
   /** Which light's config panel is open (double-click a light marker). */
   const [editingLightId, setEditingLightId] = useState<string | null>(null);
+  // Close the light config panel the moment lighting mode is exited (tool switch, Esc, hotkey
+  // toggle, …) — it's only meaningful while placing/editing lights, and left open it just
+  // covers the map with a stale panel.
+  useEffect(() => {
+    if (activeToolId !== "lights") setEditingLightId(null);
+  }, [activeToolId]);
   /** DM-local darkness while dragging the slider (before it's committed to the scene). */
   const [darknessDraft, setDarknessDraft] = useState<number | null>(null);
   /** Client toggle: run per-frame light animations (off = low-end escape hatch). */

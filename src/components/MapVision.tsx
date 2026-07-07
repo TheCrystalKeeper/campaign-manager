@@ -159,11 +159,10 @@ function animModulation(light: Light, time: number): { radiusMul: number; peak: 
     return { radiusMul: 1 - 0.3 * intensity * (1 - s), peak: 1 - 0.4 * intensity * (1 - s) };
   }
   // Flicker (torch/candle): summed incommensurate sines → pseudo-random jitter in ~[-1,1].
-  // Amplitudes are deliberately punchier than a subtle shimmer so the flicker actually reads.
   const f = Math.sin(t * 11) * 0.5 + Math.sin(t * 17.3) * 0.3 + Math.sin(t * 29.7) * 0.2;
   return {
-    radiusMul: 1 + 0.14 * intensity * f,
-    peak: Math.min(1, 1 - 0.45 * intensity * (0.5 - 0.5 * f)),
+    radiusMul: 1 + 0.06 * intensity * f,
+    peak: Math.min(1, 1 - 0.2 * intensity * (0.5 - 0.5 * f)),
   };
 }
 
@@ -1045,11 +1044,18 @@ export const WallsLightsEditor = memo(function WallsLightsEditor({
             e.cancelBubble = true;
             const p = e.target.getStage()?.getRelativePointerPosition();
             if (!p) return;
-            const ft = Math.round(Math.hypot(p.x - light.x, p.y - light.y) / ftToPx / 5) * 5;
+            const raw = Math.hypot(p.x - light.x, p.y - light.y) / ftToPx;
+            // Shift-drag: free resize (rounded to 0.1 ft to avoid float noise) for fine-tuning;
+            // otherwise snap to 5 ft.
+            const ft = e.evt.shiftKey ? Math.round(raw * 10) / 10 : Math.round(raw / 5) * 5;
+            // Bright ≤ Dim always holds: growing Bright past the current Dim pulls Dim out with
+            // it, and shrinking Dim below the current Bright pulls Bright in with it — either
+            // ring can drive the light smaller or larger, they just clamp together at the
+            // boundary instead of one stalling against the other.
             setResize(
               kind === "bright"
                 ? { id: light.id, brightR: Math.max(0, ft), dimR: Math.max(light.dimR, ft) }
-                : { id: light.id, brightR: light.brightR, dimR: Math.max(5, light.brightR, ft) },
+                : { id: light.id, brightR: Math.min(light.brightR, Math.max(5, ft)), dimR: Math.max(5, ft) },
             );
           },
           onDragEnd: (e: Konva.KonvaEventObject<DragEvent>) => {

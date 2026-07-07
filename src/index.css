@@ -152,6 +152,17 @@ label {
 .map-light-config--dock-open {
   right: calc(var(--dock-rail-w) + var(--dock-panel-w) + 12px);
 }
+/* Glass backing so the panel's text stays legible over busy map art without losing the
+   floating/see-through feel. */
+.map-light-config .panel {
+  background: rgba(20, 19, 16, 0.55);
+  backdrop-filter: var(--blur);
+  -webkit-backdrop-filter: var(--blur);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+  box-shadow: var(--elev-2);
+  overflow: hidden;
+}
 /* Reserved inline-validation slot under the Bright/Dim inputs — always occupies its line so
    showing/hiding the message never reflows the light panel. */
 .light-field-note {
