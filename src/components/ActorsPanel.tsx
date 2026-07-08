@@ -16,6 +16,12 @@ type ActorsPanelProps = {
    * (the NPCs page's own tree). NPC sheets carry an independent folder in each.
    */
   folderKind?: "actor" | "npc";
+  /**
+   * Whether creating an NPC immediately opens its sheet. The NPCs page opens it
+   * into the side-by-side authoring area (on); the dock Actors tab just adds the
+   * row, like player creation (off) — no auto-popped floating sheet.
+   */
+  openOnCreate?: boolean;
 };
 
 const newId = (prefix: string) => `${prefix}-${crypto.randomUUID().slice(0, 8)}`;
@@ -45,6 +51,7 @@ export function ActorsPanel({
   dropActorAt,
   filterKind,
   folderKind = "actor",
+  openOnCreate = true,
 }: ActorsPanelProps) {
   const records = Object.values(state.sheets).filter(
     (record) => !filterKind || record.kind === filterKind,
@@ -117,7 +124,9 @@ export function ActorsPanel({
         if (folderId) {
           dm.setSheetFolder(sheetId, folderId, undefined, folderKind);
         }
-        openSheet(sheetId);
+        if (openOnCreate) {
+          openSheet(sheetId);
+        }
       }}
       onCreateFolder={(name) =>
         dm.createFolder(

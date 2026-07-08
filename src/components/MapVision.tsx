@@ -1091,6 +1091,12 @@ export const WallsLightsEditor = memo(function WallsLightsEditor({
           name: "map-handle", // the stage's tool handler skips map-handles (no new light placed)
           draggable: true,
           dragBoundFunc: pinToParentCenter,
+          // Hit-test only the ring's outline, not its filled interior. Konva's hit graph fills
+          // every closed path by default (regardless of a visible fill), which turned each
+          // light's whole disk into a grab/select target and made overlapping lights impossible
+          // to pick apart. With fill disabled only the stroke — widened to hitStrokeWidth below —
+          // catches the pointer, so you select a light by its dotted/solid ring.
+          fillEnabled: false,
           hitStrokeWidth: 12,
           onMouseEnter: (e: Konva.KonvaEventObject<MouseEvent>) => {
             setHoveredRing({ id: light.id, kind });

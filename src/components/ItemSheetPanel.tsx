@@ -11,6 +11,7 @@ import {
 import { uploadTokenImage } from "../lib/uploadAsset";
 import { CroppableImage } from "./CroppableImage";
 import { ImageCropModal } from "./ImageCropModal";
+import { AssetPickerModal } from "./AssetPickerModal";
 
 /// <summary>
 /// Item Sheet: a compact editor for a catalog `ItemRecord` — icon, name, type, rarity,
@@ -30,6 +31,7 @@ export function ItemSheetPanel({
 }) {
   const [uploading, setUploading] = useState(false);
   const [cropOpen, setCropOpen] = useState(false);
+  const [libOpen, setLibOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const patch = (fields: Partial<ItemRecord>) => onChange({ ...item, ...fields });
 
@@ -76,6 +78,9 @@ export function ItemSheetPanel({
             <button onClick={() => fileRef.current?.click()} disabled={uploading}>
               {uploading ? "Uploading…" : item.iconUrl ? "Change icon" : "Upload icon"}
             </button>
+            <button className="btn-ghost" title="Reuse an already-uploaded image" onClick={() => setLibOpen(true)}>
+              Library
+            </button>
             {item.iconUrl ? (
               <button className="btn-ghost" onClick={() => setCropOpen(true)}>
                 Crop
@@ -109,6 +114,14 @@ export function ItemSheetPanel({
                 setCropOpen(false);
               }}
               onClose={() => setCropOpen(false)}
+            />
+          ) : null}
+          {libOpen ? (
+            <AssetPickerModal
+              roomId={roomId}
+              title="Choose an icon"
+              onPick={(url) => patch({ iconUrl: url, iconCrop: { ...DEFAULT_ICON_CROP } })}
+              onClose={() => setLibOpen(false)}
             />
           ) : null}
         </div>

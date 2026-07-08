@@ -179,6 +179,7 @@ export function SheetView({
         <div className="sheet7-sidebar">
           <SheetSidebar
             sheet={sheet}
+            roomId={roomId}
             uploading={uploading}
             handlePortrait={handlePortrait}
             onRemoveFavorite={(id) => update({ favorites: value.favorites.filter((f) => f !== id) })}

@@ -263,6 +263,9 @@ export const PANELS: PanelDef[] = [
         dm={ctx.dm}
         openSheet={ctx.openSheet}
         dropActorAt={ctx.dropActorAt}
+        // Creating an NPC here just adds the row (like player creation) — no
+        // auto-popped floating sheet. Click the row to open it when you want it.
+        openOnCreate={false}
       />
     ),
   },

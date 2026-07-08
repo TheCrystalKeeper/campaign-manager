@@ -28,8 +28,8 @@ const DRAW_WIDTHS = [2, 4, 7];
 /** CSP-style labels for the light tint blend modes (+ the tint-off escape hatch). */
 const LIGHT_BLEND_OPTIONS: Array<{ id: LightBlendMode; label: string }> = [
   { id: "none", label: "None (fog only)" },
-  { id: "screen", label: "Screen" },
   { id: "overlay", label: "Overlay" },
+  { id: "screen", label: "Screen" },
   { id: "soft-light", label: "Soft Light" },
   { id: "multiply", label: "Multiply" },
   { id: "plus-lighter", label: "Add (Glow)" },

@@ -118,6 +118,26 @@ label {
   inset: 0;
 }
 
+/* The board and all its chrome (sidebars, dock, buttons, button emojis, tooltips) plus the
+   modals it spawns are a canvas-style UI, not a document — stray text selection just fights the
+   click/drag gestures and highlights emoji glyphs. Suppress selection here; genuinely editable
+   fields opt back in via the rule below. `.modal-backdrop` is listed explicitly because those
+   modals portal to <body>, outside `.app`. */
+.app,
+.modal-backdrop {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Real text entry stays selectable so users can position the caret, drag-select, and copy.
+   Global (unscoped) so it holds no matter which container an input lives in. */
+input,
+textarea,
+[contenteditable]:not([contenteditable="false"]) {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
 .map-root {
   position: fixed;
   inset: 0;

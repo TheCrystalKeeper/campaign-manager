@@ -3,10 +3,12 @@ import {
   CONDITIONS,
   DEFAULT_ICON_CROP,
   DEFAULT_TOKEN_SIZE,
+  PORTRAIT_ASPECT,
   TOKEN_ENEMY_COLOR,
   TOKEN_SHAPES,
   tokenSizeLabel,
   type GameState,
+  type IconCrop,
   type Token,
   type TokenHpDisplay,
   type TokenShape,
@@ -14,6 +16,8 @@ import {
 import { uploadPortrait, uploadTokenImage } from "../lib/uploadAsset";
 import type { useDmActions } from "../hooks/useGameRoom";
 import { HpStepper } from "./HpStepper";
+import { AssetPickerModal } from "./AssetPickerModal";
+import { ImageCropModal } from "./ImageCropModal";
 
 type TokenEditorProps = {
   token: Token;
@@ -49,6 +53,8 @@ export function TokenEditor({ token, state, dm, openSheet, openItemSheet, onClos
   const controlledNpc = !isPlayerChar && Boolean(controllerSlot);
   const npcSheets = Object.values(state.sheets).filter((record) => record.kind === "npc");
   const [uploading, setUploading] = useState(false);
+  const [libOpen, setLibOpen] = useState(false);
+  const [cropOpen, setCropOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   // The token's image is shared with its linked sheet's portrait (mirrors the map's
@@ -59,6 +65,18 @@ export function TokenEditor({ token, state, dm, openSheet, openItemSheet, onClos
   // Item tokens share their catalog item's icon, the same way sheet tokens share the portrait.
   const linkedItem = token.itemId ? state.items[token.itemId] : undefined;
   const effectiveImage = linkedSheet?.data.iconUrl ?? linkedItem?.iconUrl ?? token.imageUrl;
+  // Cropping edits the focal point/zoom of whichever entity owns the image — the linked
+  // sheet portrait or item icon (the map renders that crop). A standalone token image has
+  // no crop model (it uses the framed/raw toggle instead), so Crop is hidden there.
+  const cropTarget: { crop: IconCrop; apply: (crop: IconCrop) => void } | null =
+    linkedSheet?.data.iconUrl
+      ? {
+          crop: linkedSheet.data.iconCrop,
+          apply: (iconCrop) => dm.updateSheet(linkedSheetId!, { ...linkedSheet.data, iconCrop }),
+        }
+      : linkedItem?.iconUrl
+        ? { crop: linkedItem.iconCrop, apply: (iconCrop) => dm.updateItem({ ...linkedItem, iconCrop }) }
+        : null;
 
   const setControllingPlayer = (slotId: string) => {
     // A token already linked to an NPC sheet keeps that identity — assigning a player just hands
@@ -105,21 +123,31 @@ export function TokenEditor({ token, state, dm, openSheet, openItemSheet, onClos
     dm.updateToken({ ...token, conditions });
   };
 
+  // Write an image URL to the right place: a linked sheet's shared portrait, a linked
+  // item's shared icon, or (unlinked) the token's own image. Shared by fresh uploads and
+  // library reuse. A new picture resets the crop so the old focal point/zoom doesn't carry.
+  const applyImageUrl = (url: string) => {
+    if (linkedSheetId && linkedSheet) {
+      dm.updateSheet(linkedSheetId, { ...linkedSheet.data, iconUrl: url, iconCrop: { ...DEFAULT_ICON_CROP } });
+    } else if (linkedItem) {
+      dm.updateItem({ ...linkedItem, iconUrl: url, iconCrop: { ...DEFAULT_ICON_CROP } });
+    } else {
+      dm.updateToken({ ...token, imageUrl: url });
+    }
+  };
+
   const uploadImage = async (file: File) => {
     setUploading(true);
     try {
       if (linkedSheetId && linkedSheet) {
-        // Linked to a sheet → write the shared portrait, exactly like the sheet does.
-        // A new picture resets the crop so the old focal point/zoom doesn't carry over.
         const { url } = await uploadPortrait(state.roomId, linkedSheetId, file);
-        dm.updateSheet(linkedSheetId, { ...linkedSheet.data, iconUrl: url, iconCrop: { ...DEFAULT_ICON_CROP } });
+        applyImageUrl(url);
       } else if (linkedItem) {
-        // Item token → write the shared catalog item icon; the token mirrors it.
         const { url } = await uploadTokenImage(state.roomId, linkedItem.id, file);
-        dm.updateItem({ ...linkedItem, iconUrl: url, iconCrop: { ...DEFAULT_ICON_CROP } });
+        applyImageUrl(url);
       } else {
         const { url } = await uploadTokenImage(state.roomId, token.id, file);
-        dm.updateToken({ ...token, imageUrl: url });
+        applyImageUrl(url);
       }
     } catch {
       // Non-fatal: image stays unchanged.
@@ -254,6 +282,14 @@ export function TokenEditor({ token, state, dm, openSheet, openItemSheet, onClos
             <button onClick={() => fileRef.current?.click()} disabled={uploading}>
               {uploading ? "Uploading…" : hasImage ? "Change" : "Upload"}
             </button>
+            <button className="btn-ghost" title="Reuse an already-uploaded image" onClick={() => setLibOpen(true)}>
+              Library
+            </button>
+            {hasImage && cropTarget ? (
+              <button className="btn-ghost" title="Crop the portrait/icon focal point" onClick={() => setCropOpen(true)}>
+                Crop
+              </button>
+            ) : null}
             {hasImage ? (
               <button className="btn-ghost" onClick={clearImage}>
                 Clear
@@ -271,6 +307,27 @@ export function TokenEditor({ token, state, dm, openSheet, openItemSheet, onClos
               }}
             />
           </div>
+          {libOpen ? (
+            <AssetPickerModal
+              roomId={state.roomId}
+              title={linkedSheet ? "Choose a portrait" : "Choose a token image"}
+              onPick={applyImageUrl}
+              onClose={() => setLibOpen(false)}
+            />
+          ) : null}
+          {cropOpen && effectiveImage && cropTarget ? (
+            <ImageCropModal
+              src={effectiveImage}
+              crop={cropTarget.crop}
+              frameAspect={PORTRAIT_ASPECT}
+              title="Crop image"
+              onApply={(iconCrop) => {
+                cropTarget.apply(iconCrop);
+                setCropOpen(false);
+              }}
+              onClose={() => setCropOpen(false)}
+            />
+          ) : null}
         </div>
         {hasImage ? (
           <div className="row" style={{ justifyContent: "space-between" }}>

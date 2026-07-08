@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { DEFAULT_SHEET_TEMPLATE, PORTRAIT_ASPECT, formatModifier } from "../../lib/types";
+import { DEFAULT_ICON_CROP, DEFAULT_SHEET_TEMPLATE, PORTRAIT_ASPECT, formatModifier } from "../../lib/types";
 import { CroppableImage } from "../CroppableImage";
 import { ImageCropModal } from "../ImageCropModal";
+import { AssetPickerModal } from "../AssetPickerModal";
 import { NumberInput } from "../NumberInput";
 import { BarMeter, DerivedNumber, StatBadge } from "./atoms";
 import { DeathSaveTracker } from "./DeathSaveTracker";
@@ -16,12 +17,15 @@ import type { SheetEdit } from "./context";
  */
 export function SheetSidebar({
   sheet,
+  roomId,
   uploading,
   handlePortrait,
   onRemoveFavorite,
   reveal,
 }: {
   sheet: SheetEdit;
+  /** Room id for the "choose from library" image picker. */
+  roomId: string;
   uploading: boolean;
   handlePortrait: (file: File) => void;
   onRemoveFavorite: (id: string) => void;
@@ -31,6 +35,9 @@ export function SheetSidebar({
   const { value, canEdit, kind, derived, setOverride, update } = sheet;
   const isNpc = kind === "npc";
   const [cropOpen, setCropOpen] = useState(false);
+  const [libOpen, setLibOpen] = useState(false);
+  // Reuse an already-uploaded image as the portrait; a fresh pick resets the crop.
+  const pickFromLibrary = (iconUrl: string) => update({ iconUrl, iconCrop: { ...DEFAULT_ICON_CROP } });
 
   const skillsSummary = DEFAULT_SHEET_TEMPLATE.skills.filter(
     (skill) => (value.skillProfs[skill.id] ?? 0) > 0 || (value.skillMods[skill.id] ?? 0) !== 0,
@@ -97,6 +104,14 @@ export function SheetSidebar({
               >
                 ✂ Crop
               </button>
+              <button
+                type="button"
+                className="sheet-portrait-lib"
+                title="Reuse an already-uploaded image"
+                onClick={() => setLibOpen(true)}
+              >
+                🖼 Library
+              </button>
             </>
           ) : null}
           {cropOpen && value.iconUrl ? (
@@ -114,24 +129,42 @@ export function SheetSidebar({
           ) : null}
         </div>
       ) : canEdit ? (
-        <label className="sheet-portrait-btn sheet-portrait-btn--lg" title="Click to upload a portrait">
-          <div className="sheet-portrait sheet-portrait--lg sheet-portrait--empty">
-            <span>{uploading ? "…" : "＋"}</span>
-          </div>
-          <span className="sheet-portrait-hint">{uploading ? "Uploading…" : "Add photo"}</span>
-          <input
-            type="file"
-            accept="image/*"
-            style={{ display: "none" }}
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) handlePortrait(file);
-            }}
-          />
-        </label>
+        <div className="sheet-portrait-wrap">
+          <label className="sheet-portrait-btn sheet-portrait-btn--lg" title="Click to upload a portrait">
+            <div className="sheet-portrait sheet-portrait--lg sheet-portrait--empty">
+              <span>{uploading ? "…" : "＋"}</span>
+            </div>
+            <span className="sheet-portrait-hint">{uploading ? "Uploading…" : "Add photo"}</span>
+            <input
+              type="file"
+              accept="image/*"
+              style={{ display: "none" }}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) handlePortrait(file);
+              }}
+            />
+          </label>
+          <button
+            type="button"
+            className="sheet-portrait-lib sheet-portrait-lib--empty"
+            title="Reuse an already-uploaded image"
+            onClick={() => setLibOpen(true)}
+          >
+            🖼 Library
+          </button>
+        </div>
       ) : (
         <div className="sheet-portrait sheet-portrait--lg" />
       )}
+      {libOpen ? (
+        <AssetPickerModal
+          roomId={roomId}
+          title="Choose a portrait"
+          onPick={pickFromLibrary}
+          onClose={() => setLibOpen(false)}
+        />
+      ) : null}
 
       <div className="ac-shield" title="Armor Class">
         <span className="ac-shield-icon">🛡</span>

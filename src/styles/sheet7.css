@@ -1343,6 +1343,73 @@
   color: var(--danger);
 }
 
+/* ---- "Choose from library" image picker (reuse an uploaded asset) --------- */
+.asset-picker {
+  width: min(680px, 96vw);
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  max-height: 80vh;
+}
+.asset-picker-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+.asset-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+  gap: 0.5rem;
+  overflow-y: auto;
+  min-height: 0;
+  padding: 0.15rem;
+}
+.asset-picker-item {
+  aspect-ratio: 1;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  background: var(--surface-inset);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+  overflow: hidden;
+  cursor: pointer;
+}
+.asset-picker-item:hover {
+  border-color: var(--accent-bright);
+}
+.asset-picker-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Overlay pill on the sheet portrait to open the library picker (mirrors the
+   change/crop pills in index.css). Top-right, stacked just under the "Change"
+   pill — the bottom edge holds the hover zoom slider + the AC shield, and the
+   centre holds the empty-state "Add photo" hint, so neither is covered. */
+.sheet-portrait-lib {
+  position: absolute;
+  top: 30px;
+  right: 6px;
+  z-index: 1;
+  padding: 2px 8px;
+  font-size: 0.62rem;
+  border-radius: 6px;
+  color: var(--text);
+  background: rgba(10, 12, 16, 0.72);
+  border: 1px solid var(--border);
+  cursor: pointer;
+}
+.sheet-portrait-lib:hover {
+  background: rgba(10, 12, 16, 0.92);
+}
+/* Empty state has no "Change" pill above it, so sit in the top corner itself. */
+.sheet-portrait-lib--empty {
+  top: 6px;
+}
+
 /* ---- Rules engine: overrides + derived stats (AUTOMATION_PLAN Round A) ---- */
 
 /* Wraps a derived total (roll button or read-only) plus its override marker. */
