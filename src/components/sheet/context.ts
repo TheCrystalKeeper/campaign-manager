@@ -1,7 +1,20 @@
 import type { CharacterSheet, CheckSpec, SheetKind, SheetSectionId } from "../../lib/types";
+import type { Derived } from "../../lib/rules5e";
 
 /** Advantage/disadvantage from a modifier-key click (Shift = adv, Alt = dis). */
 export type Adv = "adv" | "dis" | undefined;
+
+/** Tier-3 resource actions (server mutations). Absent for read-only viewers. */
+export type SheetActions = {
+  /** Spend one spell slot of `level` (1..9). */
+  castSpell: (level: number) => void;
+  /** Decrement a feature's uses. */
+  useFeature: (featureId: string) => void;
+  /** Decrement an inventory row's charges. */
+  useItemCharge: (rowId: string) => void;
+  /** Roll a server-side death saving throw. */
+  deathSave: () => void;
+};
 
 /**
  * Everything a sheet page/atom needs to render + edit. Threaded from SheetView to
@@ -12,6 +25,13 @@ export type SheetEdit = {
   kind: SheetKind;
   canEdit: boolean;
   isDm: boolean;
+  /** Rules-engine output (PC: derived formulas + overrides; NPC: manual passthrough). */
+  derived: Derived;
+  /**
+   * Set (or clear with null) a per-stat manual override. Committing a value equal to
+   * the formula's own result clears the override — the field falls back to auto.
+   */
+  setOverride: (key: string, value: number | null) => void;
   /** Merge a partial patch into the draft (debounced to the server). */
   update: (patch: Partial<CharacterSheet>) => void;
   /** Player looking at an unrevealed NPC section: render "???". */
@@ -32,6 +52,8 @@ export type SheetEdit = {
     linkedTokenCount: number;
     toggle: (conditionId: string, on: boolean) => void;
   };
+  /** Tier-3 resource actions (cast/use/death-save). Absent for read-only viewers. */
+  actions?: SheetActions;
 };
 
 export const ROLL_HINT = "Click to roll (Shift = advantage, Alt = disadvantage)";

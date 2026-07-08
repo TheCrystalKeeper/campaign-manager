@@ -29,6 +29,7 @@ teardown artifact.
 - `smoke-walls-move.mjs` — Phase 6.9 wall movement collision: a player can't drag a token through a movement wall (server rejects, token stays), a clear path is allowed, `wallsBlockMovement` off lets it pass, and the DM bypasses collision
 - `smoke-scenes.mjs` — Phase 6.5 prep secrecy + fog brush: players receive ONLY the active scene + its tokens, Set Live swaps atomically; brush/cover/inverted fog round-trips (points trimmed at 120) and stays DM-only; full-scene UPDATE_SCENE (the editor's Apply path) carries walls+lights+fog at once
 - `smoke-phase7.mjs` — Phase 7 game-content depth: UPDATE_SHEET 20KB cap, SET_TOKEN_CONDITIONS + REST authz, ROLL_CHECK color-part breakdown (+ secret no-leak), ADJUST_HP clamp/temp-first/authz, MOVE_TOKEN facing (both paths), TEMPLATE transient relay (coalesce/clear/oversize-drop), coin flip (values ∈{1,2}, secret strip, Heads/Tails log), DM-only map pins stripped from players, pre-staged tokens hidden until Set Live, and the EXPORT→mutate→IMPORT v2 round-trip (+ player-export deny)
+- `smoke-automation.mjs` — AUTOMATION_PLAN Tiers 1–3 end-to-end: ROLL_CHECK derives dot×prof + overrides server-side, poisoned-token disadvantage, CAST_SPELL slot spend (absent-entry=full, 0-slot reject, authz), USE_FEATURE/USE_ITEM_CHARGE decrements, short rest (hit-dice spend + sr recharge) and long rest (full HP/half dice/all slots/saves reset), DEATH_SAVE server roll, APPLY_DAMAGE resistance/immunity math + DM-only
 
 ## Unit tests (`unit-*.test.ts`)
 
@@ -49,7 +50,12 @@ migration parity —
 section guard, new-field normalization + caps, deterministic row-id backfill,
 `inventoryRowFromItem`, per-page NPC redaction, `Token.facing` wrapping, dmOnly-pin
 redaction, and the assets in-use scanner — `unit-rollcheck.test.ts` — the ROLL_CHECK
-resolver (parts sum to total for skill/attack/damage/adv) —
+resolver (parts sum to total for skill/attack/damage/adv; engine dot×prof/expertise/
+override/NPC-passthrough paths) — `unit-rules5e.test.ts` — the rules engine
+(prof-by-level, skill/save/passive/init/capacity/DC formulas, override precedence +
+base values, caster-type slot tables, NPC manual passthrough) — `unit-traits.test.ts` —
+Tier 2: every Special-Traits switch, condition disadvantage, 5e adv/dis cancellation,
+crit thresholds + crit damage dice, engine↔resolver consistency —
 `unit-scene-editor.test.ts` — Phase 6.5 fog-brush sanitization, `fog.inverted`, the
 `applySceneMessage` staging reducer incl. caps, and active-scene-only player redaction —
 and `unit-history.test.ts` — the DM undo/redo command/inverse builder for scene edits +

@@ -47,9 +47,11 @@ import {
   type Role,
   type Scene,
   type ServerMessage,
+  type SheetRecord,
 } from "../src/lib/types";
 import { clampMove, movementSegments } from "../src/lib/visibility";
 import { rollDiceExpression, rollWithAdvantage, secureRandInt } from "../src/lib/dice";
+import { computeDerived } from "../src/lib/rules5e";
 import { partsFromExpression, resolveCheck } from "../src/lib/rollCheck";
 import {
   buildExpressionLabel,
@@ -229,12 +231,107 @@ export default class GameServer implements Party.Server {
   }
 
   /// <summary>
-  /// Initiative bonus for a sheet: DEX modifier plus the sheet's manual init field.
+  /// Initiative bonus for a sheet. PC sheets go through the rules engine (DEX mod +
+  /// misc, override-aware) so the tracker matches the sheet's Init badge; NPC sheets
+  /// keep the manual DEX-mod + init-field math.
   /// </summary>
   initiativeBonus(sheetId: string | null): { bonus: number; dexScore: number } {
-    const data = sheetId ? this.state.sheets[sheetId]?.data : undefined;
+    const record = sheetId ? this.state.sheets[sheetId] : undefined;
+    const data = record?.data;
     const dexScore = data?.abilityScores["dex"] ?? DEFAULT_ABILITY_SCORE;
+    if (record && record.kind === "pc") {
+      return { bonus: computeDerived(record.data, "pc").values["init"] ?? 0, dexScore };
+    }
     return { bonus: abilityModifier(dexScore) + (data?.initiative ?? 0), dexScore };
+  }
+
+  /// <summary>
+  /// Applies an HP delta to a sheet: damage eats temp HP first and never drops below 0;
+  /// healing caps at max (temp HP is never healed). Shared by ADJUST_HP, APPLY_DAMAGE,
+  /// and rests.
+  /// </summary>
+  applyHpDelta(record: SheetRecord, delta: number) {
+    const hp = record.data.hp;
+    let temp = hp.temp ?? 0;
+    let current = hp.current;
+    if (delta < 0) {
+      let dmg = -delta;
+      const fromTemp = Math.min(temp, dmg);
+      temp -= fromTemp;
+      dmg -= fromTemp;
+      current = Math.max(0, current - dmg);
+    } else {
+      current = Math.min(hp.max, current + delta);
+    }
+    record.data.hp = { ...hp, current, ...(temp > 0 ? { temp } : { temp: undefined }) };
+  }
+
+  /// <summary>
+  /// Re-syncs tokens linked to a sheet (player tokens via the owning slot, NPC tokens
+  /// via their direct sheet link) after a sheet mutation.
+  /// </summary>
+  syncSheetTokens(record: SheetRecord) {
+    this.state.tokens = this.state.tokens.map((token) =>
+      (record.ownerSlotId !== null && token.ownerPlayerId === record.ownerSlotId) ||
+      token.sheetId === record.id
+        ? syncTokenFromState(token, this.state)
+        : token,
+    );
+  }
+
+  /// <summary>
+  /// Whether a sheet's HP numbers may appear in player-visible log lines (PCs always;
+  /// NPCs once combat is revealed or a linked token shows HP).
+  /// </summary>
+  hpVisibleFor(record: SheetRecord): boolean {
+    return (
+      record.kind !== "npc" ||
+      record.revealed.combat ||
+      this.state.tokens.some((token) => token.sheetId === record.id && token.showHp !== "none")
+    );
+  }
+
+  /// <summary>
+  /// Restores feature uses whose recovery matches the rest kind. Returns how many
+  /// features recharged.
+  /// </summary>
+  restoreFeatureUses(record: SheetRecord, kinds: Array<"sr" | "lr">): number {
+    let count = 0;
+    record.data.features = record.data.features.map((feature) => {
+      if (
+        feature.uses &&
+        feature.recovery &&
+        kinds.includes(feature.recovery) &&
+        feature.uses.current < feature.uses.max
+      ) {
+        count += 1;
+        return { ...feature, uses: { ...feature.uses, current: feature.uses.max } };
+      }
+      return feature;
+    });
+    return count;
+  }
+
+  /// <summary>
+  /// Refills spell slots to the effective maximums (rules-engine derived for auto
+  /// caster types, stored otherwise). Returns whether anything changed. The stored
+  /// entry keeps its max so a fully-spent auto slot level persists (absent = full).
+  /// </summary>
+  restoreSpellSlots(record: SheetRecord, slotMaxes: Record<string, number>): boolean {
+    let changed = false;
+    const slots = { ...record.data.spellSlots };
+    for (const [level, max] of Object.entries(slotMaxes)) {
+      const stored = slots[level];
+      const current = stored?.current ?? max;
+      if (current < max) {
+        slots[level] = { current: max, max: stored && stored.max > 0 ? stored.max : max };
+        changed = true;
+      }
+    }
+    if (changed) {
+      record.data.spellSlots = slots;
+    }
+    return changed;
   }
 
   /// <summary>
@@ -656,7 +753,10 @@ export default class GameServer implements Party.Server {
       return;
     }
 
-    // Rest: log-only hook today (manual-fields-first). DM any sheet; players own only.
+    // Rest with real effects (AUTOMATION_PLAN Tier 3). Short rest: spend hit dice
+    // (server-rolled: die + CON mod each) and recharge "sr" features (+ pact slots).
+    // Long rest: HP to max (temp HP ends), regain half hit dice (min 1), all slots,
+    // "sr"+"lr" features, death saves reset. DM any sheet; players own only.
     if (parsed.type === "REST") {
       const record = this.state.sheets[parsed.sheetId];
       if (!record) {
@@ -667,8 +767,67 @@ export default class GameServer implements Party.Server {
         this.sendTo(sender, { type: "ERROR", message: "You can only rest your own character." });
         return;
       }
-      const name = record.data.characterName?.trim() || "A character";
-      this.logEvent(`${name} takes a ${parsed.kind === "long" ? "long" : "short"} rest ${parsed.kind === "long" ? "⛰" : "🍴"}`);
+      const data = record.data;
+      const name = data.characterName?.trim() || "A character";
+      const derived = computeDerived(data, record.kind);
+      const hitDiceMax = derived.values["hit-dice-max"] ?? data.hitDice.max;
+      const summary: string[] = [];
+      if (parsed.kind === "long") {
+        const healed = Math.max(0, data.hp.max - data.hp.current);
+        // Temp HP ends when a long rest finishes (5e).
+        data.hp = { current: data.hp.max, max: data.hp.max };
+        if (healed > 0) summary.push(`+${healed} HP`);
+        const regained = Math.min(
+          Math.max(0, hitDiceMax - data.hitDice.current),
+          Math.max(1, Math.floor(hitDiceMax / 2)),
+        );
+        if (regained > 0) {
+          data.hitDice = { ...data.hitDice, current: data.hitDice.current + regained };
+          summary.push(`${regained} hit ${regained === 1 ? "die" : "dice"}`);
+        }
+        if (this.restoreSpellSlots(record, derived.slotMaxes)) {
+          summary.push("all spell slots");
+        }
+        const features = this.restoreFeatureUses(record, ["sr", "lr"]);
+        if (features > 0) summary.push(`${features} feature${features === 1 ? "" : "s"}`);
+        if (data.deathSaves.successes > 0 || data.deathSaves.failures > 0) {
+          data.deathSaves = { successes: 0, failures: 0 };
+        }
+        this.logEvent(`${name} finished a long rest ⛰${summary.length ? ` — ${summary.join(", ")}` : ""}`);
+      } else {
+        const spend = Math.max(0, Math.min(Math.trunc(parsed.spendHitDice ?? 0), data.hitDice.current, 20));
+        if (spend > 0) {
+          const dieMatch = data.hitDice.die.match(/(\d+)/);
+          const parsedSize = dieMatch ? Number.parseInt(dieMatch[1], 10) : 8;
+          const dieSize = parsedSize >= 2 && parsedSize <= 100 ? parsedSize : 8;
+          const conMod = abilityModifier(data.abilityScores["con"] ?? DEFAULT_ABILITY_SCORE);
+          const rolls: number[] = [];
+          let healed = 0;
+          for (let i = 0; i < spend; i += 1) {
+            const die = secureRandInt(dieSize) + 1;
+            rolls.push(die);
+            healed += Math.max(0, die + conMod);
+          }
+          healed = Math.min(healed, Math.max(0, data.hp.max - data.hp.current));
+          data.hp = { ...data.hp, current: data.hp.current + healed };
+          data.hitDice = { ...data.hitDice, current: data.hitDice.current - spend };
+          summary.push(
+            `spent ${spend} hit ${spend === 1 ? "die" : "dice"} [${rolls.join(", ")}]${
+              conMod !== 0 ? ` ${conMod > 0 ? "+" : ""}${conMod} CON each` : ""
+            } → +${healed} HP`,
+          );
+        }
+        const features = this.restoreFeatureUses(record, ["sr"]);
+        if (features > 0) summary.push(`${features} feature${features === 1 ? "" : "s"}`);
+        // Pact magic (warlock) recharges on a short rest.
+        if (record.kind === "pc" && data.spellcasting.casterType === "pact") {
+          if (this.restoreSpellSlots(record, derived.slotMaxes)) {
+            summary.push("pact slots");
+          }
+        }
+        this.logEvent(`${name} finished a short rest 🍴${summary.length ? ` — ${summary.join(", ")}` : ""}`);
+      }
+      this.syncSheetTokens(record);
       void this.broadcastState();
       return;
     }
@@ -688,38 +847,227 @@ export default class GameServer implements Party.Server {
       if (delta === 0) {
         return;
       }
-      const hp = record.data.hp;
-      let temp = hp.temp ?? 0;
-      let current = hp.current;
-      if (delta < 0) {
-        // Damage eats temp HP first, then current; never below 0.
-        let dmg = -delta;
-        const fromTemp = Math.min(temp, dmg);
-        temp -= fromTemp;
-        dmg -= fromTemp;
-        current = Math.max(0, current - dmg);
-      } else {
-        // Heal adds to current, capped at max (temp HP is not healed here).
-        current = Math.min(hp.max, current + delta);
-      }
-      record.data.hp = { ...hp, current, ...(temp > 0 ? { temp } : { temp: undefined }) };
-      // Keep player tokens in sync (portrait/label/etc. unaffected, but future-proof).
-      if (record.ownerSlotId) {
-        this.state.tokens = this.state.tokens.map((token) =>
-          token.ownerPlayerId === record.ownerSlotId ? syncTokenFromState(token, this.state) : token,
-        );
-      }
+      this.applyHpDelta(record, delta);
+      this.syncSheetTokens(record);
       // Log during combat. Hide the numbers for players when the NPC's HP is secret
       // (combat section unrevealed AND no linked token shows HP).
       if (this.state.combat) {
         const name = record.data.characterName?.trim() || "A character";
-        const hpVisible =
-          record.kind !== "npc" ||
-          record.revealed.combat ||
-          this.state.tokens.some((token) => token.sheetId === record.id && token.showHp !== "none");
         const text = delta < 0 ? `${name} takes ${-delta} damage` : `${name} heals ${delta}`;
-        this.logEvent(text, !hpVisible);
+        this.logEvent(text, !this.hpVisibleFor(record));
       }
+      void this.broadcastState();
+      return;
+    }
+
+    // Spend one spell slot (Tier 3). Auto caster types: an absent slot entry means
+    // "never spent" = full; the write stores the effective max so a fully-spent level
+    // persists. DM any sheet; players own only.
+    if (parsed.type === "CAST_SPELL") {
+      const record = this.state.sheets[parsed.sheetId];
+      if (!record) {
+        this.sendTo(sender, { type: "ERROR", message: "Sheet not found." });
+        return;
+      }
+      if (meta.role === "player" && meta.playerId !== parsed.sheetId) {
+        this.sendTo(sender, { type: "ERROR", message: "You can only cast from your own sheet." });
+        return;
+      }
+      const level = Math.max(1, Math.min(9, Math.trunc(parsed.level || 0)));
+      const derived = computeDerived(record.data, record.kind);
+      const max = derived.slotMaxes[String(level)] ?? 0;
+      const stored = record.data.spellSlots[String(level)];
+      // Absent entry = never spent = full (auto caster types); capped at the max.
+      const current = Math.min(stored?.current ?? max, max);
+      if (max <= 0 || current <= 0) {
+        this.sendTo(sender, { type: "ERROR", message: `No level-${level} spell slots left.` });
+        return;
+      }
+      record.data.spellSlots = {
+        ...record.data.spellSlots,
+        [String(level)]: { current: current - 1, max: stored && stored.max > 0 ? stored.max : max },
+      };
+      const name = record.data.characterName?.trim() || "A character";
+      this.logEvent(`${name} casts a level-${level} spell (${current - 1}/${max} slots left)`);
+      void this.broadcastState();
+      return;
+    }
+
+    // Spend a feature use (Tier 3). DM any sheet; players own only.
+    if (parsed.type === "USE_FEATURE") {
+      const record = this.state.sheets[parsed.sheetId];
+      if (!record) {
+        this.sendTo(sender, { type: "ERROR", message: "Sheet not found." });
+        return;
+      }
+      if (meta.role === "player" && meta.playerId !== parsed.sheetId) {
+        this.sendTo(sender, { type: "ERROR", message: "You can only use your own features." });
+        return;
+      }
+      const feature = record.data.features.find((f) => f.id === parsed.featureId);
+      if (!feature?.uses || feature.uses.max <= 0) {
+        this.sendTo(sender, { type: "ERROR", message: "That feature has no uses to spend." });
+        return;
+      }
+      if (feature.uses.current <= 0) {
+        this.sendTo(sender, { type: "ERROR", message: `No uses of ${feature.name} left.` });
+        return;
+      }
+      const remaining = feature.uses.current - 1;
+      record.data.features = record.data.features.map((f) =>
+        f.id === feature.id && f.uses ? { ...f, uses: { ...f.uses, current: remaining } } : f,
+      );
+      const name = record.data.characterName?.trim() || "A character";
+      this.logEvent(`${name} uses ${feature.name} (${remaining}/${feature.uses.max} left)`);
+      void this.broadcastState();
+      return;
+    }
+
+    // Spend an item charge (Tier 3). DM any sheet; players own only.
+    if (parsed.type === "USE_ITEM_CHARGE") {
+      const record = this.state.sheets[parsed.sheetId];
+      if (!record) {
+        this.sendTo(sender, { type: "ERROR", message: "Sheet not found." });
+        return;
+      }
+      if (meta.role === "player" && meta.playerId !== parsed.sheetId) {
+        this.sendTo(sender, { type: "ERROR", message: "You can only use your own items." });
+        return;
+      }
+      const row = record.data.inventory.find((r) => r.id === parsed.rowId);
+      if (!row?.charges || row.charges.max <= 0) {
+        this.sendTo(sender, { type: "ERROR", message: "That item has no charges." });
+        return;
+      }
+      if (row.charges.current <= 0) {
+        this.sendTo(sender, { type: "ERROR", message: `${row.name} has no charges left.` });
+        return;
+      }
+      const remaining = row.charges.current - 1;
+      record.data.inventory = record.data.inventory.map((r) =>
+        r.id === row.id && r.charges ? { ...r, charges: { ...r.charges, current: remaining } } : r,
+      );
+      const name = record.data.characterName?.trim() || "A character";
+      this.logEvent(`${name} uses ${row.name} (${remaining}/${row.charges.max} charges left)`);
+      void this.broadcastState();
+      return;
+    }
+
+    // Server-rolled death saving throw (Tier 3): 10+ = success, 9− = failure,
+    // nat 1 = two failures, nat 20 = back up at 1 HP. Three successes stabilize
+    // (tracker resets); three failures = death (clearly logged). DM any; players own.
+    if (parsed.type === "DEATH_SAVE") {
+      const record = this.state.sheets[parsed.sheetId];
+      if (!record) {
+        this.sendTo(sender, { type: "ERROR", message: "Sheet not found." });
+        return;
+      }
+      if (meta.role === "player" && meta.playerId !== parsed.sheetId) {
+        this.sendTo(sender, { type: "ERROR", message: "You can only roll your own death saves." });
+        return;
+      }
+      const data = record.data;
+      const name = data.characterName?.trim() || "A character";
+      const d20 = secureRandInt(20) + 1;
+      let ds = { ...data.deathSaves };
+      let note: string;
+      if (d20 === 20) {
+        // Regain 1 HP and wake up; the tracker resets.
+        data.hp = { ...data.hp, current: Math.max(data.hp.current, 1) };
+        ds = { successes: 0, failures: 0 };
+        note = "natural 20 — back up with 1 HP!";
+      } else if (d20 === 1) {
+        ds.failures = Math.min(3, ds.failures + 2);
+        note = "natural 1 — two failures";
+      } else if (d20 >= 10) {
+        ds.successes = Math.min(3, ds.successes + 1);
+        note = "success";
+      } else {
+        ds.failures = Math.min(3, ds.failures + 1);
+        note = "failure";
+      }
+      let event: string | null = null;
+      if (ds.successes >= 3) {
+        ds = { successes: 0, failures: 0 };
+        event = `${name} is stable 💤`;
+      } else if (ds.failures >= 3) {
+        event = `${name} has died ☠`;
+      }
+      data.deathSaves = ds;
+      const roll: DiceRoll = {
+        id: `roll-${crypto.randomUUID().slice(0, 8)}`,
+        rollerName: meta.displayName?.trim() || "Unknown",
+        rollerId: meta.playerId ?? "unknown",
+        expression: "1d20",
+        rolls: [d20],
+        modifier: 0,
+        total: d20,
+        timestamp: Date.now(),
+        parts: [{ kind: "die", value: d20, label: "d20" }],
+      };
+      this.appendLog({
+        id: `log-${crypto.randomUUID().slice(0, 8)}`,
+        t: roll.timestamp,
+        kind: "roll",
+        roll,
+        actor: { name, sheetId: parsed.sheetId },
+        label: `Death saving throw (${note})`,
+      });
+      if (event) {
+        this.logEvent(event);
+      }
+      this.syncSheetTokens(record);
+      void this.broadcastState();
+      return;
+    }
+
+    // DM-only damage apply (Tier 3): matches the damage type against the target's
+    // resistance/immunity/vulnerability pills (case-insensitive, fuzzy both ways
+    // since pills are free text) — immune = 0, resist = half (rounded down),
+    // vulnerable = double. Temp HP is eaten first via the shared HP path.
+    if (parsed.type === "APPLY_DAMAGE") {
+      if (!this.isDm(sender.id)) {
+        this.sendTo(sender, { type: "ERROR", message: "Only the DM can apply damage." });
+        return;
+      }
+      const record = this.state.sheets[parsed.sheetId];
+      if (!record) {
+        this.sendTo(sender, { type: "ERROR", message: "Sheet not found." });
+        return;
+      }
+      const amount = Math.max(1, Math.min(999, Math.trunc(parsed.amount || 0)));
+      const dt = (parsed.damageType ?? "").trim().toLowerCase().slice(0, 40);
+      const matches = (pills: string[]) =>
+        dt !== "" &&
+        pills.some((pill) => {
+          const p = pill.trim().toLowerCase();
+          return p.length > 0 && (p.includes(dt) || dt.includes(p));
+        });
+      const notes: string[] = [];
+      let final = amount;
+      if (matches(record.data.immunities)) {
+        final = 0;
+        notes.push("immune");
+      } else {
+        if (matches(record.data.resistances)) {
+          final = Math.floor(final / 2);
+          notes.push("resistant");
+        }
+        if (matches(record.data.vulnerabilities)) {
+          final *= 2;
+          notes.push("vulnerable");
+        }
+      }
+      if (final > 0) {
+        this.applyHpDelta(record, -final);
+        this.syncSheetTokens(record);
+      }
+      const name = record.data.characterName?.trim() || "A character";
+      const detail = notes.length > 0 ? ` (${notes.join(", ")}: ${amount} → ${final})` : "";
+      this.logEvent(
+        `${name} takes ${final}${dt ? ` ${dt}` : ""} damage${detail}`,
+        !this.hpVisibleFor(record),
+      );
       void this.broadcastState();
       return;
     }
@@ -803,7 +1151,29 @@ export default class GameServer implements Party.Server {
         this.sendTo(sender, { type: "ERROR", message: "You can only roll from your own sheet." });
         return;
       }
-      const resolved = resolveCheck(record.data, parsed.check, parsed.adv, secureRandInt);
+      // The acting token's conditions impose adv/dis (Poisoned → disadvantage…). An
+      // explicit tokenId wins when it belongs to this sheet; otherwise fall back to
+      // the sheet's single linked token when unambiguous (shared stat blocks with
+      // several tokens can't be guessed).
+      const linkedToSheet = (token: (typeof this.state.tokens)[number]) =>
+        token.sheetId === parsed.sheetId ||
+        (record.ownerSlotId !== null && token.ownerPlayerId === record.ownerSlotId);
+      let conditions: string[] = [];
+      if (parsed.tokenId) {
+        const token = this.state.tokens.find((item) => item.id === parsed.tokenId);
+        if (token && linkedToSheet(token)) {
+          conditions = token.conditions;
+        }
+      } else {
+        const linked = this.state.tokens.filter(linkedToSheet);
+        if (linked.length === 1) {
+          conditions = linked[0].conditions;
+        }
+      }
+      const resolved = resolveCheck(record.data, parsed.check, parsed.adv, secureRandInt, {
+        kind: record.kind,
+        conditions,
+      });
       const roll: DiceRoll = {
         id: `roll-${crypto.randomUUID().slice(0, 8)}`,
         rollerName: meta.displayName?.trim() || "Unknown",
@@ -816,6 +1186,7 @@ export default class GameServer implements Party.Server {
         parts: resolved.parts.slice(0, MAX_ROLL_PARTS),
         ...(resolved.adv ? { adv: resolved.adv } : {}),
         ...(resolved.otherTotal !== undefined ? { otherTotal: resolved.otherTotal } : {}),
+        ...(resolved.crit ? { crit: true } : {}),
       };
       this.appendLog({
         id: `log-${crypto.randomUUID().slice(0, 8)}`,

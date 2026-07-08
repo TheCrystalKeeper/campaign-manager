@@ -1,13 +1,13 @@
+import { useState } from "react";
 import {
   abilityModifier,
   DEFAULT_SHEET_TEMPLATE,
-  derivedStatTotal,
   formatModifier,
   rowId,
   type ToolEntry,
 } from "../../../lib/types";
 import { NumberInput } from "../../NumberInput";
-import { PillList, ProfDot, SectionHeader } from "../atoms";
+import { OverrideMarker, PillList, ProfDot, SectionHeader } from "../atoms";
 import { advFromEvent, ROLL_HINT, type SheetEdit } from "../context";
 
 const template = DEFAULT_SHEET_TEMPLATE;
@@ -19,11 +19,82 @@ function abilityAbbr(abilityId: string): string {
 
 /**
  * The Main page (PC): ability blocks, skills (prof dot + passive), tools, saving
- * throws, and the proficiency/resistance/language pill lists. NPCs render the ability
- * blocks + saves at the top of their Features page instead (see AbilityHeader).
+ * throws, and the proficiency/resistance/language pill lists. Totals come from the
+ * rules engine (ability mod + dot × proficiency + Misc, override-aware); NPCs render
+ * the ability blocks + saves at the top of their Features page instead (AbilityHeader).
  */
 export function MainPage({ sheet }: { sheet: SheetEdit }) {
-  const { value, canEdit, update, onRollCheck } = sheet;
+  const { value, canEdit, derived, setOverride, update, onRollCheck } = sheet;
+  // Which stat total (skill/save id) is showing its inline override editor.
+  const [editingStat, setEditingStat] = useState<string | null>(null);
+
+  const profValue = derived.values["prof"] ?? 0;
+  const rollTitle = (base: string) =>
+    `${base} — ${ROLL_HINT}${canEdit && derived.auto ? " · Right-click to override" : ""}`;
+
+  /**
+   * Migration honesty (AUTOMATION_PLAN §4.4): before automation the dots were
+   * decorative and proficiency was hand-typed into the modifier box. A dot + a Misc
+   * equal to dot × prof now double-counts — flag it, never silently rewrite.
+   */
+  const doubleCounts = (statId: string, profs: Record<string, number>, mods: Record<string, number>) => {
+    if (!derived.auto || !canEdit) return false;
+    const dot = profs[statId] ?? 0;
+    const misc = mods[statId] ?? 0;
+    return dot > 0 && misc !== 0 && misc === dot * profValue;
+  };
+  const clearMisc = (statId: string, field: "skillMods" | "saveMods") => {
+    const next = { ...value[field] };
+    delete next[statId];
+    update({ [field]: next });
+  };
+
+  /** The total cell: roll button (right-click = override editor) + override marker. */
+  const totalCell = (statId: string, name: string, checkKind: "skill" | "save") => {
+    const total = derived.values[statId] ?? 0;
+    const overridden = derived.auto && value.overrides[statId] !== undefined;
+    const cls = checkKind === "skill" ? "skill-total" : "save-total";
+    return (
+      <span className="stat-total-wrap" onBlur={() => setEditingStat(null)}>
+        {editingStat === statId && canEdit && derived.auto ? (
+          <NumberInput
+            className={`${cls} ovr-edit`}
+            value={total}
+            autoFocus
+            onCommit={(next) => {
+              setOverride(statId, next);
+              setEditingStat(null);
+            }}
+            aria-label={`${name} override`}
+          />
+        ) : onRollCheck ? (
+          <button
+            className={`${cls} roll-btn`}
+            title={rollTitle(`${name}${checkKind === "save" ? " save" : ""}`)}
+            onClick={(e) => onRollCheck({ kind: checkKind, statId }, advFromEvent(e))}
+            onContextMenu={
+              canEdit && derived.auto
+                ? (e) => {
+                    e.preventDefault();
+                    setEditingStat(statId);
+                  }
+                : undefined
+            }
+          >
+            {formatModifier(total)}
+          </button>
+        ) : (
+          <span className={cls}>{formatModifier(total)}</span>
+        )}
+        <OverrideMarker
+          overridden={overridden}
+          baseValue={derived.base[statId] ?? 0}
+          onReset={() => setOverride(statId, null)}
+          disabled={!canEdit}
+        />
+      </span>
+    );
+  };
 
   return (
     <div className="sheet-page main-page">
@@ -34,7 +105,6 @@ export function MainPage({ sheet }: { sheet: SheetEdit }) {
           <SectionHeader title="Skills" />
           {template.skills.map((skill) => {
             const manual = value.skillMods[skill.id] ?? 0;
-            const total = derivedStatTotal(skill, manual, value.abilityScores);
             const prof = value.skillProfs[skill.id] ?? 0;
             return (
               <div className="skill-row" key={skill.id}>
@@ -48,16 +118,22 @@ export function MainPage({ sheet }: { sheet: SheetEdit }) {
                 <span className="skill-abbr">{abilityAbbr((skill as { abilityId?: string }).abilityId ?? "")}</span>
                 <span className="skill-name">{skill.name}</span>
                 {canEdit ? (
-                  <NumberInput className="skill-mod-input" value={manual} onCommit={(next) => update({ skillMods: { ...value.skillMods, [skill.id]: next } })} aria-label={`${skill.name} modifier`} />
+                  <span className="misc-wrap">
+                    <NumberInput className="skill-mod-input" value={manual} onCommit={(next) => update({ skillMods: { ...value.skillMods, [skill.id]: next } })} aria-label={`${skill.name} misc bonus`} />
+                    {doubleCounts(skill.id, value.skillProfs, value.skillMods) ? (
+                      <button
+                        type="button"
+                        className="dc-warn"
+                        title={`Possible double-count: Misc (${formatModifier(manual)}) equals the dot's proficiency. If you typed proficiency in before automation, click to clear Misc.`}
+                        onClick={() => clearMisc(skill.id, "skillMods")}
+                      >
+                        ⚠
+                      </button>
+                    ) : null}
+                  </span>
                 ) : null}
-                {onRollCheck ? (
-                  <button className="skill-total roll-btn" title={`${skill.name} — ${ROLL_HINT}`} onClick={(e) => onRollCheck({ kind: "skill", statId: skill.id }, advFromEvent(e))}>
-                    {formatModifier(total)}
-                  </button>
-                ) : (
-                  <span className="skill-total">{formatModifier(total)}</span>
-                )}
-                <span className="skill-passive" title="Passive">{10 + total}</span>
+                {totalCell(skill.id, skill.name, "skill")}
+                <span className="skill-passive" title="Passive">{derived.values[`passive-${skill.id}`] ?? 10}</span>
               </div>
             );
           })}
@@ -70,21 +146,26 @@ export function MainPage({ sheet }: { sheet: SheetEdit }) {
           <div className="saves-grid">
             {template.saves.map((save) => {
               const manual = value.saveMods[save.id] ?? 0;
-              const total = derivedStatTotal(save, manual, value.abilityScores);
               const prof = value.saveProfs[save.id] ?? 0;
               return (
                 <div className="save-row" key={save.id}>
                   <ProfDot level={prof} max={1} disabled={!canEdit} title={`${save.name} save proficiency`} onCycle={(next) => update({ saveProfs: { ...value.saveProfs, [save.id]: next } })} />
                   <span className="save-name">{save.name}</span>
-                  {onRollCheck ? (
-                    <button className="save-total roll-btn" title={`${save.name} save — ${ROLL_HINT}`} onClick={(e) => onRollCheck({ kind: "save", statId: save.id }, advFromEvent(e))}>
-                      {formatModifier(total)}
-                    </button>
-                  ) : (
-                    <span className="save-total">{formatModifier(total)}</span>
-                  )}
+                  {totalCell(save.id, save.name, "save")}
                   {canEdit ? (
-                    <NumberInput className="save-mod-input" value={manual} onCommit={(next) => update({ saveMods: { ...value.saveMods, [save.id]: next } })} aria-label={`${save.name} save modifier`} />
+                    <span className="misc-wrap">
+                      <NumberInput className="save-mod-input" value={manual} onCommit={(next) => update({ saveMods: { ...value.saveMods, [save.id]: next } })} aria-label={`${save.name} save misc bonus`} />
+                      {doubleCounts(save.id, value.saveProfs, value.saveMods) ? (
+                        <button
+                          type="button"
+                          className="dc-warn"
+                          title={`Possible double-count: Misc (${formatModifier(manual)}) equals the dot's proficiency. If you typed proficiency in before automation, click to clear Misc.`}
+                          onClick={() => clearMisc(save.id, "saveMods")}
+                        >
+                          ⚠
+                        </button>
+                      ) : null}
+                    </span>
                   ) : null}
                 </div>
               );
@@ -136,11 +217,11 @@ export function AbilityRow({ sheet }: { sheet: SheetEdit }) {
 
 /** An inline saving-throw row shown under the NPC ability blocks. */
 export function SavesRow({ sheet }: { sheet: SheetEdit }) {
-  const { value, onRollCheck } = sheet;
+  const { derived, onRollCheck } = sheet;
   return (
     <div className="npc-saves-row">
       {template.saves.map((save) => {
-        const total = derivedStatTotal(save, value.saveMods[save.id] ?? 0, value.abilityScores);
+        const total = derived.values[save.id] ?? 0;
         return (
           <button
             type="button"

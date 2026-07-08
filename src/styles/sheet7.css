@@ -1195,6 +1195,13 @@
   border-style: dashed;
   color: var(--text-muted);
 }
+.roll-chip--crit {
+  background: rgba(196, 60, 60, 0.85);
+  border-color: rgba(255, 120, 120, 0.9);
+  color: #fff;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
 
 /* --- Quick-HP stepper (Phase 7e) -------------------------------------------- */
 .hp-stepper {
@@ -1334,4 +1341,171 @@
 }
 .asset-del:hover {
   color: var(--danger);
+}
+
+/* ---- Rules engine: overrides + derived stats (AUTOMATION_PLAN Round A) ---- */
+
+/* Wraps a derived total (roll button or read-only) plus its override marker. */
+.stat-total-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+  justify-content: flex-end;
+}
+.derived-num {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+}
+.derived-num input {
+  width: 2.6rem;
+  text-align: center;
+  padding: 0.05rem;
+}
+
+/* Gold dot on an overridden stat; click = reset to auto. */
+.ovr-marker {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  color: var(--accent-bright);
+  font-size: 0.5rem;
+  line-height: 1;
+}
+.ovr-marker:hover {
+  color: var(--danger);
+}
+
+/* Inline override editor swapped in for a skill/save total (right-click). */
+.ovr-edit {
+  width: 2.6rem;
+  text-align: right;
+  padding: 0.05rem;
+}
+
+/* Misc-bonus cell wrapper (input + optional double-count warning). */
+.misc-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.1rem;
+}
+
+/* Possible proficiency double-count (pre-automation sheets); click clears Misc. */
+.dc-warn {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-size: 0.66rem;
+  line-height: 1;
+}
+
+/* Derived badge values (Init/Prof) keep the badge's display font. */
+.stat-badge-input {
+  width: 2.4rem;
+  text-align: center;
+  padding: 0.05rem;
+  font-family: var(--font-display);
+  color: var(--accent-bright);
+  background: none;
+  border: 1px solid transparent;
+}
+.stat-badge-input:hover,
+.stat-badge-input:focus {
+  border-color: var(--border-subtle);
+}
+
+/* ---- Tier 3: rests, cast/use buttons, death-save roll, damage apply ---------- */
+
+.short-rest-wrap {
+  position: relative;
+  display: inline-flex;
+}
+.short-rest-pop {
+  position: absolute;
+  top: calc(100% + 0.3rem);
+  right: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 13rem;
+  padding: 0.55rem 0.65rem;
+  background: var(--surface-1);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+  font-size: 0.78rem;
+}
+.short-rest-pop label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.short-rest-pop input {
+  width: 2.8rem;
+  text-align: center;
+}
+.short-rest-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.3rem;
+}
+
+.death-roll-btn {
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  padding: 0 0.15rem;
+}
+.death-roll-btn:hover {
+  border-color: var(--border-subtle);
+  background: var(--surface-2);
+}
+
+/* Spend buttons (feature uses / item charges) and the spell Cast button. */
+.use-btn,
+.cast-btn {
+  background: none;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.66rem;
+  line-height: 1;
+  padding: 0.15rem 0.3rem;
+  color: var(--accent-bright);
+}
+.use-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.use-btn:hover:not(:disabled),
+.cast-btn:hover {
+  background: var(--surface-2);
+}
+
+/* DM damage-apply row under a damage roll entry. */
+.dmg-apply {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-top: 0.2rem;
+  flex-wrap: wrap;
+  font-size: 0.74rem;
+}
+.dmg-apply select,
+.dmg-apply .dmg-type {
+  font-size: 0.74rem;
+  padding: 0.1rem 0.25rem;
+  max-width: 9rem;
+}
+.dmg-apply .dmg-type {
+  width: 6.5rem;
+}
+.dmg-apply .btn-ghost {
+  font-size: 0.72rem;
+  padding: 0.1rem 0.4rem;
 }

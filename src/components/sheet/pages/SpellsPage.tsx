@@ -1,24 +1,37 @@
+import type { ReactElement } from "react";
 import {
+  CASTER_TYPES,
   DEFAULT_SHEET_TEMPLATE,
+  type CasterType,
   rowId,
   type SpellEntry,
 } from "../../../lib/types";
 import { NumberInput } from "../../NumberInput";
 import { RowTable, type RowGroup } from "../RowTable";
-import { SlotPips } from "../atoms";
+import { DerivedNumber, SlotPips } from "../atoms";
 import { type SheetEdit } from "../context";
 
 function levelTitle(level: number): string {
   return level === 0 ? "Cantrips" : `Level ${level}`;
 }
 
+const CASTER_TYPE_LABELS: Record<CasterType, string> = {
+  none: "Manual",
+  full: "Full caster",
+  half: "Half caster",
+  third: "Third caster",
+  pact: "Pact (warlock)",
+};
+
 /**
- * The Spells page: a manual spellcasting header (ability / attack / save DC), spell-slot
- * pips per level, and a per-level spell list. Always present — simply empty for
- * non-casters (never hidden).
+ * The Spells page: the spellcasting header (ability / caster type / attack / save DC),
+ * spell-slot pips per level, and a per-level spell list. Always present — simply empty
+ * for non-casters (never hidden). Rules engine (PC): picking a casting ability derives
+ * attack/DC (prof + mod / 8 + prof + mod, override-aware); picking a caster type
+ * derives slot maximums from level.
  */
 export function SpellsPage({ sheet }: { sheet: SheetEdit }) {
-  const { value, canEdit, update } = sheet;
+  const { value, canEdit, derived, setOverride, update, actions } = sheet;
 
   const patchSpell = (id: string, patch: Partial<SpellEntry>) =>
     update({ spells: value.spells.map((s) => (s.id === id ? { ...s, ...patch } : s)) });
@@ -38,9 +51,35 @@ export function SpellsPage({ sheet }: { sheet: SheetEdit }) {
     onAdd: canEdit ? () => addSpell(level) : undefined,
   }));
 
-  const slotLevels = [1, 2, 3, 4, 5, 6, 7, 8, 9].filter(
-    (lv) => canEdit || (value.spellSlots[String(lv)]?.max ?? 0) > 0,
+  // Slot maximums: auto caster types derive them from level (max inputs hidden);
+  // "Manual" keeps the stored per-level maximums editable.
+  const autoSlots = derived.auto && value.spellcasting.casterType !== "none";
+  const slotMax = (lv: number) =>
+    autoSlots ? derived.slotMaxes[String(lv)] ?? 0 : value.spellSlots[String(lv)]?.max ?? 0;
+  const slotLevels = [1, 2, 3, 4, 5, 6, 7, 8, 9].filter((lv) =>
+    autoSlots ? slotMax(lv) > 0 : canEdit || slotMax(lv) > 0,
   );
+
+  // Attack/DC derive once a casting ability is picked; the manual numbers remain the
+  // fallback while it's unset (and always for NPCs).
+  const autoCasting = derived.auto && Boolean(value.spellcasting.abilityId);
+
+  const castingStat = (key: "spell-attack" | "spell-dc", label: string, manual: ReactElement) =>
+    autoCasting ? (
+      <DerivedNumber
+        value={derived.values[key] ?? 0}
+        base={derived.base[key] ?? 0}
+        overridden={value.overrides[key] !== undefined}
+        canEdit={canEdit}
+        onCommit={(next) => setOverride(key, next)}
+        onReset={() => setOverride(key, null)}
+        className="sc-value"
+        formatted={key === "spell-attack"}
+        ariaLabel={label}
+      />
+    ) : (
+      manual
+    );
 
   return (
     <div className="sheet-page spells-page">
@@ -58,20 +97,46 @@ export function SpellsPage({ sheet }: { sheet: SheetEdit }) {
             <span className="sc-value">{DEFAULT_SHEET_TEMPLATE.abilities.find((a) => a.id === value.spellcasting.abilityId)?.abbr ?? "—"}</span>
           )}
         </div>
+        {derived.auto ? (
+          <div className="spellcasting-cell">
+            <span className="sc-label">Slots</span>
+            {canEdit ? (
+              <select
+                value={value.spellcasting.casterType}
+                aria-label="Caster type"
+                onChange={(e) => update({ spellcasting: { ...value.spellcasting, casterType: e.target.value as CasterType } })}
+              >
+                {CASTER_TYPES.map((type) => (
+                  <option key={type} value={type}>{CASTER_TYPE_LABELS[type]}</option>
+                ))}
+              </select>
+            ) : (
+              <span className="sc-value">{CASTER_TYPE_LABELS[value.spellcasting.casterType]}</span>
+            )}
+          </div>
+        ) : null}
         <div className="spellcasting-cell">
           <span className="sc-label">Attack</span>
-          {canEdit ? (
-            <NumberInput className="sc-value" value={value.spellcasting.attackBonus} onCommit={(attackBonus) => update({ spellcasting: { ...value.spellcasting, attackBonus } })} aria-label="Spell attack bonus" />
-          ) : (
-            <span className="sc-value">{value.spellcasting.attackBonus >= 0 ? `+${value.spellcasting.attackBonus}` : value.spellcasting.attackBonus}</span>
+          {castingStat(
+            "spell-attack",
+            "Spell attack bonus",
+            canEdit ? (
+              <NumberInput className="sc-value" value={value.spellcasting.attackBonus} onCommit={(attackBonus) => update({ spellcasting: { ...value.spellcasting, attackBonus } })} aria-label="Spell attack bonus" />
+            ) : (
+              <span className="sc-value">{value.spellcasting.attackBonus >= 0 ? `+${value.spellcasting.attackBonus}` : value.spellcasting.attackBonus}</span>
+            ),
           )}
         </div>
         <div className="spellcasting-cell">
           <span className="sc-label">Spell DC</span>
-          {canEdit ? (
-            <NumberInput className="sc-value" value={value.spellcasting.saveDc} min={0} allowNegative={false} onCommit={(saveDc) => update({ spellcasting: { ...value.spellcasting, saveDc } })} aria-label="Spell save DC" />
-          ) : (
-            <span className="sc-value">{value.spellcasting.saveDc}</span>
+          {castingStat(
+            "spell-dc",
+            "Spell save DC",
+            canEdit ? (
+              <NumberInput className="sc-value" value={value.spellcasting.saveDc} min={0} allowNegative={false} onCommit={(saveDc) => update({ spellcasting: { ...value.spellcasting, saveDc } })} aria-label="Spell save DC" />
+            ) : (
+              <span className="sc-value">{value.spellcasting.saveDc}</span>
+            ),
           )}
         </div>
       </div>
@@ -79,14 +144,21 @@ export function SpellsPage({ sheet }: { sheet: SheetEdit }) {
       {slotLevels.length > 0 ? (
         <div className="spell-slots">
           {slotLevels.map((lv) => {
-            const slot = value.spellSlots[String(lv)] ?? { current: 0, max: 0 };
+            const max = slotMax(lv);
+            // Auto slots: an absent stored entry means "never spent" = full.
+            const current = Math.min(value.spellSlots[String(lv)]?.current ?? (autoSlots ? max : 0), max);
             return (
               <div className="spell-slot-row" key={lv}>
                 <span className="spell-slot-lv">Lv {lv}</span>
-                <SlotPips current={slot.current} max={slot.max} disabled={!canEdit} onChange={(current) => setSlot(lv, { current })} />
-                {canEdit ? (
+                <SlotPips
+                  current={current}
+                  max={max}
+                  disabled={!canEdit}
+                  onChange={(next) => setSlot(lv, { current: next, ...(autoSlots ? { max } : {}) })}
+                />
+                {canEdit && !autoSlots ? (
                   <span className="spell-slot-max">
-                    max <NumberInput value={slot.max} min={0} allowNegative={false} onCommit={(max) => setSlot(lv, { max, current: Math.min(slot.current, max) })} aria-label={`Level ${lv} max slots`} />
+                    max <NumberInput value={max} min={0} allowNegative={false} onCommit={(next) => setSlot(lv, { max: next, current: Math.min(current, next) })} aria-label={`Level ${lv} max slots`} />
                   </span>
                 ) : null}
               </div>
@@ -124,6 +196,16 @@ export function SpellsPage({ sheet }: { sheet: SheetEdit }) {
             <span className="inv-cell inv-cell--sm">{row.range || "—"}</span>
             <span className="inv-cell inv-cell--sm">{row.target || "—"}</span>
             <span className="inv-cell inv-equip">
+              {actions && canEdit && row.level >= 1 ? (
+                <button
+                  type="button"
+                  className="cast-btn"
+                  title={`Cast (spends a level-${row.level} slot)`}
+                  onClick={() => actions.castSpell(row.level)}
+                >
+                  ✨
+                </button>
+              ) : null}
               <button
                 type="button"
                 className={`prepared-toggle ${row.prepared ? "prepared-toggle--on" : ""}`}

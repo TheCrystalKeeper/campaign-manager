@@ -53,8 +53,14 @@ export function SheetCards({ ctx, records, onClose, allowReveal, emptyHint }: Sh
                   : undefined
               }
               onRollCheck={(check, adv) => ctx.rollCheck(record.id, check, adv)}
-              onRest={(kind) => ctx.room.send({ type: "REST", sheetId: record.id, kind })}
+              onRest={(kind, spendHitDice) => ctx.room.send({ type: "REST", sheetId: record.id, kind, spendHitDice })}
               conditions={buildConditionsControl(ctx.state.tokens, record.id, true, ctx.room.send)}
+              actions={{
+                castSpell: (level) => ctx.room.send({ type: "CAST_SPELL", sheetId: record.id, level }),
+                useFeature: (featureId) => ctx.room.send({ type: "USE_FEATURE", sheetId: record.id, featureId }),
+                useItemCharge: (rowId) => ctx.room.send({ type: "USE_ITEM_CHARGE", sheetId: record.id, rowId }),
+                deathSave: () => ctx.room.send({ type: "DEATH_SAVE", sheetId: record.id }),
+              }}
             />
           </div>
         </section>

@@ -1,6 +1,6 @@
 import type { CharacterSheet, CheckSpec, SheetRecord, SheetSectionId } from "../lib/types";
 import { SheetView } from "./sheet/SheetView";
-import type { Adv, SheetEdit } from "./sheet/context";
+import type { Adv, SheetActions, SheetEdit } from "./sheet/context";
 
 type CharacterSheetPanelProps = {
   record: SheetRecord | null;
@@ -15,10 +15,12 @@ type CharacterSheetPanelProps = {
    * from the sheet and builds the color-coded breakdown. Shift = advantage, Alt = disadvantage.
    */
   onRollCheck?: (check: CheckSpec, adv?: Adv) => void;
-  /** Short/Long rest (log-only hook today). */
-  onRest?: (kind: "short" | "long") => void;
+  /** Rest with real effects (Tier 3); short rests may spend hit dice. */
+  onRest?: (kind: "short" | "long", spendHitDice?: number) => void;
   /** Two-way conditions control for the Effects page (writes to linked tokens). */
   conditions?: SheetEdit["conditions"];
+  /** Tier-3 resource actions (cast/use/death-save). */
+  actions?: SheetActions;
 };
 
 /**

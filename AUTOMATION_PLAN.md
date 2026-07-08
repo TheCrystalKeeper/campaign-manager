@@ -1,11 +1,42 @@
 # Character-Sheet Automation Plan
 
-**Status: designed 2026-07-07 — NOT YET BUILT.** This is the "automation is a separate
-future plan" that Phase 7 of `IMPLEMENTATION_PLAN.md` deliberately deferred
-("layout + manual fields FIRST, automation LATER"). Phase 7 shipped every field as
-hand-typed and left clean hooks for this plan to consume. This document explains, in
-plain English, what will be automated, exactly how it will work, and why the codebase
-is already shaped for it.
+**Status: Tiers 1–3 SHIPPED 2026-07-07 (designed and built the same day).** This is the
+"automation is a separate future plan" that Phase 7 of `IMPLEMENTATION_PLAN.md`
+deliberately deferred ("layout + manual fields FIRST, automation LATER"). This document
+explains, in plain English, what is automated, exactly how it works, and why the
+codebase was already shaped for it.
+
+> **As built (2026-07-07):** shipped per this plan in three rounds, all machine-verified
+> (`tests/unit-{rules5e,rollcheck,traits}.test.ts` + `tests/smoke-automation.mjs`
+> end-to-end, plus the full pre-existing unit + smoke suites re-run green; a manual
+> two-window feel pass is still owed). The engine lives in `src/lib/rules5e.ts`; totals
+> are the sum of the same labeled parts the roll resolver uses, so display and rolls
+> cannot drift. Deltas from the prose below:
+>
+> - **Override UI:** badges (Init/Prof), hit-dice max, capacity, and spell attack/DC are
+>   directly editable derived numbers (commit = override; committing the formula's own
+>   value returns to auto). Skill/save totals are roll buttons, so overriding those is
+>   **right-click** on the total; the gold ● marker resets either way.
+> - **Auto spell slots:** an absent stored slot entry means "never spent" = full; writes
+>   store the effective max so a fully-spent level persists. "Cast" at 0 slots is
+>   **rejected with a clear error** rather than the planned "cast anyway" override —
+>   houserule tables just adjust slots by hand (pips/manual mode).
+> - **Why a roll was adv/dis** is appended to its log label (e.g. "Stealth check
+>   (dis: poisoned)", "(cancelled)") — there is no roll dialog to surface it in.
+> - **`ROLL_CHECK.tokenId`** is in the protocol; the client doesn't send it yet — the
+>   server's single-linked-token fallback covers the common case, and multi-token
+>   shared stat blocks get no auto conditions (can't be guessed).
+> - **Attack rows** (manual + inventory weapons) gained optional `toHitAbility`
+>   ("auto to-hit": ability mod + prof, "spell" = casting ability) and a
+>   **melee/ranged tag** that routes the 8 global attack/damage trait bonuses
+>   (untagged rows skip them). Shift-click a damage roll = crit dice (doubled +
+>   melee-crit-damage-dice extras on melee rows).
+> - **Exhaustion** = flat disadvantage on ability checks (the level-1 effect; levels
+>   aren't tracked on `Token.conditions`). Enhanced Dual Wielding + Tavern Brawler are
+>   marked informational (they change action economy the app doesn't model).
+> - **Short rest** is a small flyout on the 🍴 button (pick hit dice to spend; each
+>   heals its die + CON, server-rolled). `initiativeBonus` now runs through the engine
+>   for PCs, fixing the old sheet-badge vs combat-tracker inconsistency.
 
 **Decisions locked (user, 2026-07-07):**
 

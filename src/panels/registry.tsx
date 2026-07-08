@@ -150,8 +150,18 @@ export const PANELS: PanelDef[] = [
               : undefined
           }
           onRollCheck={canEdit ? (check, adv) => ctx.rollCheck(sheetId, check, adv) : undefined}
-          onRest={canEdit ? (kind) => ctx.room.send({ type: "REST", sheetId, kind }) : undefined}
+          onRest={canEdit ? (kind, spendHitDice) => ctx.room.send({ type: "REST", sheetId, kind, spendHitDice }) : undefined}
           conditions={buildConditionsControl(ctx.state.tokens, sheetId, canEdit, ctx.room.send)}
+          actions={
+            canEdit
+              ? {
+                  castSpell: (level) => ctx.room.send({ type: "CAST_SPELL", sheetId, level }),
+                  useFeature: (featureId) => ctx.room.send({ type: "USE_FEATURE", sheetId, featureId }),
+                  useItemCharge: (rowId) => ctx.room.send({ type: "USE_ITEM_CHARGE", sheetId, rowId }),
+                  deathSave: () => ctx.room.send({ type: "DEATH_SAVE", sheetId }),
+                }
+              : undefined
+          }
         />
       );
     },
@@ -198,6 +208,13 @@ export const PANELS: PanelDef[] = [
         yourPlayerId={ctx.room.yourPlayerId}
         playerSlots={ctx.state.playerSlots}
         onSendChat={(text, whisperTo) => ctx.room.send({ type: "SEND_CHAT", text, whisperTo })}
+        sheets={ctx.isDm ? ctx.state.sheets : undefined}
+        onApplyDamage={
+          ctx.isDm
+            ? (sheetId, amount, damageType) =>
+                ctx.room.send({ type: "APPLY_DAMAGE", sheetId, amount, damageType })
+            : undefined
+        }
       />
     ),
   },

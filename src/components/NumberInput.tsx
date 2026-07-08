@@ -8,6 +8,7 @@ type NumberInputProps = {
   min?: number;
   max?: number;
   allowNegative?: boolean;
+  autoFocus?: boolean;
   "aria-label"?: string;
 };
 
@@ -24,6 +25,7 @@ export function NumberInput({
   min,
   max,
   allowNegative = true,
+  autoFocus,
   "aria-label": ariaLabel,
 }: NumberInputProps) {
   const [draft, setDraft] = useState(String(value));
@@ -68,6 +70,7 @@ export function NumberInput({
       className={className}
       disabled={disabled}
       value={draft}
+      autoFocus={autoFocus}
       aria-label={ariaLabel}
       onChange={(event) => {
         const raw = event.target.value;

@@ -618,6 +618,10 @@ export type InventoryEntry = {
   toHit?: number;
   damage?: string;
   damageType?: string;
+  /** Auto to-hit ability (see AttackEntry.toHitAbility). */
+  toHitAbility?: string;
+  /** Melee/ranged tag — routes the global weapon attack/damage trait bonuses. */
+  range?: "melee" | "ranged";
   /** Expand-body text. */
   description?: string;
 };
@@ -633,6 +637,14 @@ export type AttackEntry = {
   /** Subtitle / expand body, e.g. "Natural · Action". */
   notes?: string;
   itemId?: string | null;
+  /**
+   * Auto to-hit (rules engine, PC): an ability id ("str"/"dex"/…) or "spell" (the
+   * spellcasting ability). When set, to-hit derives as mod + prof and the manual
+   * `toHit` is ignored. Unset = manual to-hit (NPC actions, homebrew).
+   */
+  toHitAbility?: string;
+  /** Melee/ranged tag — routes the global weapon attack/damage trait bonuses. */
+  range?: "melee" | "ranged";
 };
 
 /** A class/species feature or feat row. */
@@ -736,8 +748,25 @@ export type DeathSaves = { successes: number; failures: number };
 /** Hit-dice pool (die is free text, e.g. "d8"). */
 export type HitDice = { current: number; max: number; die: string };
 
-/** Manual spellcasting numbers (no derivation). */
-export type Spellcasting = { abilityId: string; attackBonus: number; saveDc: number };
+/**
+ * Caster progression for auto spell-slot maximums (rules engine): full (wizard/cleric…),
+ * half (paladin/ranger), third (eldritch knight), pact (warlock — slots refresh on short
+ * rest). "none" keeps slot maximums manual.
+ */
+export const CASTER_TYPES = ["none", "full", "half", "third", "pact"] as const;
+export type CasterType = (typeof CASTER_TYPES)[number];
+
+/**
+ * Spellcasting numbers. When `abilityId` is set on a PC sheet the rules engine derives
+ * attack/DC (8 + prof + mod) and `attackBonus`/`saveDc` become the manual fallback used
+ * while it's unset (and always on NPCs).
+ */
+export type Spellcasting = {
+  abilityId: string;
+  attackBonus: number;
+  saveDc: number;
+  casterType: CasterType;
+};
 
 export type CharacterSheet = {
   characterName: string;
@@ -824,6 +853,13 @@ export type CharacterSheet = {
   traits: Record<string, boolean | number>;
   /** Favorited action/item ids, e.g. "item:<id>". */
   favorites: string[];
+  /**
+   * Per-stat manual overrides (rules engine). Keyed by override key ("prof", "init",
+   * "skill-stealth", "save-dex", "spell-dc", "spell-attack", "carry-capacity",
+   * "hit-dice-max"); a present key replaces that stat's derived value verbatim.
+   * Empty = fully automatic. PC-only — the engine is off for NPC sheets.
+   */
+  overrides: Record<string, number>;
 };
 
 export type AbilityDef = {
@@ -941,7 +977,7 @@ export const SHEET_SECTION_FIELDS: Record<SheetSectionId, Array<keyof CharacterS
   features: ["features", "attacks"],
   spells: ["spells", "spellSlots", "spellcasting"],
   effects: ["effects"],
-  traits: ["traits", "favorites"],
+  traits: ["traits", "favorites", "overrides"],
   biography: [
     "alignment",
     "size",
@@ -1133,7 +1169,8 @@ export type CheckSpec =
   | { kind: "tool"; toolId: string }
   | { kind: "initiative" }
   | { kind: "attack"; rowId: string }
-  | { kind: "damage"; rowId: string }
+  /** `crit` doubles the weapon dice (+ melee-crit-damage-dice extras on melee rows). */
+  | { kind: "damage"; rowId: string; crit?: boolean }
   | { kind: "spell-attack" };
 
 export type DiceRoll = {
@@ -1151,6 +1188,8 @@ export type DiceRoll = {
   otherTotal?: number;
   /** Color-coded breakdown (Phase 7). Absent on freeform/legacy rolls. */
   parts?: RollPart[];
+  /** Attack roll met the crit threshold (natural die ≥ 20, or lower via traits). */
+  crit?: boolean;
 };
 
 /** One entry in the unified roll/action/chat log. */
@@ -1256,8 +1295,22 @@ export type ClientMessage =
   | { type: "DUPLICATE_SHEET"; sheetId: string; newSheetId: string }
   | { type: "DELETE_SHEET"; sheetId: string }
   | { type: "SET_SHEET_REVEAL"; sheetId: string; section: SheetSectionId; revealed: boolean }
-  | { type: "REST"; sheetId: string; kind: "short" | "long" }
+  /** Rest with real effects (Tier 3). Short rests may spend hit dice (server-rolled). */
+  | { type: "REST"; sheetId: string; kind: "short" | "long"; spendHitDice?: number }
   | { type: "ADJUST_HP"; sheetId: string; delta: number }
+  /** Spend one spell slot of `level` (1..9). DM any sheet; players own only. */
+  | { type: "CAST_SPELL"; sheetId: string; level: number }
+  /** Decrement a feature's uses. DM any sheet; players own only. */
+  | { type: "USE_FEATURE"; sheetId: string; featureId: string }
+  /** Decrement an inventory row's charges. DM any sheet; players own only. */
+  | { type: "USE_ITEM_CHARGE"; sheetId: string; rowId: string }
+  /** Server-rolled death saving throw: 10+ success, nat 1 = 2 failures, nat 20 = 1 HP. */
+  | { type: "DEATH_SAVE"; sheetId: string }
+  /**
+   * DM-only: apply damage to a sheet respecting its resistance/immunity/vulnerability
+   * pills (half / zero / double), temp HP first.
+   */
+  | { type: "APPLY_DAMAGE"; sheetId: string; amount: number; damageType?: string }
   | {
       type: "SET_SHEET_FOLDER";
       sheetId: string;
@@ -1298,6 +1351,11 @@ export type ClientMessage =
       check: CheckSpec;
       adv?: "adv" | "dis";
       private?: boolean;
+      /**
+       * The acting token (conditions like Poisoned grant adv/dis). Optional — without
+       * it the server uses the sheet's single linked token when unambiguous.
+       */
+      tokenId?: string;
     }
   | { type: "SEND_CHAT"; text: string; whisperTo?: string }
   | {
@@ -1635,10 +1693,11 @@ export function createDefaultSheet(name: string): CharacterSheet {
     features: [],
     spells: [],
     spellSlots: {},
-    spellcasting: { abilityId: "", attackBonus: 0, saveDc: 0 },
+    spellcasting: { abilityId: "", attackBonus: 0, saveDc: 0, casterType: "none" },
     effects: [],
     traits: {},
     favorites: [],
+    overrides: {},
   };
 }
 
@@ -1881,6 +1940,32 @@ function sanitizeTraits(record: unknown): Record<string, boolean | number> {
   return result;
 }
 
+/** Sanitize the per-stat override map (finite numbers, capped keys/values). */
+function sanitizeOverrides(record: unknown): Record<string, number> {
+  if (!record || typeof record !== "object") {
+    return {};
+  }
+  const result: Record<string, number> = {};
+  for (const [key, value] of Object.entries(record as Record<string, unknown>)) {
+    if (typeof value === "number" && Number.isFinite(value)) {
+      result[key.slice(0, 40)] = Math.min(Math.max(Math.round(value), -1000), 1000);
+    }
+    if (Object.keys(result).length >= 80) {
+      break;
+    }
+  }
+  return result;
+}
+
+/** Valid auto-to-hit ability ids: the six abilities or "spell" (spellcasting ability). */
+function sanitizeToHitAbility(value: unknown): string | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  const valid = value === "spell" || DEFAULT_SHEET_TEMPLATE.abilities.some((a) => a.id === value);
+  return valid ? value : undefined;
+}
+
 /// <summary>
 /// Keeps only well-formed inventory rows (v2: self-contained display copies).
 /// Legacy rows without an id are backfilled deterministically (`inv-${index}`).
@@ -1913,6 +1998,8 @@ function sanitizeInventory(inventory: unknown): InventoryEntry[] {
       ...(typeof raw.damageType === "string" && raw.damageType.trim()
         ? { damageType: str(raw.damageType, SHORT_CAP) }
         : {}),
+      ...(sanitizeToHitAbility(raw.toHitAbility) ? { toHitAbility: sanitizeToHitAbility(raw.toHitAbility) } : {}),
+      ...(raw.range === "melee" || raw.range === "ranged" ? { range: raw.range } : {}),
       ...(typeof raw.description === "string" && raw.description.trim()
         ? { description: str(raw.description, DESC_CAP) }
         : {}),
@@ -1934,6 +2021,8 @@ function sanitizeAttacks(value: unknown): AttackEntry[] {
       ...(uses ? { uses } : {}),
       ...(typeof raw.notes === "string" && raw.notes.trim() ? { notes: str(raw.notes, DESC_CAP) } : {}),
       ...(typeof raw.itemId === "string" ? { itemId: raw.itemId } : {}),
+      ...(sanitizeToHitAbility(raw.toHitAbility) ? { toHitAbility: sanitizeToHitAbility(raw.toHitAbility) } : {}),
+      ...(raw.range === "melee" || raw.range === "ranged" ? { range: raw.range } : {}),
     };
   });
 }
@@ -2008,7 +2097,10 @@ function sanitizeCurrency(value: unknown): Currency {
   return { cp: coin(v.cp), sp: coin(v.sp), ep: coin(v.ep), gp: coin(v.gp), pp: coin(v.pp) };
 }
 
-function sanitizeSpellSlots(value: unknown): Record<string, { current: number; max: number }> {
+function sanitizeSpellSlots(
+  value: unknown,
+  casterType: CasterType = "none",
+): Record<string, { current: number; max: number }> {
   if (!value || typeof value !== "object") {
     return {};
   }
@@ -2018,7 +2110,10 @@ function sanitizeSpellSlots(value: unknown): Record<string, { current: number; m
     if (slot && typeof slot === "object") {
       const s = slot as { current?: unknown; max?: unknown };
       const max = clampInt(s.max, 0, 12, 0);
-      const current = Math.min(clampInt(s.current, 0, 12, 0), max);
+      // With an auto caster type, maximums derive from level (rules engine) and the
+      // stored max is dormant — keep `current` up to the absolute cap instead of
+      // clamping it to a stored max of 0.
+      const current = Math.min(clampInt(s.current, 0, 12, 0), casterType === "none" ? max : 12);
       if (max > 0 || current > 0) {
         result[String(level)] = { current, max };
       }
@@ -2042,6 +2137,11 @@ export function normalizeCharacterSheet(
 
   const legacyName = sheet.name ?? sheet.characterName;
   const legacyStory = mergeLegacyStoryFields(sheet);
+  const casterType: CasterType = CASTER_TYPES.includes(
+    sheet.spellcasting?.casterType as CasterType,
+  )
+    ? (sheet.spellcasting?.casterType as CasterType)
+    : "none";
 
   return {
     characterName: sheet.characterName ?? legacyName?.trim() ?? defaults.characterName,
@@ -2121,15 +2221,17 @@ export function normalizeCharacterSheet(
     attacks: sanitizeAttacks(sheet.attacks),
     features: sanitizeFeatures(sheet.features),
     spells: sanitizeSpells(sheet.spells),
-    spellSlots: sanitizeSpellSlots(sheet.spellSlots),
+    spellSlots: sanitizeSpellSlots(sheet.spellSlots, casterType),
     spellcasting: {
       abilityId: str(sheet.spellcasting?.abilityId, SHORT_CAP),
       attackBonus: clampInt(sheet.spellcasting?.attackBonus, -100, 100, 0),
       saveDc: clampInt(sheet.spellcasting?.saveDc, 0, 100, 0),
+      casterType,
     },
     effects: sanitizeEffects(sheet.effects),
     traits: sanitizeTraits(sheet.traits),
     favorites: sanitizePillList(sheet.favorites).slice(0, SHEET_ROW_CAPS.favorites),
+    overrides: sanitizeOverrides(sheet.overrides),
   };
 }
 

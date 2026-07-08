@@ -1,9 +1,9 @@
 import { useState } from "react";
-import { DEFAULT_SHEET_TEMPLATE, PORTRAIT_ASPECT, derivedStatTotal, formatModifier } from "../../lib/types";
+import { DEFAULT_SHEET_TEMPLATE, PORTRAIT_ASPECT, formatModifier } from "../../lib/types";
 import { CroppableImage } from "../CroppableImage";
 import { ImageCropModal } from "../ImageCropModal";
 import { NumberInput } from "../NumberInput";
-import { BarMeter, StatBadge } from "./atoms";
+import { BarMeter, DerivedNumber, StatBadge } from "./atoms";
 import { DeathSaveTracker } from "./DeathSaveTracker";
 import type { RevealControl } from "./SheetHeader";
 import type { SheetEdit } from "./context";
@@ -28,12 +28,27 @@ export function SheetSidebar({
   /** DM + NPC: reveal control for the identity + combat (sidebar) sections. */
   reveal: RevealControl;
 }) {
-  const { value, canEdit, kind, update } = sheet;
+  const { value, canEdit, kind, derived, setOverride, update } = sheet;
   const isNpc = kind === "npc";
   const [cropOpen, setCropOpen] = useState(false);
 
   const skillsSummary = DEFAULT_SHEET_TEMPLATE.skills.filter(
     (skill) => (value.skillProfs[skill.id] ?? 0) > 0 || (value.skillMods[skill.id] ?? 0) !== 0,
+  );
+
+  /** A rules-engine badge value: editable (commit = override) with the auto marker. */
+  const derivedBadge = (key: string, label: string) => (
+    <DerivedNumber
+      value={derived.values[key] ?? 0}
+      base={derived.base[key] ?? 0}
+      overridden={derived.auto && value.overrides[key] !== undefined}
+      canEdit={canEdit && derived.auto}
+      onCommit={(next) => setOverride(key, next)}
+      onReset={() => setOverride(key, null)}
+      className="stat-badge-input"
+      formatted
+      ariaLabel={label}
+    />
   );
 
   return (
@@ -128,9 +143,9 @@ export function SheetSidebar({
       </div>
 
       <div className="vitals-badges">
-        <StatBadge label="Init" value={formatModifier(value.initiative)} />
+        <StatBadge label="Init" value={isNpc ? formatModifier(value.initiative) : derivedBadge("init", "Initiative")} />
         <StatBadge label="Walk" value={value.speed} />
-        <StatBadge label="Prof" value={formatModifier(value.proficiencyBonus)} />
+        <StatBadge label="Prof" value={isNpc ? formatModifier(value.proficiencyBonus) : derivedBadge("prof", "Proficiency bonus")} />
       </div>
 
       <div className="vitals-block">
@@ -164,15 +179,27 @@ export function SheetSidebar({
 
       <div className="vitals-block">
         <label className="vitals-label">Hit Dice</label>
-        <BarMeter current={value.hitDice.current} max={value.hitDice.max}>
+        <BarMeter current={value.hitDice.current} max={derived.values["hit-dice-max"] ?? value.hitDice.max}>
           {canEdit ? (
             <span className="hp-edit">
               <NumberInput value={value.hitDice.current} min={0} allowNegative={false} onCommit={(current) => update({ hitDice: { ...value.hitDice, current } })} aria-label="Hit dice current" />
               <span>/</span>
-              <NumberInput value={value.hitDice.max} min={0} allowNegative={false} onCommit={(max) => update({ hitDice: { ...value.hitDice, max } })} aria-label="Hit dice max" />
+              {derived.auto ? (
+                <DerivedNumber
+                  value={derived.values["hit-dice-max"] ?? 0}
+                  base={derived.base["hit-dice-max"] ?? 0}
+                  overridden={value.overrides["hit-dice-max"] !== undefined}
+                  canEdit={canEdit}
+                  onCommit={(next) => setOverride("hit-dice-max", next)}
+                  onReset={() => setOverride("hit-dice-max", null)}
+                  ariaLabel="Hit dice max"
+                />
+              ) : (
+                <NumberInput value={value.hitDice.max} min={0} allowNegative={false} onCommit={(max) => update({ hitDice: { ...value.hitDice, max } })} aria-label="Hit dice max" />
+              )}
             </span>
           ) : (
-            <span>{value.hitDice.current} / {value.hitDice.max}</span>
+            <span>{value.hitDice.current} / {derived.values["hit-dice-max"] ?? value.hitDice.max}</span>
           )}
         </BarMeter>
       </div>
@@ -185,9 +212,7 @@ export function SheetSidebar({
               {skillsSummary.map((skill) => (
                 <div className="vitals-skill" key={skill.id}>
                   <span>{skill.name}</span>
-                  <span className="total">
-                    {formatModifier(derivedStatTotal(skill, value.skillMods[skill.id] ?? 0, value.abilityScores))}
-                  </span>
+                  <span className="total">{formatModifier(derived.values[skill.id] ?? 0)}</span>
                 </div>
               ))}
             </div>
@@ -213,7 +238,12 @@ export function SheetSidebar({
         </>
       ) : (
         <>
-          <DeathSaveTracker value={value.deathSaves} canEdit={canEdit} onChange={(deathSaves) => update({ deathSaves })} />
+          <DeathSaveTracker
+            value={value.deathSaves}
+            canEdit={canEdit}
+            onChange={(deathSaves) => update({ deathSaves })}
+            onRoll={sheet.actions?.deathSave}
+          />
           <div className="vitals-block">
             <label className="vitals-label">Favorites</label>
             <div className="favorites-drop">

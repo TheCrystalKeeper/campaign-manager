@@ -4,8 +4,10 @@ Roadmap for building out the VTT from the `bare-bones` foundation. Covers everyt
 `revamp_todo.md` plus recommended additions. Companion docs: `CODEBASE.md` (pre-revamp
 architecture reference — **historical**, describes the codebase before Phases 0–4 shipped),
 `DICE_PLAN.md` (v1 3D dice concepts — the shipped Phase 4 recovered its core),
-`AUTOMATION_PLAN.md` (sheet-automation design, 2026-07-07 — the "automation LATER" plan
-Phase 7 deferred; designed, not yet built).
+`AUTOMATION_PLAN.md` (sheet automation — the "automation LATER" plan Phase 7 deferred;
+**Tiers 1–3 designed AND SHIPPED 2026-07-07**: rules engine `src/lib/rules5e.ts`,
+overrides, trait/condition-aware rolls, real rests/casting/death saves — see its
+"as built" note).
 
 ## STATUS (2026-07-07) — read this first in a fresh session
 

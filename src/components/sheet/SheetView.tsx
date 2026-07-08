@@ -1,6 +1,7 @@
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { CharacterSheet, CheckSpec, SheetRecord, SheetSectionId } from "../../lib/types";
+import { computeDerived } from "../../lib/rules5e";
 import { useSheetDraft } from "./useSheetDraft";
 import { SheetSidebar } from "./SheetSidebar";
 import { SheetHeader, type RevealControl } from "./SheetHeader";
@@ -12,7 +13,7 @@ import { SpellsPage } from "./pages/SpellsPage";
 import { EffectsPage } from "./pages/EffectsPage";
 import { BiographyPage } from "./pages/BiographyPage";
 import { TraitsPage } from "./pages/TraitsPage";
-import type { Adv, SheetEdit } from "./context";
+import type { Adv, SheetActions, SheetEdit } from "./context";
 
 /** Which sheet sections each rail page reveals (drives the DM's per-page reveal eye). */
 const PAGE_SECTIONS: Record<SheetPageId, SheetSectionId[]> = {
@@ -36,8 +37,11 @@ export type SheetViewProps = {
   onChange: (sheet: CharacterSheet) => void;
   onToggleReveal?: (section: SheetSectionId, revealed: boolean) => void;
   onRollCheck?: (check: CheckSpec, adv?: Adv) => void;
-  onRest?: (kind: "short" | "long") => void;
+  /** Rest with real effects (Tier 3); short rests may spend hit dice. */
+  onRest?: (kind: "short" | "long", spendHitDice?: number) => void;
   conditions?: SheetEdit["conditions"];
+  /** Tier-3 resource actions (cast/use/death-save). */
+  actions?: SheetActions;
 };
 
 /**
@@ -56,6 +60,7 @@ export function SheetView({
   onRollCheck,
   onRest,
   conditions,
+  actions,
 }: SheetViewProps) {
   const { value, update, uploading, handlePortrait, overSoftCap } = useSheetDraft(
     record,
@@ -102,7 +107,33 @@ export function SheetView({
   const hiddenFor = (section: SheetSectionId) =>
     !isDm && record.kind === "npc" && !record.revealed[section];
 
-  const sheet: SheetEdit = { value, kind: record.kind, canEdit, isDm, update, hiddenFor, onRollCheck, conditions };
+  // Rules engine: derived totals for display (PC formulas + overrides; NPC passthrough).
+  // Cheap pure math — recompute on every draft change so totals track edits live.
+  const derived = computeDerived(value, record.kind);
+  const setOverride = (key: string, next: number | null) => {
+    const overrides = { ...value.overrides };
+    // Typing the formula's own value back in means "return to auto".
+    if (next === null || next === derived.base[key]) {
+      delete overrides[key];
+    } else {
+      overrides[key] = next;
+    }
+    update({ overrides });
+  };
+
+  const sheet: SheetEdit = {
+    value,
+    kind: record.kind,
+    canEdit,
+    isDm,
+    derived,
+    setOverride,
+    update,
+    hiddenFor,
+    onRollCheck,
+    conditions,
+    actions,
+  };
 
   const revealControlFor = (sections: SheetSectionId[]): RevealControl => {
     if (!isDm || record.kind !== "npc" || !onToggleReveal) return null;

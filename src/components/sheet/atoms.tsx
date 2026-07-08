@@ -224,6 +224,71 @@ export function PillList({
   );
 }
 
+/** Gold dot marking a manually overridden stat; click resets it to the formula value. */
+export function OverrideMarker({
+  overridden,
+  baseValue,
+  onReset,
+  disabled,
+}: {
+  overridden: boolean;
+  baseValue: number;
+  onReset: () => void;
+  disabled?: boolean;
+}) {
+  if (!overridden) return null;
+  return (
+    <button
+      type="button"
+      className="ovr-marker"
+      disabled={disabled}
+      title={`Overridden — auto is ${formatModifier(baseValue)}. Click to reset.`}
+      onClick={onReset}
+    >
+      ●
+    </button>
+  );
+}
+
+/**
+ * An auto-computed stat the user may override (rules engine): shows the final value;
+ * committing a different number stores an override, committing the formula's own value
+ * (or clicking the marker) returns it to auto.
+ */
+export function DerivedNumber({
+  value,
+  base,
+  overridden,
+  canEdit,
+  onCommit,
+  onReset,
+  className,
+  formatted,
+  ariaLabel,
+}: {
+  value: number;
+  base: number;
+  overridden: boolean;
+  canEdit: boolean;
+  onCommit: (value: number) => void;
+  onReset: () => void;
+  className?: string;
+  /** Read-only render uses a signed modifier (+2) instead of a bare number. */
+  formatted?: boolean;
+  ariaLabel?: string;
+}) {
+  return (
+    <span className="derived-num">
+      {canEdit ? (
+        <NumberInput className={className} value={value} onCommit={onCommit} aria-label={ariaLabel} />
+      ) : (
+        <span className={className}>{formatted ? formatModifier(value) : value}</span>
+      )}
+      <OverrideMarker overridden={overridden} baseValue={base} onReset={onReset} disabled={!canEdit} />
+    </span>
+  );
+}
+
 /** A section header row with an optional trailing "+ add" action. */
 export function SectionHeader({
   title,

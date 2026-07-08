@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { formatDiceRoll } from "../lib/dice";
-import type { LogEntry, PlayerSlot } from "../lib/types";
+import type { LogEntry, PlayerSlot, SheetRecord } from "../lib/types";
 
 type LogPanelProps = {
   log: LogEntry[];
@@ -8,7 +8,36 @@ type LogPanelProps = {
   yourPlayerId: string | null;
   playerSlots: PlayerSlot[];
   onSendChat: (text: string, whisperTo?: string) => void;
+  /** DM-only (Tier 3): targets for the damage-apply action on damage rolls. */
+  sheets?: Record<string, SheetRecord>;
+  onApplyDamage?: (sheetId: string, amount: number, damageType?: string) => void;
 };
+
+/**
+ * Mirror of the server's damage adjustment (immune = 0, resist = half, vulnerable =
+ * double; fuzzy pill match) so the DM sees the outcome BEFORE applying.
+ */
+function previewDamage(record: SheetRecord, amount: number, damageType: string): { final: number; note: string } {
+  const dt = damageType.trim().toLowerCase();
+  const matches = (pills: string[]) =>
+    dt !== "" &&
+    pills.some((pill) => {
+      const p = pill.trim().toLowerCase();
+      return p.length > 0 && (p.includes(dt) || dt.includes(p));
+    });
+  if (matches(record.data.immunities)) return { final: 0, note: "immune" };
+  let final = amount;
+  const notes: string[] = [];
+  if (matches(record.data.resistances)) {
+    final = Math.floor(final / 2);
+    notes.push("resistant");
+  }
+  if (matches(record.data.vulnerabilities)) {
+    final *= 2;
+    notes.push("vulnerable");
+  }
+  return { final, note: notes.join(", ") };
+}
 
 type LogFilter = "all" | "rolls" | "chat";
 
@@ -29,10 +58,14 @@ function resolveWhisperTarget(name: string, slots: PlayerSlot[]): string | null 
 /// The unified roll/action/chat feed with a chat input. Whispers use
 /// `/w name message`; what each viewer sees is already filtered server-side.
 /// </summary>
-export function LogPanel({ log, isDm, yourPlayerId, playerSlots, onSendChat }: LogPanelProps) {
+export function LogPanel({ log, isDm, yourPlayerId, playerSlots, onSendChat, sheets, onApplyDamage }: LogPanelProps) {
   const [filter, setFilter] = useState<LogFilter>("all");
   const [text, setText] = useState("");
   const [inputError, setInputError] = useState<string | null>(null);
+  // Damage-apply flyout state (DM): which roll entry is open, target + typed damage type.
+  const [applyFor, setApplyFor] = useState<string | null>(null);
+  const [applyTarget, setApplyTarget] = useState("");
+  const [applyType, setApplyType] = useState("");
 
   const slotName = (id: string) =>
     id === "dm" ? "DM" : (playerSlots.find((slot) => slot.id === id)?.name ?? "player");
@@ -139,10 +172,73 @@ export function LogPanel({ log, isDm, yourPlayerId, playerSlots, onSendChat }: L
                       {entry.roll.adv === "adv" ? "adv" : "dis"} · dropped {entry.roll.otherTotal}
                     </span>
                   ) : null}
+                  {entry.roll.crit ? (
+                    <span className="roll-chip roll-chip--crit" title="Critical hit — Shift-click the damage roll for crit dice">
+                      CRIT
+                    </span>
+                  ) : null}
                 </div>
               ) : (
                 <span className="expr">{formatDiceRoll(entry.roll)}</span>
               )}
+              {onApplyDamage && sheets && entry.label?.toLowerCase().includes("damage") ? (
+                <div className="dmg-apply">
+                  {applyFor === entry.id ? (
+                    <>
+                      <select value={applyTarget} aria-label="Damage target" onChange={(e) => setApplyTarget(e.target.value)}>
+                        <option value="">Target…</option>
+                        {Object.values(sheets)
+                          .sort((a, b) => (a.data.characterName || "").localeCompare(b.data.characterName || ""))
+                          .map((record) => (
+                            <option key={record.id} value={record.id}>
+                              {record.data.characterName || "Unnamed"}
+                            </option>
+                          ))}
+                      </select>
+                      <input
+                        className="dmg-type"
+                        value={applyType}
+                        placeholder="type (fire…)"
+                        aria-label="Damage type"
+                        onChange={(e) => setApplyType(e.target.value)}
+                      />
+                      {applyTarget && sheets[applyTarget] ? (
+                        (() => {
+                          const preview = previewDamage(sheets[applyTarget], entry.roll.total, applyType);
+                          return (
+                            <button
+                              type="button"
+                              className="btn-ghost dmg-go"
+                              title={preview.note ? `${entry.roll.total} → ${preview.final} (${preview.note})` : `${preview.final} damage`}
+                              onClick={() => {
+                                onApplyDamage(applyTarget, entry.roll.total, applyType.trim() || undefined);
+                                setApplyFor(null);
+                              }}
+                            >
+                              Apply {preview.final}
+                              {preview.note ? ` (${preview.note})` : ""}
+                            </button>
+                          );
+                        })()
+                      ) : null}
+                      <button type="button" className="btn-ghost" onClick={() => setApplyFor(null)}>✕</button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      className="btn-ghost dmg-open"
+                      title="Apply this damage to a character (resistances respected)"
+                      onClick={() => {
+                        setApplyFor(entry.id);
+                        setApplyTarget("");
+                        setApplyType("");
+                      }}
+                    >
+                      ⚔ Apply
+                    </button>
+                  )}
+                </div>
+              ) : null}
             </div>
           );
         })}

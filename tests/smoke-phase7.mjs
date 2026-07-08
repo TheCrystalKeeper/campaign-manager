@@ -125,16 +125,19 @@ try {
   player.send({ type: "UPDATE_SHEET", sheetId: slotId, sheet: { ...pcData, abilityScores: { ...pcData.abilityScores, dex: 16 }, skillMods: { ...pcData.skillMods, "skill-stealth": 2 } } });
   await dm.next((m) => m.type === "STATE" && m.state.sheets[slotId]?.data.abilityScores.dex === 16);
 
+  // NOTE: the rules engine appends condition notes to the label (tok-vex is still
+  // poisoned from 7c → "Stealth check (dis: poisoned)"), so match by prefix.
   player.send({ type: "ROLL_CHECK", sheetId: slotId, check: { kind: "skill", statId: "skill-stealth" } });
-  const rollFrame = await dm.next((m) => m.type === "STATE" && m.state.log.some((e) => e.kind === "roll" && e.label === "Stealth check"));
-  const rollEntry = [...rollFrame.state.log].reverse().find((e) => e.kind === "roll" && e.label === "Stealth check");
+  const rollFrame = await dm.next((m) => m.type === "STATE" && m.state.log.some((e) => e.kind === "roll" && e.label?.startsWith("Stealth check")));
+  const rollEntry = [...rollFrame.state.log].reverse().find((e) => e.kind === "roll" && e.label?.startsWith("Stealth check"));
   const partsSum = (rollEntry.roll.parts ?? []).reduce((s, p) => s + p.value, 0);
   check("ROLL_CHECK builds parts that sum to the total", rollEntry.roll.parts?.length >= 2 && partsSum === rollEntry.roll.total, `sum=${partsSum} total=${rollEntry.roll.total}`);
   check("ROLL_CHECK parts include a die + ability + prof", rollEntry.roll.parts.map((p) => p.kind).includes("ability"), JSON.stringify(rollEntry.roll.parts));
+  check("ROLL_CHECK poisoned roller rolls at disadvantage", rollEntry.roll.adv === "dis", rollEntry.label);
 
   // Player sees the SAME public roll with parts (not masked).
-  const playerRollFrame = await player.next((m) => m.type === "STATE" && m.state.log.some((e) => e.kind === "roll" && e.label === "Stealth check"));
-  const playerRoll = [...playerRollFrame.state.log].reverse().find((e) => e.kind === "roll" && e.label === "Stealth check");
+  const playerRollFrame = await player.next((m) => m.type === "STATE" && m.state.log.some((e) => e.kind === "roll" && e.label?.startsWith("Stealth check")));
+  const playerRoll = [...playerRollFrame.state.log].reverse().find((e) => e.kind === "roll" && e.label?.startsWith("Stealth check"));
   check("player sees public ROLL_CHECK parts", (playerRoll.roll.parts ?? []).length >= 2 && !playerRoll.masked);
 
   // A secret DM ROLL_CHECK is masked for the player (no parts, no values).

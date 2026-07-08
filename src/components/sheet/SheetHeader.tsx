@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { NumberInput } from "../NumberInput";
 import type { SheetEdit } from "./context";
 
@@ -6,8 +7,9 @@ export type RevealControl = { revealed: boolean; onToggle: (revealed: boolean) =
 
 /**
  * The persistent sheet header: name + subtitle (PC: "Class Level"; NPC: type line +
- * source · CR), Short/Long Rest buttons, a level/CR ring, and (DM + NPC) the active
- * page's reveal eye.
+ * source · CR), Short/Long Rest buttons (real effects — Tier 3; the short-rest button
+ * opens a spend-hit-dice flyout), a level/CR ring, and (DM + NPC) the active page's
+ * reveal eye.
  */
 export function SheetHeader({
   sheet,
@@ -15,17 +17,24 @@ export function SheetHeader({
   reveal,
 }: {
   sheet: SheetEdit;
-  onRest?: (kind: "short" | "long") => void;
+  onRest?: (kind: "short" | "long", spendHitDice?: number) => void;
   reveal: RevealControl;
 }) {
   const { value, canEdit, kind, update } = sheet;
   const isNpc = kind === "npc";
+  const [shortRestOpen, setShortRestOpen] = useState(false);
+  const [spendDice, setSpendDice] = useState(0);
 
   const subtitle = isNpc
     ? [value.size, value.creatureType, value.alignment].filter(Boolean).join(" · ") || "NPC"
     : `${value.characterClass || "Class"} ${value.level}`;
 
   const meta = isNpc ? [value.source, value.xp ? `${value.xp} XP` : ""].filter(Boolean).join(" · ") : "";
+
+  const startShortRest = () => {
+    setSpendDice(0);
+    setShortRestOpen((open) => !open);
+  };
 
   return (
     <div className="sheet-header">
@@ -47,8 +56,55 @@ export function SheetHeader({
       <div className="sheet-header-actions">
         {onRest ? (
           <>
-            <button type="button" className="rest-btn" title="Short rest" onClick={() => onRest("short")}>🍴</button>
-            <button type="button" className="rest-btn" title="Long rest" onClick={() => onRest("long")}>⛰</button>
+            <span className="short-rest-wrap">
+              <button
+                type="button"
+                className="rest-btn"
+                title="Short rest — spend hit dice, recharge short-rest abilities"
+                onClick={startShortRest}
+              >
+                🍴
+              </button>
+              {shortRestOpen ? (
+                <div className="short-rest-pop">
+                  <label>
+                    Spend hit dice ({value.hitDice.current} left)
+                    <NumberInput
+                      value={spendDice}
+                      min={0}
+                      max={Math.max(0, value.hitDice.current)}
+                      allowNegative={false}
+                      onCommit={setSpendDice}
+                      aria-label="Hit dice to spend"
+                    />
+                  </label>
+                  <span className="muted">Each heals {value.hitDice.die || "d8"} + CON</span>
+                  <div className="short-rest-actions">
+                    <button
+                      type="button"
+                      className="btn-ghost"
+                      onClick={() => {
+                        onRest("short", spendDice);
+                        setShortRestOpen(false);
+                      }}
+                    >
+                      Rest
+                    </button>
+                    <button type="button" className="btn-ghost" onClick={() => setShortRestOpen(false)}>
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+            </span>
+            <button
+              type="button"
+              className="rest-btn"
+              title="Long rest — full HP, half hit dice back, all slots and abilities"
+              onClick={() => onRest("long")}
+            >
+              ⛰
+            </button>
           </>
         ) : null}
         {reveal ? (

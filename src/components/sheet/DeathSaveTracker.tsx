@@ -8,10 +8,13 @@ export function DeathSaveTracker({
   value,
   canEdit,
   onChange,
+  onRoll,
 }: {
   value: DeathSaves;
   canEdit: boolean;
   onChange: (next: DeathSaves) => void;
+  /** Tier 3: server-rolled death save (10+ success, nat 1 = 2 fails, nat 20 = 1 HP). */
+  onRoll?: () => void;
 }) {
   const setSuccesses = (n: number) => onChange({ ...value, successes: value.successes === n ? n - 1 : n });
   const setFailures = (n: number) => onChange({ ...value, failures: value.failures === n ? n - 1 : n });
@@ -30,7 +33,18 @@ export function DeathSaveTracker({
             />
           ))}
         </div>
-        <span className="death-skull-mid" title="Death saves">💀</span>
+        {onRoll && canEdit ? (
+          <button
+            type="button"
+            className="death-skull-mid death-roll-btn"
+            title="Roll a death saving throw (10+ succeeds; nat 20 = back up with 1 HP)"
+            onClick={onRoll}
+          >
+            💀
+          </button>
+        ) : (
+          <span className="death-skull-mid" title="Death saves">💀</span>
+        )}
         <div className="death-col" title="Failures">
           {[1, 2, 3].map((n) => (
             <button

@@ -1,8 +1,10 @@
 import {
+  DEFAULT_SHEET_TEMPLATE,
   rowId,
   type AttackEntry,
   type FeatureEntry,
 } from "../../../lib/types";
+import { attackModParts, sumParts } from "../../../lib/rules5e";
 import { NumberInput } from "../../NumberInput";
 import { RowTable, type RowGroup } from "../RowTable";
 import { UsesCell } from "../atoms";
@@ -11,6 +13,56 @@ import { AbilityRow, SavesRow } from "./MainPage";
 
 
 type AttackRow = AttackEntry & { derived?: boolean };
+
+/** The melee/ranged tag picker — routes the global weapon/spell attack+damage bonuses. */
+export function RangeTagSelect({
+  value,
+  disabled,
+  onChange,
+}: {
+  value: string;
+  disabled?: boolean;
+  onChange: (range: "melee" | "ranged" | undefined) => void;
+}) {
+  return (
+    <select
+      value={value}
+      disabled={disabled}
+      aria-label="Melee or ranged"
+      onChange={(e) => onChange(e.target.value === "melee" || e.target.value === "ranged" ? e.target.value : undefined)}
+    >
+      <option value="">—</option>
+      <option value="melee">Melee</option>
+      <option value="ranged">Ranged</option>
+    </select>
+  );
+}
+
+/** The auto-to-hit ability picker (rules engine): manual, one of the six, or Spell. */
+export function ToHitAbilitySelect({
+  value,
+  disabled,
+  onChange,
+}: {
+  value: string;
+  disabled?: boolean;
+  onChange: (toHitAbility: string | undefined) => void;
+}) {
+  return (
+    <select
+      value={value}
+      disabled={disabled}
+      aria-label="Auto to-hit"
+      onChange={(e) => onChange(e.target.value || undefined)}
+    >
+      <option value="">Manual</option>
+      {DEFAULT_SHEET_TEMPLATE.abilities.map((a) => (
+        <option key={a.id} value={a.id}>{a.abbr} + Prof</option>
+      ))}
+      <option value="spell">Spell ability + Prof</option>
+    </select>
+  );
+}
 
 const FEATURE_GROUPS: Array<{ id: FeatureEntry["source"]; title: string }> = [
   { id: "class", title: "Class Features" },
@@ -26,13 +78,27 @@ const FEATURE_GROUPS: Array<{ id: FeatureEntry["source"]; title: string }> = [
  * read-only here — edit them in Inventory).
  */
 export function FeaturesPage({ sheet }: { sheet: SheetEdit }) {
-  const { value, canEdit, kind, update, onRollCheck } = sheet;
+  const { value, canEdit, kind, derived, update, onRollCheck, actions } = sheet;
   const isNpc = kind === "npc";
 
-  const derived: AttackRow[] = value.inventory
+  const derivedRows: AttackRow[] = value.inventory
     .filter((r) => r.equipped && r.damage)
-    .map((r) => ({ id: `inv:${r.id}`, name: r.name, toHit: r.toHit ?? 0, damage: r.damage ?? "", damageType: r.damageType, derived: true }));
-  const attackRows: AttackRow[] = [...value.attacks, ...derived];
+    .map((r) => ({
+      id: `inv:${r.id}`,
+      name: r.name,
+      toHit: r.toHit ?? 0,
+      damage: r.damage ?? "",
+      damageType: r.damageType,
+      toHitAbility: r.toHitAbility,
+      range: r.range,
+      derived: true,
+    }));
+  const attackRows: AttackRow[] = [...value.attacks, ...derivedRows];
+
+  // Rules engine: to-hit displays as the sum of the SAME parts the roll resolver
+  // uses (auto ability + prof, or manual, plus tagged global bonuses).
+  const rowToHit = (row: AttackRow) =>
+    derived.auto ? sumParts(attackModParts(value, row, derived.values["prof"] ?? 0)) : row.toHit;
 
   const patchAttack = (id: string, patch: Partial<AttackEntry>) =>
     update({ attacks: value.attacks.map((a) => (a.id === id ? { ...a, ...patch } : a)) });
@@ -84,15 +150,19 @@ export function FeaturesPage({ sheet }: { sheet: SheetEdit }) {
             <span className="inv-cell">
               {onRollCheck ? (
                 <button className="roll-btn" title={`${row.name} attack — ${ROLL_HINT}`} onClick={(e) => onRollCheck({ kind: "attack", rowId: row.id }, advFromEvent(e))}>
-                  {row.toHit >= 0 ? `+${row.toHit}` : row.toHit}
+                  {rowToHit(row) >= 0 ? `+${rowToHit(row)}` : rowToHit(row)}
                 </button>
               ) : (
-                <span>{row.toHit >= 0 ? `+${row.toHit}` : row.toHit}</span>
+                <span>{rowToHit(row) >= 0 ? `+${rowToHit(row)}` : rowToHit(row)}</span>
               )}
             </span>
             <span className="inv-cell">
               {onRollCheck && row.damage ? (
-                <button className="roll-btn" title={`${row.name} damage`} onClick={() => onRollCheck({ kind: "damage", rowId: row.id })}>
+                <button
+                  className="roll-btn"
+                  title={`${row.name} damage — Shift-click for crit damage`}
+                  onClick={(e) => onRollCheck({ kind: "damage", rowId: row.id, crit: e.shiftKey || undefined })}
+                >
                   {row.damage}
                 </button>
               ) : (
@@ -107,8 +177,29 @@ export function FeaturesPage({ sheet }: { sheet: SheetEdit }) {
           ) : (
             <div className="inv-expand">
               <div className="inv-expand-grid">
+                {!isNpc ? (
+                  <>
+                    <label>Auto to-hit</label>
+                    <ToHitAbilitySelect
+                      value={row.toHitAbility ?? ""}
+                      disabled={!canEdit}
+                      onChange={(toHitAbility) => patchAttack(row.id, { toHitAbility })}
+                    />
+                    <label>Range</label>
+                    <RangeTagSelect
+                      value={row.range ?? ""}
+                      disabled={!canEdit}
+                      onChange={(range) => patchAttack(row.id, { range })}
+                    />
+                  </>
+                ) : null}
                 <label>To hit</label>
-                <NumberInput value={row.toHit} disabled={!canEdit} onCommit={(toHit) => patchAttack(row.id, { toHit })} aria-label="To hit" />
+                <NumberInput
+                  value={row.toHitAbility && !isNpc ? rowToHit(row) : row.toHit}
+                  disabled={!canEdit || (!isNpc && Boolean(row.toHitAbility))}
+                  onCommit={(toHit) => patchAttack(row.id, { toHit })}
+                  aria-label="To hit"
+                />
                 <label>Damage</label>
                 <input value={row.damage} disabled={!canEdit} onChange={(e) => patchAttack(row.id, { damage: e.target.value })} />
                 <label>Type</label>
@@ -139,6 +230,17 @@ export function FeaturesPage({ sheet }: { sheet: SheetEdit }) {
         renderCells={(row) => (
           <>
             <span className="inv-cell" title="Uses">
+              {actions && canEdit && (row.uses?.max ?? 0) > 0 ? (
+                <button
+                  type="button"
+                  className="use-btn"
+                  disabled={(row.uses?.current ?? 0) <= 0}
+                  title={`Use ${row.name} (${row.uses?.current ?? 0}/${row.uses?.max ?? 0} left)`}
+                  onClick={() => actions.useFeature(row.id)}
+                >
+                  ▶
+                </button>
+              ) : null}
               {row.uses || canEdit ? (
                 <UsesCell
                   current={row.uses?.current ?? 0}
