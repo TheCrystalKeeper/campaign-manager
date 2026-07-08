@@ -122,7 +122,7 @@ export default function App() {
   const [toastsEnabled, setToastsEnabledState] = useState(() => readLocalFlag(TOASTS_KEY, true));
   const [spaceClick, setSpaceClickState] = useState(() => readLocalFlag(SPACE_CLICK_KEY, false));
   const [tokenPanelOnClick, setTokenPanelOnClickState] = useState(() => readLocalFlag(TOKEN_PANEL_KEY, true));
-  const [hiResRender, setHiResRenderState] = useState(() => readLocalFlag(HI_RES_KEY, false));
+  const [hiResRender, setHiResRenderState] = useState(() => readLocalFlag(HI_RES_KEY, true));
   /** Bumped by "Reset UI layout" — remounts windows / repositions the tray. */
   const [layoutEpoch, setLayoutEpoch] = useState(0);
   const lastSceneRef = useRef<string | null>(null);
@@ -380,7 +380,7 @@ export default function App() {
     setToastsEnabledState(readCampaignFlag(roomId, "toasts", true, TOASTS_KEY));
     setSpaceClickState(readCampaignFlag(roomId, "space-click", false, SPACE_CLICK_KEY));
     setTokenPanelOnClickState(readCampaignFlag(roomId, "token-panel", true, TOKEN_PANEL_KEY));
-    setHiResRenderState(readCampaignFlag(roomId, "hi-res", false, HI_RES_KEY));
+    setHiResRenderState(readCampaignFlag(roomId, "hi-res", true, HI_RES_KEY));
   }, [roomId]);
 
   // Persist the layout blob whenever it changes (only after this campaign has been restored, so
