@@ -1,3 +1,4 @@
+import { MapPin } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Circle, Group, Path } from "react-konva";
 import type { MapTool, ToolRuntime } from "./types";
@@ -93,7 +94,7 @@ export function movePin(rt: ToolRuntime, annotationId: string, x: number, y: num
 export const pinTool: MapTool = {
   id: "pin",
   label: "Map pin",
-  icon: "📍",
+  icon: <MapPin size={17} strokeWidth={2.2} />,
   hotkey: "p",
   dmOnly: true,
   cursor: "crosshair",

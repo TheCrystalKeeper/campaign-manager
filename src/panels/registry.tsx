@@ -1,4 +1,15 @@
 import type { ReactNode } from "react";
+import {
+  Backpack,
+  Feather,
+  HeartHandshake,
+  IdCard,
+  Map as MapIcon,
+  MessageSquare,
+  Settings,
+  Swords,
+  Users,
+} from "lucide-react";
 import { ActorsPanel } from "../components/ActorsPanel";
 import { CharacterSheetPanel } from "../components/CharacterSheet";
 import { InitiativeTracker } from "../components/InitiativeTracker";
@@ -12,7 +23,7 @@ import { SettingsPanel } from "../components/SettingsPanel";
 import type { WindowPos } from "../components/FloatingWindow";
 import type { DiceOverlayController } from "../dice/useDiceOverlay";
 import type { GameRoom, RollOptions, useDmActions } from "../hooks/useGameRoom";
-import type { CharacterSheet, CheckSpec, GameState, Role } from "../lib/types";
+import type { CharacterSheet, CheckSpec, GameState, Role, UiAccent } from "../lib/types";
 import { buildConditionsControl } from "../components/sheet/conditionsControl";
 
 export type PanelId =
@@ -69,6 +80,9 @@ export type PanelContext = {
   /** Per-client theme: day (parchment) or night (carved stone). */
   nightMode: boolean;
   setNightMode: (on: boolean) => void;
+  /** Per-client accent variation (sky/moss/ember/lapis). */
+  accent: UiAccent;
+  setAccent: (accent: UiAccent) => void;
   /** Clears saved window/tray positions and returns floating UI to defaults. */
   resetUiLayout: () => void;
   /** Leaves the campaign (back to the lobby). */
@@ -80,7 +94,7 @@ export type PanelDef = {
   /** Tab tooltip / window title fallback. */
   label: string;
   /** Sidebar tab glyph. */
-  icon: string;
+  icon: ReactNode;
   /** Dockable panels appear as sidebar tabs; others are floating-only. */
   dockable: boolean;
   /** Roles that can see this panel. */
@@ -111,7 +125,7 @@ export const PANELS: PanelDef[] = [
   {
     id: "sheet",
     label: "Sheet",
-    icon: "🪪",
+    icon: <IdCard size={17} strokeWidth={2.2} />,
     dockable: false,
     roles: ["dm", "player"],
     title: (ctx) => {
@@ -172,7 +186,7 @@ export const PANELS: PanelDef[] = [
   {
     id: "itemSheet",
     label: "Item",
-    icon: "🎒",
+    icon: <Backpack size={17} strokeWidth={2.2} />,
     dockable: false,
     roles: ["dm"],
     title: (ctx) => {
@@ -198,7 +212,7 @@ export const PANELS: PanelDef[] = [
   {
     id: "log",
     label: "Log",
-    icon: "💬",
+    icon: <MessageSquare size={17} strokeWidth={2.2} />,
     dockable: true,
     roles: ["dm", "player"],
     title: () => "Log",
@@ -224,7 +238,7 @@ export const PANELS: PanelDef[] = [
   {
     id: "initiative",
     label: "Combat",
-    icon: "⚔",
+    icon: <Swords size={17} strokeWidth={2.2} />,
     dockable: true,
     roles: ["dm", "player"],
     title: (ctx) => (ctx.state.combat ? `Combat — Round ${ctx.state.combat.round}` : "Combat"),
@@ -243,7 +257,7 @@ export const PANELS: PanelDef[] = [
   {
     id: "scenes",
     label: "Scenes",
-    icon: "🗺",
+    icon: <MapIcon size={17} strokeWidth={2.2} />,
     dockable: true,
     roles: ["dm"],
     title: () => "Scenes",
@@ -254,7 +268,7 @@ export const PANELS: PanelDef[] = [
   {
     id: "actors",
     label: "Actors",
-    icon: "👥",
+    icon: <Users size={17} strokeWidth={2.2} />,
     dockable: true,
     roles: ["dm"],
     title: () => "Actors",
@@ -275,7 +289,7 @@ export const PANELS: PanelDef[] = [
   {
     id: "items",
     label: "Items",
-    icon: "🎒",
+    icon: <Backpack size={17} strokeWidth={2.2} />,
     dockable: true,
     roles: ["dm"],
     title: () => "Items",
@@ -293,7 +307,7 @@ export const PANELS: PanelDef[] = [
   {
     id: "party",
     label: "Party",
-    icon: "🧑‍🤝‍🧑",
+    icon: <HeartHandshake size={17} strokeWidth={2.2} />,
     dockable: true,
     roles: ["dm"],
     title: () => "Party",
@@ -307,7 +321,7 @@ export const PANELS: PanelDef[] = [
   {
     id: "notes",
     label: "DM Notes",
-    icon: "📝",
+    icon: <Feather size={17} strokeWidth={2.2} />,
     dockable: true,
     roles: ["dm"],
     title: () => "DM Notes",
@@ -320,7 +334,7 @@ export const PANELS: PanelDef[] = [
   {
     id: "settings",
     label: "Settings",
-    icon: "⚙",
+    icon: <Settings size={17} strokeWidth={2.2} />,
     dockable: false,
     roles: ["dm", "player"],
     title: () => "Settings",

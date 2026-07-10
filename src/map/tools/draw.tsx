@@ -1,3 +1,4 @@
+import { Pencil } from "lucide-react";
 import { Line } from "react-konva";
 import { MAX_ANNOTATION_POINTS } from "../../lib/types";
 import type { MapTool, ToolRuntime } from "./types";
@@ -35,7 +36,7 @@ function commit(rt: ToolRuntime, points: number[]) {
 export const drawTool: MapTool = {
   id: "draw",
   label: "Draw",
-  icon: "✏️",
+  icon: <Pencil size={17} strokeWidth={2.2} />,
   hotkey: "d",
   cursor: "crosshair",
   onDown: (event, rt) => {

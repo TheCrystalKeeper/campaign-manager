@@ -1,4 +1,5 @@
 import type { ReactElement } from "react";
+import { Sparkles } from "lucide-react";
 import {
   CASTER_TYPES,
   DEFAULT_SHEET_TEMPLATE,
@@ -203,7 +204,7 @@ export function SpellsPage({ sheet }: { sheet: SheetEdit }) {
                   title={`Cast (spends a level-${row.level} slot)`}
                   onClick={() => actions.castSpell(row.level)}
                 >
-                  ✨
+                  <Sparkles size={14} strokeWidth={2.2} />
                 </button>
               ) : null}
               <button

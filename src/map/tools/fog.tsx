@@ -1,3 +1,4 @@
+import { CloudFog } from "lucide-react";
 import { Circle, Line, Rect } from "react-konva";
 import { MAX_FOG_BRUSH_POINTS, MAX_FOG_POLY_POINTS } from "../../lib/types";
 import type { MapTool, ToolRuntime } from "./types";
@@ -100,7 +101,7 @@ function vertexDots(points: number[], color: string) {
 export const fogTool: MapTool = {
   id: "fog",
   label: "Fog",
-  icon: "🌫",
+  icon: <CloudFog size={17} strokeWidth={2.2} />,
   hotkey: "f",
   dmOnly: true,
   cursor: "crosshair",

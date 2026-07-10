@@ -1,3 +1,4 @@
+import { Lamp } from "lucide-react";
 import type { Light } from "../../lib/types";
 import type { MapTool } from "./types";
 
@@ -40,7 +41,7 @@ export type LightPreset = keyof typeof LIGHT_PRESETS;
 export const lightsTool: MapTool = {
   id: "lights",
   label: "Lights",
-  icon: "💡",
+  icon: <Lamp size={17} strokeWidth={2.2} />,
   hotkey: "l",
   dmOnly: true,
   cursor: "crosshair",

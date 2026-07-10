@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Lock } from "lucide-react";
 import { formatDiceRoll } from "../lib/dice";
 import type { LogEntry, PlayerSlot } from "../lib/types";
 
@@ -129,14 +130,14 @@ export function LogToasts({
         if (entry.masked) {
           return (
             <div className="log-toast log-toast--event" key={entry.id}>
-              🔒 {entry.actor.name} rolled in secret
+              <Lock size={11} strokeWidth={2.2} /> {entry.actor.name} rolled in secret
             </div>
           );
         }
         return (
           <div className="log-toast" key={entry.id}>
             <b>
-              {entry.dmOnly ? "🔒 " : ""}
+              {entry.dmOnly ? <Lock size={11} strokeWidth={2.2} /> : null}{entry.dmOnly ? " " : ""}
               {entry.actor.name}
             </b>
             {entry.label ? <span className="muted"> — {entry.label}</span> : null}:{" "}

@@ -1,3 +1,4 @@
+import { Shield } from "lucide-react";
 import {
   createInventoryRow,
   INVENTORY_CATEGORIES,
@@ -200,7 +201,7 @@ export function InventoryPage({ sheet }: { sheet: SheetEdit }) {
                   title={row.equipped ? "Equipped" : "Not equipped"}
                   onClick={() => patchRow(row.id, { equipped: !row.equipped })}
                 >
-                  🛡
+                  <Shield size={13} strokeWidth={2.2} />
                 </button>
               ) : null}
               <button

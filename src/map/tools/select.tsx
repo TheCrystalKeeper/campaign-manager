@@ -1,3 +1,4 @@
+import { MousePointer2 } from "lucide-react";
 import type { MapTool } from "./types";
 
 /// <summary>
@@ -7,7 +8,7 @@ import type { MapTool } from "./types";
 export const selectTool: MapTool = {
   id: "select",
   label: "Select",
-  icon: "🖱",
+  icon: <MousePointer2 size={17} strokeWidth={2.2} />,
   hotkey: "v",
   cursor: "default",
 };

@@ -476,12 +476,29 @@
   width: 0.85rem;
   height: 0.85rem;
   border-radius: 50%;
-  border: 1px solid var(--border);
+  border: 1.5px solid var(--border);
   background: none;
+  box-shadow: none;
   cursor: pointer;
 }
+/* Full spell slots are crystal — tiny opal gems (the arcane accent). Staggered
+   texture crops so neighboring pips don't look stamped from the same die. */
 .slot-pip--full {
-  background: var(--accent-bright);
+  background-color: #b7b4c4;
+  background-image:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0) 55%),
+    url("/textures/opal-b.png");
+  background-size: auto, 90px;
+  background-position: center, 35% 60%;
+}
+.slot-pip--full:nth-child(2n) {
+  background-position: center, 70% 25%;
+}
+.slot-pip--full:nth-child(3n) {
+  background-position: center, 15% 80%;
+}
+[data-theme="night"] .slot-pip--full {
+  box-shadow: 0 0 6px color-mix(in srgb, #d6d2f2 45%, transparent);
 }
 .pill-list {
   display: flex;

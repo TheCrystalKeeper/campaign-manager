@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { Backpack } from "lucide-react";
 import {
   DEFAULT_ICON_CROP,
   ITEM_RARITIES,
@@ -62,7 +63,7 @@ export function ItemSheetPanel({
               onChange={(iconCrop) => patch({ iconCrop })}
             />
           ) : (
-            <span aria-hidden>🎒</span>
+            <span aria-hidden><Backpack size={22} strokeWidth={2.2} /></span>
           )}
         </div>
         <div className="stack" style={{ flex: 1 }}>

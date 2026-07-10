@@ -1,4 +1,5 @@
 import { NumberInput } from "../../NumberInput";
+import { Lock, LockOpen } from "lucide-react";
 import { TRAIT_GROUPS, type TraitDef } from "../traitDefs";
 import type { SheetEdit } from "../context";
 
@@ -29,7 +30,7 @@ export function TraitsPage({ sheet }: { sheet: SheetEdit }) {
             title={on ? "Enabled — click to disable" : "Disabled — click to enable"}
             onClick={() => setTrait(trait.id, !on)}
           >
-            {on ? "🔓" : "🔒"}
+            {on ? <LockOpen size={13} strokeWidth={2.2} /> : <Lock size={13} strokeWidth={2.2} />}
           </button>
         </div>
       );

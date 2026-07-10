@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Crop, Eye, EyeOff, Image, Shield } from "lucide-react";
 import { DEFAULT_ICON_CROP, DEFAULT_SHEET_TEMPLATE, PORTRAIT_ASPECT, formatModifier } from "../../lib/types";
 import { CroppableImage } from "../CroppableImage";
 import { ImageCropModal } from "../ImageCropModal";
@@ -67,7 +68,7 @@ export function SheetSidebar({
           title={reveal.revealed ? "Vitals visible to players — click to hide" : "Vitals hidden from players — click to reveal"}
           onClick={() => reveal.onToggle(!reveal.revealed)}
         >
-          {reveal.revealed ? "👁 Vitals" : "✕ Vitals"}
+          {reveal.revealed ? <><Eye size={12} strokeWidth={2.2} /> Vitals</> : <><EyeOff size={12} strokeWidth={2.2} /> Vitals</>}
         </button>
       ) : null}
       {value.iconUrl ? (
@@ -102,7 +103,7 @@ export function SheetSidebar({
                 title="Crop portrait"
                 onClick={() => setCropOpen(true)}
               >
-                ✂ Crop
+                <Crop size={11} strokeWidth={2.2} /> Crop
               </button>
               <button
                 type="button"
@@ -110,7 +111,7 @@ export function SheetSidebar({
                 title="Reuse an already-uploaded image"
                 onClick={() => setLibOpen(true)}
               >
-                🖼 Library
+                <Image size={11} strokeWidth={2.2} /> Library
               </button>
             </>
           ) : null}
@@ -151,7 +152,7 @@ export function SheetSidebar({
             title="Reuse an already-uploaded image"
             onClick={() => setLibOpen(true)}
           >
-            🖼 Library
+            <Image size={11} strokeWidth={2.2} /> Library
           </button>
         </div>
       ) : (
@@ -167,7 +168,7 @@ export function SheetSidebar({
       ) : null}
 
       <div className="ac-shield" title="Armor Class">
-        <span className="ac-shield-icon">🛡</span>
+        <span className="ac-shield-icon"><Shield size={15} strokeWidth={2.2} /></span>
         {canEdit ? (
           <NumberInput className="ac-shield-value" value={value.ac} onCommit={(ac) => update({ ac })} aria-label="AC" />
         ) : (

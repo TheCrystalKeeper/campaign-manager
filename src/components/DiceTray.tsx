@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { CircleDollarSign, Lock, Undo2, Volume2, VolumeX, X } from "lucide-react";
 import { DICE_QUICK_SIDES } from "../lib/dice";
 import { playRollSound } from "../lib/rollSound";
 import { clampToViewport } from "../lib/clampToViewport";
@@ -235,7 +236,7 @@ export function DiceTray({
           title="Put all readied dice back (Esc). Right-click a d# button to put back just one."
           onClick={controller.clearSelection}
         >
-          ↩
+          <Undo2 size={14} strokeWidth={2.2} />
         </button>
 
         {(() => {
@@ -263,7 +264,7 @@ export function DiceTray({
                 }
               }}
             >
-              🪙
+              <CircleDollarSign size={15} strokeWidth={2.2} />
               {count > 0 ? <span className="die-count">{count}</span> : null}
             </button>
           );
@@ -273,7 +274,7 @@ export function DiceTray({
           return (
             <button
               key={sides}
-              className={`die-btn${count > 0 ? " die-btn--sel" : ""}`}
+              className={`die-btn${count > 0 ? " die-btn--sel" : ""}${sides === 20 ? " btn-crystal" : ""}`}
               title={
                 controller.enabled
                   ? `d${sides} — click to ready a die (right-click puts one back), then drag it out of the tray to throw`
@@ -319,7 +320,7 @@ export function DiceTray({
             title="While on, every roll you make is secret — players see blank dice and a masked log entry"
             onClick={() => onToggleSecret(!secret)}
           >
-            🔒
+            <Lock size={14} strokeWidth={2.2} />
           </button>
         ) : null}
         <button
@@ -335,11 +336,11 @@ export function DiceTray({
             title={controller.muted ? "Unmute dice" : "Mute dice"}
             onClick={() => controller.setMuted(!controller.muted)}
           >
-            {controller.muted ? "🔇" : "🔊"}
+            {controller.muted ? <VolumeX size={14} strokeWidth={2.2} /> : <Volume2 size={14} strokeWidth={2.2} />}
           </button>
         ) : null}
         <button className="btn-ghost icon-btn" title="Hide tray" onClick={onClose}>
-          ✕
+          <X size={14} strokeWidth={2.2} />
         </button>
       </div>
     </div>

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Eye, EyeOff, Tent, Utensils } from "lucide-react";
 import { NumberInput } from "../NumberInput";
 import type { SheetEdit } from "./context";
 
@@ -63,7 +64,7 @@ export function SheetHeader({
                 title="Short rest — spend hit dice, recharge short-rest abilities"
                 onClick={startShortRest}
               >
-                🍴
+                <Utensils size={14} strokeWidth={2.2} />
               </button>
               {shortRestOpen ? (
                 <div className="short-rest-pop">
@@ -103,7 +104,7 @@ export function SheetHeader({
               title="Long rest — full HP, half hit dice back, all slots and abilities"
               onClick={() => onRest("long")}
             >
-              ⛰
+              <Tent size={14} strokeWidth={2.2} />
             </button>
           </>
         ) : null}
@@ -114,7 +115,7 @@ export function SheetHeader({
             title={reveal.revealed ? "Page visible to players — click to hide" : "Page hidden from players — click to reveal"}
             onClick={() => reveal.onToggle(!reveal.revealed)}
           >
-            {reveal.revealed ? "👁" : "✕"}
+            {reveal.revealed ? <Eye size={13} strokeWidth={2.2} /> : <EyeOff size={13} strokeWidth={2.2} />}
           </button>
         ) : null}
       </div>

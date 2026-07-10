@@ -1,4 +1,5 @@
 import type { GameRoom, useDmActions } from "../hooks/useGameRoom";
+import { Dices, Swords } from "lucide-react";
 import { DEFAULT_ICON_CROP, type GameState } from "../lib/types";
 import { CroppableImage } from "./CroppableImage";
 import { NumberInput } from "./NumberInput";
@@ -38,7 +39,7 @@ export function InitiativeTracker({ state, isDm, room, dm, openSheet }: Initiati
           disabled={sceneTokenIds.length === 0}
           onClick={() => dm.startCombat(sceneTokenIds)}
         >
-          ⚔ Roll for initiative!
+          <Swords size={15} strokeWidth={2.2} /> Roll for initiative!
         </button>
         <span className="muted" style={{ fontSize: "0.78rem" }}>
           {sceneTokenIds.length === 0
@@ -83,7 +84,7 @@ export function InitiativeTracker({ state, isDm, room, dm, openSheet }: Initiati
           className="btn-primary"
           onClick={() => room.send({ type: "COMBAT_ROLL_INITIATIVE" })}
         >
-          🎲 Roll initiative!
+          <Dices size={15} strokeWidth={2.2} /> Roll initiative!
         </button>
       ) : null}
 

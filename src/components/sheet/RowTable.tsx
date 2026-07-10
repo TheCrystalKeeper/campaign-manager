@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from "react";
+import { Search } from "lucide-react";
 
 export type RowGroup<T> = {
   id: string;
@@ -61,7 +62,7 @@ export function RowTable<T extends { id: string }>({
     <div className="row-table">
       {getSearchText ? (
         <div className="rt-search">
-          <span className="rt-search-icon">🔍</span>
+          <span className="rt-search-icon"><Search size={12} strokeWidth={2.2} /></span>
           <input
             value={query}
             placeholder="Search"

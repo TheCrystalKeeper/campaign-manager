@@ -65,7 +65,7 @@ export type ToolRuntime = {
 export type MapTool = {
   id: string;
   label: string;
-  icon: string;
+  icon: ReactNode;
   hotkey: string;
   dmOnly?: boolean;
   cursor: string;

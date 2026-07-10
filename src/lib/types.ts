@@ -1255,7 +1255,36 @@ export type GameState = {
   playersCanMove: boolean;
   /** Whether players may draw shift-drag dotted pointer arrows. On by default. */
   playersCanPoint: boolean;
+  /**
+   * DM-forced UI theme (Phase 8): when set, every client renders this theme +
+   * accent instead of their own device preference. null (default) = players
+   * pick their own look in Settings.
+   */
+  uiOverride: UiThemeOverride | null;
 };
+
+/** Accent variations of the Quill & Ember skin (Phase 8). "sky" is the default. */
+export const UI_ACCENTS = ["sky", "moss", "ember", "lapis"] as const;
+export type UiAccent = (typeof UI_ACCENTS)[number];
+export const UI_ACCENT_LABEL: Record<UiAccent, string> = {
+  sky: "Sky (default)",
+  moss: "Moss & Loam",
+  ember: "Ember & Wine",
+  lapis: "Tide & Lapis",
+};
+export type UiTheme = "day" | "night";
+export type UiThemeOverride = { theme: UiTheme; accent: UiAccent };
+
+export function normalizeUiOverride(value: unknown): UiThemeOverride | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+  const candidate = value as Partial<UiThemeOverride>;
+  return {
+    theme: candidate.theme === "night" ? "night" : "day",
+    accent: UI_ACCENTS.includes(candidate.accent as UiAccent) ? (candidate.accent as UiAccent) : "sky",
+  };
+}
 
 export const MAX_LOG_ENTRIES = 100;
 
@@ -1391,6 +1420,7 @@ export type ClientMessage =
   | { type: "FOG_REVEAL"; sceneId: string; shape: FogReveal }
   | { type: "FOG_RESET"; sceneId: string }
   | { type: "SET_PLAYERS_CAN_DRAW"; enabled: boolean }
+  | { type: "SET_UI_OVERRIDE"; override: UiThemeOverride | null }
   | { type: "SET_PLAYERS_CAN_MOVE"; enabled: boolean }
   | { type: "SET_PLAYERS_CAN_POINT"; enabled: boolean }
   /** Replace a scene's whole wall set — bulk ops only (clear all / paste). Granular edits below. */
@@ -2673,6 +2703,7 @@ export function normalizeGameState(state: GameState & LegacyGameStateFields): Ga
     // Default-allowed: only an explicit `false` turns these off (undefined ⇒ on).
     playersCanMove: state.playersCanMove !== false,
     playersCanPoint: state.playersCanPoint !== false,
+    uiOverride: normalizeUiOverride(state.uiOverride),
     tokenShapeDefaults: normalizeTokenShapeDefaults(state.tokenShapeDefaults),
     defaultTokenSize:
       typeof state.defaultTokenSize === "number" && Number.isFinite(state.defaultTokenSize)
@@ -2727,6 +2758,7 @@ export function createInitialState(roomId: string): GameState {
     playersCanDraw: false,
     playersCanMove: true,
     playersCanPoint: true,
+    uiOverride: null,
     tokenShapeDefaults: { ...DEFAULT_TOKEN_SHAPES },
     defaultTokenSize: DEFAULT_TOKEN_SIZE,
   };

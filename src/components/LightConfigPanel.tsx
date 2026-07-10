@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Lamp } from "lucide-react";
 import type { Light, LightAnimation } from "../lib/types";
 
 /// <summary>
@@ -57,7 +58,7 @@ export function LightConfigPanel({
   return (
     <div className="panel" style={{ width: "min(280px, 92vw)" }}>
       <div className="panel-header">
-        <span className="panel-title">💡 Light</span>
+        <span className="panel-title"><Lamp size={14} strokeWidth={2.2} /> Light</span>
         <button className="btn-ghost icon-btn" onClick={onClose}>
           ✕
         </button>

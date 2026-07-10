@@ -30,6 +30,7 @@ import {
   normalizeScene,
   normalizeToken,
   normalizeTokenShapeDefaults,
+  normalizeUiOverride,
   clampTokenSize,
   playerTokenColorForSlot,
   sanitizeAnnotation,
@@ -1976,6 +1977,21 @@ export default class GameServer implements Party.Server {
         if (this.state.playersCanPoint !== enabled) {
           this.state.playersCanPoint = enabled;
           this.logEvent(`Player pointer arrows ${enabled ? "enabled" : "disabled"} by the DM.`);
+          void this.broadcastState();
+        }
+        break;
+      }
+      case "SET_UI_OVERRIDE": {
+        // DM-forced theme+accent for every client (null = players choose their own).
+        const next = parsed.override === null ? null : normalizeUiOverride(parsed.override);
+        const changed = JSON.stringify(this.state.uiOverride) !== JSON.stringify(next);
+        if (changed) {
+          this.state.uiOverride = next;
+          this.logEvent(
+            next
+              ? `The DM set the table's look: ${next.theme}, ${next.accent} accent.`
+              : "The DM released the table's look — pick your own in Settings.",
+          );
           void this.broadcastState();
         }
         break;

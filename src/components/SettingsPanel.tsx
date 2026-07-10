@@ -1,13 +1,17 @@
 import { useRef, useState } from "react";
+import { Download, Upload } from "lucide-react";
 import type { PanelContext } from "../panels/registry";
 import {
   DEFAULT_TOKEN_SHAPES,
   DEFAULT_TOKEN_SIZE,
   TOKEN_SHAPES,
+  UI_ACCENTS,
+  UI_ACCENT_LABEL,
   tokenSizeLabel,
   type CampaignExport,
   type TokenShape,
   type TokenShapeDefaults,
+  type UiAccent,
 } from "../lib/types";
 import type { CampaignManifest } from "../lib/campaignManifest";
 
@@ -19,6 +23,39 @@ const SHAPE_LABEL: Record<TokenShape, string> = {
   hexagon: "⬢ Hexagon",
   octagon: "⯃ Octagon",
 };
+
+/** Day swatch colors for the accent picker (the variations' interaction accents). */
+const ACCENT_SWATCH: Record<UiAccent, string> = {
+  sky: "#4f8cbf",
+  moss: "#6f8a48",
+  ember: "#b05f33",
+  lapis: "#4b69a6",
+};
+
+/** A row of four accent "coins"; the active one wears a cream inner ring. */
+function AccentSwatches({
+  value,
+  onPick,
+}: {
+  value: UiAccent;
+  onPick: (accent: UiAccent) => void;
+}) {
+  return (
+    <div className="accent-swatches">
+      {UI_ACCENTS.map((accent) => (
+        <button
+          key={accent}
+          className={`accent-swatch${accent === value ? " accent-swatch--active" : ""}`}
+          style={{ backgroundColor: ACCENT_SWATCH[accent] }}
+          title={UI_ACCENT_LABEL[accent]}
+          aria-label={UI_ACCENT_LABEL[accent]}
+          aria-pressed={accent === value}
+          onClick={() => onPick(accent)}
+        />
+      ))}
+    </div>
+  );
+}
 
 /** One labeled on/off row, matching the ScenePanel toggle idiom. */
 function ToggleRow({
@@ -76,12 +113,24 @@ export function SettingsPanel({ ctx }: { ctx: PanelContext }) {
   return (
     <div className="panel-body stack">
       <div className="section-title">This device</div>
+      {state.uiOverride ? (
+        <p className="muted" style={{ fontSize: "0.75rem", margin: 0 }}>
+          The DM has set one look for the whole table — your theme and accent choices below
+          will apply again once it's released.
+        </p>
+      ) : null}
       <ToggleRow
         label="Night mode"
         hint="Trade the daytime parchment for carved stone — chalk ink, moonlit accents."
         on={ctx.nightMode}
         onToggle={ctx.setNightMode}
       />
+      <div className="row" style={{ justifyContent: "space-between" }}>
+        <label style={{ margin: 0 }} title="The interactive accent: selection, links, active tabs. Gold, terracotta, and sage stay put.">
+          Accent color
+        </label>
+        <AccentSwatches value={ctx.accent} onPick={ctx.setAccent} />
+      </div>
       <ToggleRow
         label="3D dice"
         hint="Physical dice you grab, shake, and throw. Off = instant text rolls."
@@ -135,6 +184,53 @@ export function SettingsPanel({ ctx }: { ctx: PanelContext }) {
 
       {isDm ? (
         <>
+          <div className="section-title">Table look (DM)</div>
+          <ToggleRow
+            label="Override everyone's look"
+            hint="Force one theme + accent for every player at the table. Off (default) = each player picks their own in Settings."
+            on={state.uiOverride !== null}
+            onToggle={(on) =>
+              room.send({
+                type: "SET_UI_OVERRIDE",
+                override: on
+                  ? { theme: ctx.nightMode ? "night" : "day", accent: ctx.accent }
+                  : null,
+              })
+            }
+          />
+          {state.uiOverride ? (
+            <>
+              <div className="row" style={{ justifyContent: "space-between" }}>
+                <label style={{ margin: 0 }}>Table theme</label>
+                <button
+                  onClick={() =>
+                    room.send({
+                      type: "SET_UI_OVERRIDE",
+                      override: {
+                        theme: state.uiOverride!.theme === "night" ? "day" : "night",
+                        accent: state.uiOverride!.accent,
+                      },
+                    })
+                  }
+                >
+                  {state.uiOverride.theme === "night" ? "Night" : "Day"}
+                </button>
+              </div>
+              <div className="row" style={{ justifyContent: "space-between" }}>
+                <label style={{ margin: 0 }}>Table accent</label>
+                <AccentSwatches
+                  value={state.uiOverride.accent}
+                  onPick={(accent) =>
+                    room.send({
+                      type: "SET_UI_OVERRIDE",
+                      override: { theme: state.uiOverride!.theme, accent },
+                    })
+                  }
+                />
+              </div>
+            </>
+          ) : null}
+
           <div className="section-title">Room (DM)</div>
           <ToggleRow
             label="Players can move characters"
@@ -206,8 +302,8 @@ export function SettingsPanel({ ctx }: { ctx: PanelContext }) {
             URL, never embedded.
           </p>
           <div className="row">
-            <button onClick={() => room.send({ type: "EXPORT_CAMPAIGN" })}>⬇ Export campaign</button>
-            <button onClick={() => importRef.current?.click()}>⬆ Import…</button>
+            <button onClick={() => room.send({ type: "EXPORT_CAMPAIGN" })}><Download size={13} strokeWidth={2.2} /> Export campaign</button>
+            <button onClick={() => importRef.current?.click()}><Upload size={13} strokeWidth={2.2} /> Import…</button>
             <input
               ref={importRef}
               type="file"

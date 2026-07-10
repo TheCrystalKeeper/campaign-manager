@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { Backpack, EyeOff, Hand } from "lucide-react";
 import {
   CONDITIONS,
   DEFAULT_ICON_CROP,
@@ -175,7 +176,7 @@ export function TokenEditor({ token, state, dm, openSheet, openItemSheet, onClos
   return (
     <div className="panel" style={{ width: "min(280px, 90vw)" }}>
       <div className="panel-header">
-        <span className="panel-title">{isItem ? "🎒 Item token" : "Token"}</span>
+        <span className="panel-title">{isItem ? <><Backpack size={14} strokeWidth={2.2} /> Item token</> : "Token"}</span>
         <button className="btn-ghost icon-btn" onClick={onClose}>
           ✕
         </button>
@@ -366,7 +367,7 @@ export function TokenEditor({ token, state, dm, openSheet, openItemSheet, onClos
             </div>
             {controlledNpc ? (
               <div className="muted" style={{ fontSize: "0.78rem", marginTop: "-0.2rem" }}>
-                🖐 {controllerSlot?.name} can move this NPC — it keeps its own name, colour, and
+                <Hand size={13} strokeWidth={2.2} /> {controllerSlot?.name} can move this NPC — it keeps its own name, colour, and
                 portrait (shown ringed in their colour on the map).
               </div>
             ) : null}
@@ -437,7 +438,7 @@ export function TokenEditor({ token, state, dm, openSheet, openItemSheet, onClos
             title="Hidden tokens never reach player clients — you see them ghosted"
             onClick={() => dm.updateToken({ ...token, hidden: !token.hidden })}
           >
-            {token.hidden ? "👁 Hidden" : "Visible"}
+            {token.hidden ? <><EyeOff size={13} strokeWidth={2.2} /> Hidden</> : "Visible"}
           </button>
         </div>
 

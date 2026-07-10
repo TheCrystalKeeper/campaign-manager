@@ -99,6 +99,51 @@
   --dur-3: 340ms; /* panels, dialogs */
   --ease-out: cubic-bezier(0.22, 0.9, 0.36, 1);
   --ease-spring: cubic-bezier(0.34, 1.42, 0.44, 1);
+
+  /* -- Edge divots ("notches"): tiny kinks where the drawn outline deflects
+     inward to a point and returns, like a pen skip. Each nick is a small inline
+     SVG (fill patch matching --surface-solid + redrawn kinked stroke matching
+     --border) so the point stays crisp; day/night variants swap here. -- */
+  --notch-l: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='5' height='8'%3E%3Crect width='2.4' height='8' fill='%23EDE5D1'/%3E%3Cpolyline points='1,0 1,1.5 3.6,4 1,6.5 1,8' fill='none' stroke='%234A3B2F' stroke-width='2'/%3E%3C/svg%3E");
+  --notch-r: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='5' height='8'%3E%3Crect x='2.6' width='2.4' height='8' fill='%23EDE5D1'/%3E%3Cpolyline points='4,0 4,1.5 1.4,4 4,6.5 4,8' fill='none' stroke='%234A3B2F' stroke-width='2'/%3E%3C/svg%3E");
+  --notch-t: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5'%3E%3Crect width='8' height='2.4' fill='%23EDE5D1'/%3E%3Cpolyline points='0,1 1.5,1 4,3.6 6.5,1 8,1' fill='none' stroke='%234A3B2F' stroke-width='2'/%3E%3C/svg%3E");
+  --notch-b: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5'%3E%3Crect y='2.6' width='8' height='2.4' fill='%23EDE5D1'/%3E%3Cpolyline points='0,4 1.5,4 4,1.4 6.5,4 8,4' fill='none' stroke='%234A3B2F' stroke-width='2'/%3E%3C/svg%3E");
+}
+
+/* ============================================================================
+   Accent variations (Quill & Ember "Variations" cards): alternate interactive
+   accents that replace the sky family + the slate header band. Gold, terra,
+   and sage stay put. Set data-accent="moss|ember|lapis" on <html> (no
+   attribute = the default sky). Day values are verbatim from the bundle's
+   variation cards; night values are derived (brightened accent on stone).
+   ========================================================================== */
+
+[data-accent="moss"] {
+  /* Moss & Loam — forest library */
+  --bg: #e6e7d6;
+  --map-bg: #dcdec8;
+  --accent: #6f8a48;
+  --accent-bright: #93ac66;
+  --accent-soft: #dce3c2;
+  --surface-slate: #5c7155;
+}
+[data-accent="ember"] {
+  /* Ember & Wine — tavern hearth */
+  --bg: #f0dcd0;
+  --map-bg: #e8cfc0;
+  --accent: #b05f33;
+  --accent-bright: #d08153;
+  --accent-soft: #f2d9c4;
+  --surface-slate: #7a4a52;
+}
+[data-accent="lapis"] {
+  /* Tide & Lapis — coastal ruins */
+  --bg: #e3e5ec;
+  --map-bg: #d8dbe5;
+  --accent: #4b69a6;
+  --accent-bright: #6d8cc7;
+  --accent-soft: #d3dcef;
+  --surface-slate: #46598c;
 }
 
 /* Night = stone. Day is ink on paper; night is chalk on carved rock: cool
@@ -151,4 +196,40 @@
   --shadow-ledge: inset 0 -3px 0 rgba(0, 0, 0, 0.3);
   --shadow-well: inset 0 2px 5px rgba(0, 0, 0, 0.35);
   --shadow-lift: 0 6px 14px rgba(6, 4, 10, 0.5);
+
+  --notch-l: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='5' height='8'%3E%3Crect width='2.4' height='8' fill='%234B4F57'/%3E%3Cpolyline points='1,0 1,1.5 3.6,4 1,6.5 1,8' fill='none' stroke='%2315161A' stroke-width='2'/%3E%3C/svg%3E");
+  --notch-r: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='5' height='8'%3E%3Crect x='2.6' width='2.4' height='8' fill='%234B4F57'/%3E%3Cpolyline points='4,0 4,1.5 1.4,4 4,6.5 4,8' fill='none' stroke='%2315161A' stroke-width='2'/%3E%3C/svg%3E");
+  --notch-t: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5'%3E%3Crect width='8' height='2.4' fill='%234B4F57'/%3E%3Cpolyline points='0,1 1.5,1 4,3.6 6.5,1 8,1' fill='none' stroke='%2315161A' stroke-width='2'/%3E%3C/svg%3E");
+  --notch-b: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5'%3E%3Crect y='2.6' width='8' height='2.4' fill='%234B4F57'/%3E%3Cpolyline points='0,4 1.5,4 4,1.4 6.5,4 8,4' fill='none' stroke='%2315161A' stroke-width='2'/%3E%3C/svg%3E");
+}
+
+/* Accent variations at night: keep the stone walls, brighten the accent so it
+   reads as chalk-lit; slate bands go to the variation's dark stone. (Derived —
+   the bundle's variation cards are day-only.) */
+[data-theme="night"][data-accent="moss"] {
+  --bg: #26282e;
+  --map-bg: #1f2126;
+  --accent: #a3bc74;
+  --accent-bright: #bcd293;
+  --accent-soft: #3c452d;
+  --on-accent: #1f2a12;
+  --surface-slate: #465542;
+}
+[data-theme="night"][data-accent="ember"] {
+  --bg: #26282e;
+  --map-bg: #1f2126;
+  --accent: #d98f63;
+  --accent-bright: #e7ac85;
+  --accent-soft: #4e3327;
+  --on-accent: #38200f;
+  --surface-slate: #5c3a40;
+}
+[data-theme="night"][data-accent="lapis"] {
+  --bg: #26282e;
+  --map-bg: #1f2126;
+  --accent: #8aa4d8;
+  --accent-bright: #a8bee8;
+  --accent-soft: #303c57;
+  --on-accent: #16233f;
+  --surface-slate: #3a4a75;
 }

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { AlertTriangle } from "lucide-react";
 import {
   abilityModifier,
   DEFAULT_SHEET_TEMPLATE,
@@ -127,7 +128,7 @@ export function MainPage({ sheet }: { sheet: SheetEdit }) {
                         title={`Possible double-count: Misc (${formatModifier(manual)}) equals the dot's proficiency. If you typed proficiency in before automation, click to clear Misc.`}
                         onClick={() => clearMisc(skill.id, "skillMods")}
                       >
-                        ⚠
+                        <AlertTriangle size={12} strokeWidth={2.2} />
                       </button>
                     ) : null}
                   </span>
@@ -162,7 +163,7 @@ export function MainPage({ sheet }: { sheet: SheetEdit }) {
                           title={`Possible double-count: Misc (${formatModifier(manual)}) equals the dot's proficiency. If you typed proficiency in before automation, click to clear Misc.`}
                           onClick={() => clearMisc(save.id, "saveMods")}
                         >
-                          ⚠
+                          <AlertTriangle size={12} strokeWidth={2.2} />
                         </button>
                       ) : null}
                     </span>

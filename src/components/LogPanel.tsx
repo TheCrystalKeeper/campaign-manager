@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Lock, Swords } from "lucide-react";
 import { formatDiceRoll } from "../lib/dice";
 import type { LogEntry, PlayerSlot, SheetRecord } from "../lib/types";
 
@@ -119,7 +120,7 @@ export function LogPanel({ log, isDm, yourPlayerId, playerSlots, onSendChat, she
           if (entry.kind === "event") {
             return (
               <div className="log-event" key={entry.id}>
-                {entry.dmOnly ? "🔒 " : ""}
+                {entry.dmOnly ? <Lock size={11} strokeWidth={2.2} /> : null}{entry.dmOnly ? " " : ""}
                 {entry.text}
               </div>
             );
@@ -139,7 +140,7 @@ export function LogPanel({ log, isDm, yourPlayerId, playerSlots, onSendChat, she
             return (
               <div className="roll roll--masked" key={entry.id}>
                 <div className="row" style={{ justifyContent: "space-between" }}>
-                  <span className="who">🔒 {entry.actor.name}</span>
+                  <span className="who"><Lock size={11} strokeWidth={2.2} /> {entry.actor.name}</span>
                   <span className="total">?</span>
                 </div>
                 <span className="expr">rolled in secret</span>
@@ -150,7 +151,7 @@ export function LogPanel({ log, isDm, yourPlayerId, playerSlots, onSendChat, she
             <div className="roll" key={entry.id}>
               <div className="row" style={{ justifyContent: "space-between" }}>
                 <span className="who">
-                  {entry.dmOnly ? "🔒 " : ""}
+                  {entry.dmOnly ? <Lock size={11} strokeWidth={2.2} /> : null}{entry.dmOnly ? " " : ""}
                   {entry.actor.name}
                   {entry.label ? <span className="muted"> — {entry.label}</span> : null}
                 </span>
@@ -234,7 +235,7 @@ export function LogPanel({ log, isDm, yourPlayerId, playerSlots, onSendChat, she
                         setApplyType("");
                       }}
                     >
-                      ⚔ Apply
+                      <Swords size={13} strokeWidth={2.2} /> Apply
                     </button>
                   )}
                 </div>

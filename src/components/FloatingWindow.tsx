@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { Maximize2, Minimize2, PanelRight, X } from "lucide-react";
 import { clampSizeToViewport, clampToViewport, CLAMP_MARGIN } from "../lib/clampToViewport";
 import { campaignKey } from "../lib/campaignStore";
 
@@ -356,7 +357,7 @@ export function FloatingWindow({
                 onPointerDown={(event) => event.stopPropagation()}
                 onClick={onDock}
               >
-                ⇥
+                <PanelRight size={14} strokeWidth={2.2} />
               </button>
             ) : null}
             <button
@@ -365,7 +366,7 @@ export function FloatingWindow({
               onPointerDown={(event) => event.stopPropagation()}
               onClick={() => setMaximized((current) => !current)}
             >
-              {maximized ? "❐" : "⛶"}
+              {maximized ? <Minimize2 size={14} strokeWidth={2.2} /> : <Maximize2 size={14} strokeWidth={2.2} />}
             </button>
             <button
               className="btn-ghost icon-btn"
@@ -373,7 +374,7 @@ export function FloatingWindow({
               onPointerDown={(event) => event.stopPropagation()}
               onClick={onClose}
             >
-              ✕
+              <X size={14} strokeWidth={2.2} />
             </button>
           </span>
         </div>

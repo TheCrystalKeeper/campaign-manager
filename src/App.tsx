@@ -19,6 +19,8 @@ import { useDiceOverlay } from "./dice/useDiceOverlay";
 import { useDmActions, useGameRoom, type JoinParams } from "./hooks/useGameRoom";
 import { buildInverse, useHistory } from "./lib/history";
 import { readLocalFlag, writeLocalFlag } from "./lib/localFlags";
+import { Dices, IdCard, Settings, X } from "lucide-react";
+import { UI_ACCENTS, type UiAccent } from "./lib/types";
 import {
   clearCampaignLayout,
   readCampaignFlag,
@@ -48,6 +50,16 @@ const SPACE_CLICK_KEY = "cm-space-click";
 const TOKEN_PANEL_KEY = "cm-token-panel-on-click";
 const HI_RES_KEY = "cm-hi-res";
 const NIGHT_KEY = "cm-night-mode";
+const ACCENT_KEY = "cm-ui-accent";
+
+function readStoredAccent(): UiAccent {
+  try {
+    const raw = localStorage.getItem(ACCENT_KEY);
+    return UI_ACCENTS.includes(raw as UiAccent) ? (raw as UiAccent) : "sky";
+  } catch {
+    return "sky";
+  }
+}
 
 /** The per-campaign UI layout blob (localStorage `cm:{roomId}:layout`). Entity-bound windows
  *  (open sheet/item) and transient state (selection, viewport) are deliberately excluded. */
@@ -125,6 +137,7 @@ export default function App() {
   const [tokenPanelOnClick, setTokenPanelOnClickState] = useState(() => readLocalFlag(TOKEN_PANEL_KEY, true));
   const [hiResRender, setHiResRenderState] = useState(() => readLocalFlag(HI_RES_KEY, true));
   const [nightMode, setNightModeState] = useState(() => readLocalFlag(NIGHT_KEY, false));
+  const [accent, setAccentState] = useState<UiAccent>(() => readStoredAccent());
   /** Bumped by "Reset UI layout" — remounts windows / repositions the tray. */
   const [layoutEpoch, setLayoutEpoch] = useState(0);
   const lastSceneRef = useRef<string | null>(null);
@@ -355,15 +368,34 @@ export default function App() {
     writeLocalFlag(NIGHT_KEY, on);
     setNightModeState(on);
   }, []);
-  // The theme lives on <html> so every token (day parchment / night stone) flips
-  // everywhere at once — lobby, portaled modals, and toasts included.
-  useEffect(() => {
-    if (nightMode) {
-      document.documentElement.setAttribute("data-theme", "night");
-    } else {
-      document.documentElement.removeAttribute("data-theme");
+  const setAccent = useCallback((next: UiAccent) => {
+    try {
+      localStorage.setItem(ACCENT_KEY, next);
+    } catch {
+      // preference just won't persist
     }
-  }, [nightMode]);
+    setAccentState(next);
+  }, []);
+  // The theme lives on <html> so every token (day parchment / night stone,
+  // accent family) flips everywhere at once — lobby, portaled modals, and
+  // toasts included. A DM room override (state.uiOverride) beats device prefs
+  // while joined; device prefs are untouched underneath.
+  const uiOverride = status === "joined" ? state?.uiOverride ?? null : null;
+  const effectiveNight = uiOverride ? uiOverride.theme === "night" : nightMode;
+  const effectiveAccent = uiOverride ? uiOverride.accent : accent;
+  useEffect(() => {
+    const root = document.documentElement;
+    if (effectiveNight) {
+      root.setAttribute("data-theme", "night");
+    } else {
+      root.removeAttribute("data-theme");
+    }
+    if (effectiveAccent !== "sky") {
+      root.setAttribute("data-accent", effectiveAccent);
+    } else {
+      root.removeAttribute("data-accent");
+    }
+  }, [effectiveNight, effectiveAccent]);
   // Holding SpaceBar acts as the left mouse button when this device opts in.
   useSpaceClick(spaceClick);
 
@@ -416,7 +448,7 @@ export default function App() {
   }, [roomId, dockOpen, dockTab, popped, trayOpen, page, settingsOpen]);
 
   if (!session) {
-    return <JoinScreen onJoin={setSession} />;
+    return <JoinScreen onJoin={setSession} nightMode={nightMode} onToggleNight={setNightMode} />;
   }
 
   if (error && status !== "joined" && status !== "reconnecting") {
@@ -554,6 +586,8 @@ export default function App() {
     setHiResRender,
     nightMode,
     setNightMode,
+    accent,
+    setAccent,
     resetUiLayout,
     leave,
   };
@@ -574,10 +608,17 @@ export default function App() {
 
   // Rail action buttons: sheet on top, dice after the tabs, settings at the bottom.
   const dockActions: DockAction[] = [
-    { id: "sheet", icon: "🪪", title: "Character sheet", active: sheetOpen, slot: "top", onClick: toggleSheet },
+    {
+      id: "sheet",
+      icon: <IdCard size={17} strokeWidth={2.2} />,
+      title: "Character sheet",
+      active: sheetOpen,
+      slot: "top",
+      onClick: toggleSheet,
+    },
     {
       id: "dice",
-      icon: "🎲",
+      icon: <Dices size={17} strokeWidth={2.2} />,
       title: "Dice tray",
       active: trayOpen,
       slot: "after-tabs",
@@ -585,7 +626,7 @@ export default function App() {
     },
     {
       id: "settings",
-      icon: "⚙",
+      icon: <Settings size={17} strokeWidth={2.2} />,
       title: "Settings",
       active: settingsOpen,
       slot: "bottom",
@@ -667,7 +708,7 @@ export default function App() {
                     title={`Kick ${player.displayName}`}
                     onClick={() => dm.kickPlayer(player.playerId)}
                   >
-                    ✕
+                    <X size={11} strokeWidth={2.6} />
                   </button>
                 ) : null}
               </div>

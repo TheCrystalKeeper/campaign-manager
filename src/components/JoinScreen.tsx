@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
+import { Moon, Sun } from "lucide-react";
 import type { JoinParams } from "../hooks/useGameRoom";
 import { useRoomLobby } from "../hooks/useGameRoom";
 import { loadMergedCampaigns, registerCampaignRoom } from "../lib/campaignRegistry";
@@ -15,13 +16,16 @@ import type { Role } from "../lib/types";
 
 type JoinScreenProps = {
   onJoin: (params: JoinParams & { roomId: string }) => void;
+  /** Device theme (day parchment / night stone), lifted to App so it applies everywhere. */
+  nightMode: boolean;
+  onToggleNight: (on: boolean) => void;
 };
 
 /// <summary>
 /// Lobby: pick or create a campaign, choose DM or player, then join. Player role loads the
 /// room's open character slots.
 /// </summary>
-export function JoinScreen({ onJoin }: JoinScreenProps) {
+export function JoinScreen({ onJoin, nightMode, onToggleNight }: JoinScreenProps) {
   const [campaigns, setCampaigns] = useState<SavedCampaign[]>([]);
   const [selectedRoomId, setSelectedRoomId] = useState("");
   const [role, setRole] = useState<Role>("dm");
@@ -72,6 +76,13 @@ export function JoinScreen({ onJoin }: JoinScreenProps) {
   return (
     <div className="lobby">
       <div className="lobby-card">
+        <button
+          className="btn-ghost icon-btn lobby-night-toggle"
+          title={nightMode ? "Day mode — parchment and ink" : "Night mode — carved stone and chalk"}
+          onClick={() => onToggleNight(!nightMode)}
+        >
+          {nightMode ? <Sun size={16} strokeWidth={2.2} /> : <Moon size={15} strokeWidth={2.2} />}
+        </button>
         <h1>Campaign Manager</h1>
         <p className="lobby-sub">Choose a campaign and take your seat at the table.</p>
 

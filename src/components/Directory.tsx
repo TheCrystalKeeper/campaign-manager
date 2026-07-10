@@ -1,4 +1,5 @@
 import { useRef, useState, type ReactNode } from "react";
+import { ArrowUpDown, Backpack, Folder as FolderIcon, FolderPlus, Search, Trash2, User, UserPlus } from "lucide-react";
 import { startPointerDrag, wasRecentDrag, type PointerDrop } from "../lib/pointerDrag";
 import { DEFAULT_ICON_CROP, type Folder, type IconCrop } from "../lib/types";
 import { CroppableImage } from "./CroppableImage";
@@ -64,8 +65,8 @@ function effectiveOrders(rows: DirectoryRowData[]): Map<string, number> {
 }
 
 /** Per-kind glyph for the create button + empty-row avatar. */
-function kindGlyph(kind: Folder["kind"]): string {
-  return kind === "item" ? "🎒" : "👤";
+function kindGlyph(kind: Folder["kind"]): ReactNode {
+  return kind === "item" ? <Backpack size={15} strokeWidth={2.2} /> : <User size={15} strokeWidth={2.2} />;
 }
 
 /// <summary>
@@ -380,7 +381,7 @@ export function Directory({
         </button>
         {onCreatePlayer ? (
           <button className="dir-create" title="Create a player slot" onClick={onCreatePlayer}>
-            <span className="dir-create-ico">🧑</span>
+            <span className="dir-create-ico"><UserPlus size={15} strokeWidth={2.2} /></span>
             Create Player
           </button>
         ) : null}
@@ -389,7 +390,7 @@ export function Directory({
           title="Create a folder"
           onClick={() => onCreateFolder("")}
         >
-          <span className="dir-create-ico">📁</span>
+          <span className="dir-create-ico"><FolderPlus size={15} strokeWidth={2.2} /></span>
           Create Folder
         </button>
       </div>
@@ -407,14 +408,14 @@ export function Directory({
                 setSelected(new Set());
               }}
             >
-              🗑 Delete
+              <Trash2 size={13} strokeWidth={2.2} /> Delete
             </button>
           ) : null}
           <button onClick={clearSelection}>Clear</button>
         </div>
       ) : (
         <div className="dir-search">
-          <span className="dir-search-ico">🔍</span>
+          <span className="dir-search-ico"><Search size={13} strokeWidth={2.2} /></span>
           <input
             value={search}
             placeholder={`Search ${kind}s`}
@@ -425,7 +426,7 @@ export function Directory({
             title={sortAZ ? "Sorting A–Z (click for manual order)" : "Sort A–Z"}
             onClick={() => setSortAZ((v) => !v)}
           >
-            ⇅
+            <ArrowUpDown size={14} strokeWidth={2.2} />
           </button>
           {folders.length > 0 ? (
             <button
@@ -494,7 +495,7 @@ export function Directory({
                     return;
                   }
                   startPointerDrag(event, {
-                    label: `📁 ${folder.name}`,
+                    label: folder.name,
                     onStart: () => {
                       setDragging(true);
                       // Don't leave the name field focused while dragging.
@@ -513,7 +514,7 @@ export function Directory({
                 >
                   {isCollapsed ? "▸" : "▾"}
                 </button>
-                <span className="dir-folder-ico">📁</span>
+                <span className="dir-folder-ico"><FolderIcon size={14} strokeWidth={2.2} /></span>
                 <input
                   className="dir-folder-name"
                   key={folder.id + folder.name}

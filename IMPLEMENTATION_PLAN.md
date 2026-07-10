@@ -11,15 +11,18 @@ overrides, trait/condition-aware rolls, real rests/casting/death saves — see i
 
 ## STATUS (2026-07-10) — read this first in a fresh session
 
-**Latest (2026-07-10): Phase 8 STARTED — "Quill & Ember" aesthetic revamp, round 1
-shipped.** The full parchment/ink visual identity arrived as a ready-made design system
+**Latest (2026-07-10): Phase 8 rounds 1+2 shipped — "Quill & Ember" aesthetic revamp.**
+The full parchment/ink visual identity arrived as a ready-made design system
 (claude.ai/design handoff bundle at `Blue Turtle UI V2-handoff/` — treat it as the design
-source of truth) and is now applied app-wide: `tokens.css` rewritten with day + night
-themes (per-device **Night mode** toggle in Settings), a chrome pass over
-`index.css`/`sheet7.css`, new fonts (Alegreya / PT Sans / PT Mono), and bundled paper
-textures in `public/textures/`. Build green + headless-Chrome verified, zero console
-errors. Details in Phase 8's "as built" note; still open there: emoji→Lucide icon swap,
-sound design, motion language, dice/coin skins, integrated-GPU pass.
+source of truth) and is applied app-wide. Round 1: `tokens.css` rewritten with day +
+night themes, chrome pass over `index.css`/`sheet7.css`, new fonts (Alegreya / PT Sans /
+PT Mono), bundled paper textures. Round 2: edge divots on every pop-up, emoji → Lucide
+icons, the crystal (opal) variant on the d20 + spell slots, per-device **accent
+variations** (sky/moss/ember/lapis) + a lobby **night** toggle, and a DM **"Table look"
+override** (`GameState.uiOverride` + `SET_UI_OVERRIDE`, off by default) forcing one
+theme+accent table-wide. Build green + headless-Chrome E2E verified both rounds. Details
+in Phase 8's "as built" notes; still open: motion language, sound design, dice/coin
+skins, board-furniture restyle (incl. on-map emoji → SVG), integrated-GPU pass.
 
 **Prior (2026-07-07): map-interaction QoL round** — hover/drag affordances plus a
 direct-manipulation grid calibrator: pins are grabbable/editable in **select** mode (not just the
@@ -2377,15 +2380,51 @@ scoped placeholder).
 > campaign → board → dock panels → settings → night toggle) with zero console errors,
 > day + night screenshots reviewed. Test campaign + rooms.json restored after.
 >
-> **Still open in Phase 8 (next rounds):** (a) **emoji → Lucide icons** everywhere — the
-> system is explicit ("no emoji anywhere; Lucide or CSS glyphs only"); touches ~30 files
-> of glyphs (dock tabs, registry icons, toolbar, directory rows, settings buttons);
-> (b) the **crystal** variant for arcane actions (spell slots, maybe the d20) — opal
-> texture already bundled; (c) **motion language** micro-animations (the token sheet
-> already carries the durations/easings + the bundle has keyframe specs); (d) **sound
-> design** (below); (e) **dice/coin texture skins** (UV prerequisite below); (f) board
-> furniture restyle (grid/ruler/selection colors → tokens); (g) the integrated-GPU perf
-> pass + the manual both-roles visual pass over every panel/page/window.
+> **As built — round 2: divots, icons, crystal, accents, table look (2026-07-10):**
+>
+> - **Edge divots ("notches")** — the bundle's signature pen-skip kinks along drawn
+> outlines — now render on every pop-up surface: floating windows, modals, clusters,
+> dice tray, map toolbars, page switcher, light/wall/token config panels, pin editor,
+> toasts, error banner, lobby card, short-rest pop. Ported from the bundle's
+> `styles/textures.css` (SVG data-URI nick tiles, day/night variants in `tokens.css`;
+> the max()-guard math shows 1–3 nicks per edge by length). Windows paint theirs on
+> `.window::after` because `.window-inner`'s overflow clip would shave them.
+> - **Emoji → Lucide icons** (`lucide-react`, stroke 2.2): panel registry tabs, dock rail
+> + chevrons, window controls, all 9 map tools + toolbar options (sun/moon, sparkles,
+> magnet, undo/redo, wall-brush types...), directory chrome, initiative, log lock
+> markers, dice tray, settings export/import, sheet page rail + header (rests, reveal
+> eyes, AC shield, crop/library), asset page. `PanelDef.icon`/`DockAction.icon`/
+> `MapTool.icon` are `ReactNode` now; `select.ts` → `select.tsx`. Geometric glyphs
+> (✕ ▸ ● in `<option>` labels) stay per the system's "CSS glyphs for primitives" rule.
+> **Still emoji (board furniture round):** Konva-rendered on-map glyphs — condition
+> badges (`CONDITIONS` in types.ts), door 🔒/🚪, skull — need SVG-in-Konva work.
+> - **Crystal variant** (opal photo behind ink-outlined gem cuts, faint night glow):
+> the tray's **d20** is a gem-cut `.btn-crystal` (readied = gold frame + glow) and
+> **full spell slots** are tiny opal gems with staggered texture crops.
+> - **Accent variations** shipped as a per-device setting (Settings → This device →
+> Accent color swatches): Sky (default) / **Moss & Loam** / **Ember & Wine** /
+> **Tide & Lapis** — day values verbatim from the bundle's variation cards, night
+> values derived; applied via `data-accent` on `<html>` next to `data-theme`
+> (key `cm-ui-accent`).
+> - **Night mode discoverability:** a sun/moon toggle now sits on the lobby card's
+> top-right corner (same `cm-night-mode` flag as the Settings row).
+> - **DM "Table look" override (off by default):** Settings → Table look (DM) →
+> "Override everyone's look" forces one theme + accent for every client.
+> `GameState.uiOverride` (normalized in `normalizeUiOverride`, default null) +
+> DM-gated `SET_UI_OVERRIDE`; the client applies `state.uiOverride` over device prefs
+> while joined and falls back the moment it's released (device prefs untouched).
+> - **Verified:** build green; headless-Chrome E2E — lobby toggle, moss accent pick,
+> DM override to night+ember round-tripped through the live PartyKit server, release
+> restored device prefs; zero console errors. (`npm i` note: adding `lucide-react`
+> prunes the unlisted `playwright-core` the verify skill uses — reinstall with
+> `npm i --no-save playwright-core`.)
+>
+> **Still open in Phase 8 (next rounds):** (a) **motion language** micro-animations (the
+> token sheet already carries the durations/easings + the bundle has keyframe specs);
+> (b) **sound design** (below); (c) **dice/coin texture skins** (UV prerequisite below);
+> (d) board furniture restyle (grid/ruler/selection colors → tokens; on-map emoji →
+> SVG); (e) the integrated-GPU perf pass + the manual both-roles visual pass over every
+> panel/page/window.
 
 - **Direction:** tactile, real, paper-like. Textures for natural materials — paper,
 parchment, polished wood — as panel/chrome surfaces; the current dark placeholder skin

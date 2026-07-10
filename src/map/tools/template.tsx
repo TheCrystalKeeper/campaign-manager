@@ -1,3 +1,4 @@
+import { Shapes } from "lucide-react";
 import { Circle, Group, Line, Rect, Text } from "react-konva";
 import type { Scene, TemplateShape } from "../../lib/types";
 import type { MapTool, ToolRuntime } from "./types";
@@ -142,7 +143,7 @@ const TEMPLATE_COLOR = "#7cc4ff";
 export const templateTool: MapTool = {
   id: "template",
   label: "Template",
-  icon: "🔺",
+  icon: <Shapes size={17} strokeWidth={2.2} />,
   hotkey: "t",
   cursor: "crosshair",
   onDown: (event, rt) => {

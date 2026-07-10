@@ -1,3 +1,4 @@
+import { BrickWall } from "lucide-react";
 import {
   WALL_PRESETS,
   matchWallPreset,
@@ -97,7 +98,7 @@ export function WallConfigPanel({
   return (
     <div className="panel" style={{ width: "min(280px, 92vw)" }}>
       <div className="panel-header">
-        <span className="panel-title">🧱 Wall{many ? ` ×${selectionCount}` : ""}</span>
+        <span className="panel-title"><BrickWall size={14} strokeWidth={2.2} /> Wall{many ? ` ×${selectionCount}` : ""}</span>
         <button className="btn-ghost icon-btn" onClick={onClose}>
           ✕
         </button>

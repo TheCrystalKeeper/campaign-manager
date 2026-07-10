@@ -1,3 +1,4 @@
+import { Crosshair } from "lucide-react";
 import { Circle, Group, Rect, Text } from "react-konva";
 import type { Scene } from "../../lib/types";
 import type { MapTool } from "./types";
@@ -81,7 +82,7 @@ function PointHandle({ x, y, scale }: { x: number; y: number; scale: number }) {
 export const calibrateTool: MapTool = {
   id: "calibrate",
   label: "Calibrate grid",
-  icon: "🎯",
+  icon: <Crosshair size={17} strokeWidth={2.2} />,
   hotkey: "g",
   dmOnly: true,
   cursor: "crosshair",

@@ -1,4 +1,5 @@
 import type { DeathSaves } from "../../lib/types";
+import { Skull } from "lucide-react";
 
 /**
  * Death-save tracker (PC only): 3 success slots on the left, 3 failure slots on the right,
@@ -40,10 +41,10 @@ export function DeathSaveTracker({
             title="Roll a death saving throw (10+ succeeds; nat 20 = back up with 1 HP)"
             onClick={onRoll}
           >
-            💀
+            <Skull size={14} strokeWidth={2.2} />
           </button>
         ) : (
-          <span className="death-skull-mid" title="Death saves">💀</span>
+          <span className="death-skull-mid" title="Death saves"><Skull size={15} strokeWidth={2.2} /></span>
         )}
         <div className="death-col" title="Failures">
           {[1, 2, 3].map((n) => (

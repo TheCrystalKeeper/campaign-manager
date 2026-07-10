@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Image } from "lucide-react";
 import type { Scene } from "../lib/types";
 import { SCENE_BACKGROUND_PRESETS } from "../lib/types";
 import { gridSizeForMapHeight } from "../lib/sceneUtils";
@@ -49,7 +50,7 @@ export function SceneSettings({ scene, roomId, onPatch, onSetFog, onResetFog }: 
           <img className="map-upload-thumb" src={scene.mapUrl} alt="" draggable={false} />
         ) : (
           <span className="map-upload-ico" aria-hidden>
-            🖼
+            <Image size={22} strokeWidth={2.2} />
           </span>
         )}
         <span className="map-upload-text">
@@ -80,7 +81,7 @@ export function SceneSettings({ scene, roomId, onPatch, onSetFog, onResetFog }: 
 
       <div className="section-title">Grid calibration</div>
       <span className="muted" style={{ fontSize: "0.75rem" }}>
-        Tip: the 🎯 map tool (G) calibrates the grid by dragging — hover a grid point and drag the
+        Tip: the grid-calibrate map tool (G) adjusts the grid by dragging — hover a grid point and drag the
         handle to resize, drag anywhere else to move it, or use “Box a cell” to set it from one square.
       </span>
       <div className="row">
@@ -165,7 +166,7 @@ export function SceneSettings({ scene, roomId, onPatch, onSetFog, onResetFog }: 
       </div>
       <div className="row" style={{ justifyContent: "space-between" }}>
         <span className="muted" style={{ fontSize: "0.75rem" }}>
-          Paint with the 🌫 fog brush (F). {scene.fog.reveals.length} shape
+          Paint with the fog brush (F). {scene.fog.reveals.length} shape
           {scene.fog.reveals.length === 1 ? "" : "s"}.
         </span>
         <button onClick={onResetFog}>{scene.fog.inverted ? "Clear fog" : "Re-cover all"}</button>
@@ -182,8 +183,8 @@ export function SceneSettings({ scene, roomId, onPatch, onSetFog, onResetFog }: 
         </button>
       </div>
       <span className="muted" style={{ fontSize: "0.75rem" }}>
-        Turn off to enable walls + lights vision. Draw walls with 🧱 (W), place lights
-        with 💡 (L). {scene.walls.length} wall{scene.walls.length === 1 ? "" : "s"},{" "}
+        Turn off to enable walls + lights vision. Draw walls with the walls tool (W), place lights
+        with the lights tool (L). {scene.walls.length} wall{scene.walls.length === 1 ? "" : "s"},{" "}
         {scene.lights.length} light{scene.lights.length === 1 ? "" : "s"}.
       </span>
 

@@ -65,6 +65,86 @@ h3 {
   outline-offset: 2px;
 }
 
+/* Edge divots ("notches"): tiny kinks where the drawn outline deflects inward
+   and returns, like a pen skip (day) or a chip in carved stone (night) — the
+   Quill & Ember signature on big panels and pop-ups. Each host needs a
+   position context, the standard 2px ink border, and NO overflow clipping
+   over its border (windows use a .window::after variant below for that).
+   Per edge: one %-anchored nick always shows; up to two more sit at a fixed
+   px offset, flung off-box by a max()-amplified guard term until the edge is
+   long enough (~320-420px for the 2nd, ~650-820px for the 3rd) so they never
+   paint on a corner curve. */
+.modal::before,
+.cluster:not(.cluster--plain):not(.cluster--right)::before,
+.dice-tray::before,
+.map-toolbar-rail::before,
+.map-toolbar-options::before,
+.page-switcher::before,
+.short-rest-pop::before,
+.lobby-card::before,
+.map-pin-editor::before,
+.log-toast::before,
+.error-banner::before,
+.map-light-config .panel::before,
+.window::after {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 2;
+  background-image:
+    var(--notch-l), var(--notch-l), var(--notch-l),
+    var(--notch-r), var(--notch-r), var(--notch-r),
+    var(--notch-t), var(--notch-t), var(--notch-t),
+    var(--notch-b), var(--notch-b), var(--notch-b);
+  background-size:
+    5px 8px, 5px 8px, 5px 8px,
+    5px 8px, 5px 8px, 5px 8px,
+    8px 5px, 8px 5px, 8px 5px,
+    8px 5px, 8px 5px, 8px 5px;
+  background-position:
+    left 0 top clamp(14px, 26%, calc(100% - 22px)),
+    left 0 top calc(26% + 230px + max(0px, -74% + 258px) * 40),
+    left 0 top calc(26% + 480px + max(0px, -74% + 508px) * 40),
+    right 0 top clamp(14px, 64%, calc(100% - 22px)),
+    right 0 top calc(64% - 240px - max(0px, -64% + 268px) * 40),
+    right 0 top calc(64% - 490px - max(0px, -64% + 518px) * 40),
+    left clamp(14px, 61%, calc(100% - 22px)) top 0,
+    left calc(61% - 250px - max(0px, -61% + 278px) * 40) top 0,
+    left calc(61% + 260px + max(0px, -39% + 288px) * 40) top 0,
+    left clamp(14px, 33%, calc(100% - 22px)) bottom 0,
+    left calc(33% + 270px + max(0px, -67% + 298px) * 40) bottom 0,
+    left calc(33% + 540px + max(0px, -67% + 568px) * 40) bottom 0;
+  background-repeat: no-repeat;
+}
+/* Windows clip their content (overflow: hidden on .window-inner), which would
+   shave the nicks off — so the window's overlay lives on the parent .window,
+   whose box coincides with .window-inner's border box. inset 0 (not -2px)
+   because the border is INSIDE the .window box here. */
+.window::after {
+  inset: 0;
+  border-radius: var(--r-wob-md);
+}
+.window--maximized::after {
+  border-radius: var(--radius);
+}
+/* Static hosts get their position context here (fixed/absolute ones have it). */
+.modal,
+.map-toolbar-rail,
+.lobby-card,
+.log-toast {
+  position: relative;
+}
+
+/* Lucide icons: sit on the text baseline inside buttons/labels; grid-centered
+   hosts (.icon-btn, .dock-tab) zero this out via place-items. */
+svg.lucide {
+  display: inline-block;
+  vertical-align: -0.18em;
+  flex: none;
+}
+
 /* Parchment scrollbars: a plaque-tan pill in a transparent track. */
 ::-webkit-scrollbar {
   width: 12px;
@@ -307,15 +387,20 @@ textarea,
 .map-light-config--dock-open {
   right: calc(var(--dock-rail-w) + var(--dock-panel-w) + 12px);
 }
-/* Parchment backing so the panel's text stays legible over busy map art. */
+/* Parchment backing so the panel's text stays legible over busy map art.
+   No overflow clip (it would shave the edge notches); the slate header rounds
+   its own top corners to sit inside the panel's wobble outline instead. */
 .map-light-config .panel {
+  position: relative;
   background-color: var(--surface-solid);
   background-image: var(--paper-layers);
   background-size: var(--paper-sizes);
   border: 2px solid var(--border);
   border-radius: var(--r-wob-md);
   box-shadow: var(--shadow-panel);
-  overflow: hidden;
+}
+.map-light-config .panel > .panel-header {
+  border-radius: 11px 8px 0 0 / 8px 12px 0 0;
 }
 /* Reserved inline-validation slot under the Bright/Dim inputs — always occupies its line so
    showing/hiding the message never reflows the light panel. */
@@ -699,6 +784,12 @@ textarea,
   color: var(--text);
   text-align: center;
   margin-bottom: 0.2rem;
+}
+/* Day/night toggle pinned to the lobby card's top-right corner. */
+.lobby-night-toggle {
+  position: absolute;
+  top: 0.6rem;
+  right: 0.6rem;
 }
 .lobby-sub {
   text-align: center;
@@ -1264,6 +1355,28 @@ button.mod.roll-btn {
   padding: 0.15rem 0;
   font-size: 0.9rem;
   text-align: center;
+}
+
+/* --- Accent swatches (Settings: pick the interaction accent) ---------------- */
+.accent-swatches {
+  display: flex;
+  gap: 0.35rem;
+}
+.accent-swatch {
+  width: 1.6rem;
+  height: 1.6rem;
+  padding: 0;
+  flex-shrink: 0;
+  border: 2px solid var(--border);
+  border-radius: var(--r-wob-pill);
+  background-image: none;
+  box-shadow: var(--shadow-ledge);
+}
+.accent-swatch:hover:not(:disabled) {
+  background-image: none;
+}
+.accent-swatch--active {
+  box-shadow: inset 0 0 0 2.5px rgba(246, 240, 223, 0.85), var(--shadow-ledge);
 }
 
 /* --- Status / errors ------------------------------------------------------ */
@@ -2256,6 +2369,80 @@ body.pointer-dragging * {
 }
 .dice-tray-expr {
   width: 5.5rem;
+}
+
+/* --- Crystal: gem-cut arcane accent (Quill & Ember) --------------------------
+   A real precious-opal photo behind an ink-outlined cut-gem silhouette, like a
+   gemstone die. Reserved for arcane actions — the d20 and spell slots. Glows
+   faintly at night. */
+.btn-crystal {
+  --crystal-tex: url("/textures/opal-b.png");
+  position: relative;
+  isolation: isolate;
+  color: #fff;
+  background: none;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  text-shadow: 0 1px 2px rgba(25, 30, 50, 0.72);
+}
+.btn-crystal::before,
+.btn-crystal::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  pointer-events: none;
+}
+/* Ink silhouette (the drawn outline, as a clipped backing plate). */
+.btn-crystal::before {
+  inset: 0;
+  background: var(--border);
+  clip-path: polygon(
+    8px 0, calc(100% - 8px) 0, 100% 8px, 100% calc(100% - 8px),
+    calc(100% - 8px) 100%, 8px 100%, 0 calc(100% - 8px), 0 8px
+  );
+  filter: drop-shadow(0 2.5px 0 var(--border-subtle));
+  transition: filter var(--dur-1) var(--ease-out), background-color var(--dur-1) var(--ease-out);
+}
+/* The gem face: milky opal + one soft glassy sheen. */
+.btn-crystal::after {
+  inset: 2px;
+  clip-path: polygon(
+    7px 0, calc(100% - 7px) 0, 100% 7px, 100% calc(100% - 7px),
+    calc(100% - 7px) 100%, 7px 100%, 0 calc(100% - 7px), 0 7px
+  );
+  background-color: #b7b4c4;
+  background-image:
+    linear-gradient(172deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0) 45%, rgba(38, 34, 66, 0.18) 100%),
+    var(--crystal-tex);
+  background-size: auto, 230px;
+  background-position: center, 32% 68%;
+}
+.btn-crystal:hover:not(:disabled) {
+  background: none;
+  box-shadow: none;
+  filter: brightness(1.06);
+}
+.btn-crystal:active:not(:disabled) {
+  box-shadow: none;
+}
+/* Readied crystal die: the ink frame turns gold and the gem glows. */
+.btn-crystal.die-btn--sel {
+  background: none;
+  color: #fff;
+  box-shadow: none;
+}
+.btn-crystal.die-btn--sel::before {
+  background: var(--primary-strong);
+  filter: drop-shadow(0 2.5px 0 var(--border-subtle))
+    drop-shadow(0 0 6px color-mix(in srgb, var(--primary) 55%, transparent));
+}
+.btn-crystal.die-btn--sel:hover:not(:disabled) {
+  background: none;
+}
+[data-theme="night"] .btn-crystal::before {
+  filter: drop-shadow(0 2.5px 0 var(--border-subtle))
+    drop-shadow(0 0 7px color-mix(in srgb, #d6d2f2 48%, transparent));
 }
 
 /* --- Page switcher + DM prep pages (Phase 5.5) -------------------------------

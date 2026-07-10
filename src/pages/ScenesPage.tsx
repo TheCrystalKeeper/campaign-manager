@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AlertTriangle } from "lucide-react";
 import { MapCanvas } from "../components/MapCanvas";
 import { SceneSettings } from "../components/SceneSettings";
 import { PageSwitcher, type PageId } from "./PageSwitcher";
@@ -275,7 +276,7 @@ export function ScenesPage({
             <>
               {serverChanged ? (
                 <span className="muted" title="This scene was edited on the board after you started staging — Apply will overwrite those changes">
-                  ⚠ changed on the board
+                  <AlertTriangle size={12} strokeWidth={2.2} /> changed on the board
                 </span>
               ) : null}
               <button className="btn-primary" onClick={() => applyDraft(selectedSceneId)}>

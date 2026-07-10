@@ -1,3 +1,4 @@
+import { Ruler } from "lucide-react";
 import { Circle, Group, Line, Rect, Text } from "react-konva";
 import type { Scene } from "../../lib/types";
 import type { MapTool, ToolRuntime } from "./types";
@@ -85,7 +86,7 @@ export function RulerShape({
 export const measureTool: MapTool = {
   id: "measure",
   label: "Measure",
-  icon: "📏",
+  icon: <Ruler size={17} strokeWidth={2.2} />,
   hotkey: "m",
   cursor: "crosshair",
   onDown: (event, rt) => {

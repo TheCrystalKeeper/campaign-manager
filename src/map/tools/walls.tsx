@@ -1,3 +1,4 @@
+import { BrickWall } from "lucide-react";
 import { Line } from "react-konva";
 import { WALL_BRUSH_COLORS, wallFromBrush, type Wall } from "../../lib/types";
 import type { MapTool, ToolRuntime } from "./types";
@@ -35,7 +36,7 @@ function commitSegment(rt: ToolRuntime, a: Pt, b: Pt): void {
 export const wallsTool: MapTool = {
   id: "walls",
   label: "Walls & doors",
-  icon: "🧱",
+  icon: <BrickWall size={17} strokeWidth={2.2} />,
   hotkey: "w",
   dmOnly: true,
   cursor: "crosshair",

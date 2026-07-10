@@ -1,4 +1,37 @@
 import type { ReactNode } from "react";
+import {
+  AlertTriangle,
+  ArrowLeftRight,
+  Blinds,
+  BrickWall,
+  Brush,
+  Circle,
+  CloudFog,
+  Construction,
+  DoorClosed,
+  Eye,
+  EyeOff,
+  Footprints,
+  Ghost,
+  Lasso,
+  LayoutGrid,
+  Leaf,
+  Magnet,
+  Minus,
+  Moon,
+  Move,
+  Pentagon,
+  Pin,
+  RectangleHorizontal,
+  Redo2,
+  RotateCcw,
+  Sparkles,
+  SquareDashed,
+  Sun,
+  Trash2,
+  Triangle,
+  Undo2,
+} from "lucide-react";
 import type { CalibrateMode, MapTool } from "../map/tools/types";
 import type { LightPreset } from "../map/tools/lights";
 import {
@@ -12,17 +45,17 @@ import {
 import type { History } from "../lib/history";
 
 const DRAW_COLORS = ["#ffd166", "#ff6b6b", "#7cc4ff", "#8ce99a", "#f3f0ff"];
-const FOG_SHAPE_OPTIONS: Array<{ id: FogShape; label: string; title: string }> = [
-  { id: "brush", label: "🖌 Brush", title: "Freehand brush — paint fog (Alt+scroll resizes)" },
-  { id: "rect", label: "▭ Rect", title: "Rectangle select — drag a box to fog the area" },
-  { id: "lasso", label: "◠ Lasso", title: "Lasso — drag a freehand outline, release to fill" },
-  { id: "polygon", label: "⬟ Polygon", title: "Polygon lasso — click vertices; dbl-click or first point to finish" },
+const FOG_SHAPE_OPTIONS: Array<{ id: FogShape; label: ReactNode; title: string }> = [
+  { id: "brush", label: <><Brush size={13} strokeWidth={2.2} /> Brush</>, title: "Freehand brush — paint fog (Alt+scroll resizes)" },
+  { id: "rect", label: <><RectangleHorizontal size={13} strokeWidth={2.2} /> Rect</>, title: "Rectangle select — drag a box to fog the area" },
+  { id: "lasso", label: <><Lasso size={13} strokeWidth={2.2} /> Lasso</>, title: "Lasso — drag a freehand outline, release to fill" },
+  { id: "polygon", label: <><Pentagon size={13} strokeWidth={2.2} /> Polygon</>, title: "Polygon lasso — click vertices; dbl-click or first point to finish" },
 ];
-const TEMPLATE_ICON: Record<TemplateKind, string> = {
-  circle: "○ Circle",
-  cone: "◁ Cone",
-  line: "／ Line",
-  rect: "▭ Rect",
+const TEMPLATE_ICON: Record<TemplateKind, ReactNode> = {
+  circle: <><Circle size={13} strokeWidth={2.2} /> Circle</>,
+  cone: <><Triangle size={13} strokeWidth={2.2} style={{ transform: "rotate(-90deg)" }} /> Cone</>,
+  line: <><Minus size={13} strokeWidth={2.2} /> Line</>,
+  rect: <><RectangleHorizontal size={13} strokeWidth={2.2} /> Rect</>,
 };
 const DRAW_WIDTHS = [2, 4, 7];
 /** CSP-style labels for the light tint blend modes (+ the tint-off escape hatch). */
@@ -40,13 +73,13 @@ const LIGHT_PRESET_LIST: Array<{ id: LightPreset; label: string }> = [
   { id: "lantern", label: "Lantern" },
 ];
 /** Icon-only button glyphs for the walls tool's draw brushes (full names live in the tooltip). */
-const WALL_BRUSH_ICONS: Record<WallBrush, string> = {
-  normal: "🧱",
-  terrain: "🌿",
-  invisible: "🪟",
-  ethereal: "👻",
-  window: "🔲",
-  door: "🚪",
+const WALL_BRUSH_ICONS: Record<WallBrush, ReactNode> = {
+  normal: <BrickWall size={15} strokeWidth={2.2} />,
+  terrain: <Leaf size={15} strokeWidth={2.2} />,
+  invisible: <SquareDashed size={15} strokeWidth={2.2} />,
+  ethereal: <Ghost size={15} strokeWidth={2.2} />,
+  window: <Blinds size={15} strokeWidth={2.2} />,
+  door: <DoorClosed size={15} strokeWidth={2.2} />,
 };
 const WALL_BRUSH_TITLES: Record<WallBrush, string> = {
   normal: "Wall — blocks sight, light, and movement",
@@ -247,14 +280,14 @@ export function MapToolbar({
           }
           onClick={onToggleGlobalIllumination}
         >
-          {globalIllumination ? "☀ Fully lit" : "🌙 Dynamic"}
+          {globalIllumination ? <><Sun size={13} strokeWidth={2.2} /> Fully lit</> : <><Moon size={13} strokeWidth={2.2} /> Dynamic</>}
         </OptBtn>
         <OptBtn
           active={visionPreview}
           title="Preview what players see through their tokens' vision"
           onClick={onToggleVisionPreview}
         >
-          👁 Preview
+          <Eye size={13} strokeWidth={2.2} /> Preview
         </OptBtn>
       </Row>
       {visionPreview && !hasVisionTokens ? (
@@ -268,7 +301,7 @@ export function MapToolbar({
           <Label>Darkness ({Math.round(darkness * 100)}%)</Label>
           <Row>
             <OptBtn title="Transition to full daylight" onClick={() => onDarknessCommit(0)}>
-              ☀
+              <Sun size={13} strokeWidth={2.2} />
             </OptBtn>
             <input
               className="map-darkness-slider"
@@ -283,7 +316,7 @@ export function MapToolbar({
               onBlur={(e) => onDarknessCommit(Number(e.target.value))}
             />
             <OptBtn title="Transition to full darkness" onClick={() => onDarknessCommit(1)}>
-              🌙
+              <Moon size={13} strokeWidth={2.2} />
             </OptBtn>
           </Row>
           <Row>
@@ -292,14 +325,14 @@ export function MapToolbar({
               title="Animate flickering/pulsing lights (turn off on low-end machines)"
               onClick={onToggleLightAnimations}
             >
-              ✨ Animations {lightAnimations ? "on" : "off"}
+              <Sparkles size={13} strokeWidth={2.2} /> Animations {lightAnimations ? "on" : "off"}
             </OptBtn>
             {reducedMotion && lightAnimations ? (
               <span
                 className="map-toolbar-hint"
                 title="Windows 'reduce motion' is on. Lighting animations are playing because you enabled them here — turn ✨ Animations off to respect the system setting."
               >
-                ⚠ overriding system reduce-motion
+                <AlertTriangle size={12} strokeWidth={2.2} /> overriding system reduce-motion
               </span>
             ) : null}
             <select
@@ -339,7 +372,7 @@ export function MapToolbar({
           title={snap ? "Snap to grid: on" : "Snap to grid: off"}
           onClick={onToggleSnap}
         >
-          🧲
+          <Magnet size={16} strokeWidth={2.2} />
         </button>
         {history ? (
           <>
@@ -350,7 +383,7 @@ export function MapToolbar({
               disabled={!history.canUndo}
               onClick={history.undo}
             >
-              ↶
+              <Undo2 size={16} strokeWidth={2.2} />
             </button>
             <button
               className="map-tool-btn"
@@ -358,7 +391,7 @@ export function MapToolbar({
               disabled={!history.canRedo}
               onClick={history.redo}
             >
-              ↷
+              <Redo2 size={16} strokeWidth={2.2} />
             </button>
           </>
         ) : null}
@@ -394,7 +427,7 @@ export function MapToolbar({
           {isDm ? (
             <Row>
               <OptBtn title="Clear all drawings on this scene" onClick={onClearAnnotations}>
-                🗑 Clear
+                <Trash2 size={13} strokeWidth={2.2} /> Clear
               </OptBtn>
               <OptBtn
                 active={playersCanDraw}
@@ -436,7 +469,7 @@ export function MapToolbar({
               title={templatePin ? "Pin: the shape stays until cleared" : "Fades ~2s after you release"}
               onClick={onToggleTemplatePin}
             >
-              {templatePin ? "📌 Pin ✓" : "📌 Pin"}
+              {templatePin ? <><Pin size={13} strokeWidth={2.2} /> Pin ✓</> : <><Pin size={13} strokeWidth={2.2} /> Pin</>}
             </OptBtn>
           </Row>
           <span className="map-toolbar-hint">Drag from the origin to size the area.</span>
@@ -459,7 +492,7 @@ export function MapToolbar({
               }
               onClick={onToggleFogInverted}
             >
-              ⇄ Invert
+              <ArrowLeftRight size={13} strokeWidth={2.2} /> Invert
             </OptBtn>
           </Row>
           <Label>{fogMode === "cover" ? "Paints fog in" : "Reveals area"}</Label>
@@ -469,14 +502,14 @@ export function MapToolbar({
               title="Reveal — paints fog away"
               onClick={() => onFogMode("reveal")}
             >
-              ☀ Reveal
+              <Sun size={13} strokeWidth={2.2} /> Reveal
             </OptBtn>
             <OptBtn
               active={fogMode === "cover"}
               title="Cover — paints fog back in"
               onClick={() => onFogMode("cover")}
             >
-              🌫 Cover
+              <CloudFog size={13} strokeWidth={2.2} /> Cover
             </OptBtn>
           </Row>
           <Label>Shape</Label>
@@ -512,7 +545,7 @@ export function MapToolbar({
               title={fogInverted ? "Clear all painted fog" : "Re-cover the whole map"}
               onClick={onResetFog}
             >
-              ♻ {fogInverted ? "Clear fog" : "Re-cover"}
+              <RotateCcw size={13} strokeWidth={2.2} /> {fogInverted ? "Clear fog" : "Re-cover"}
             </OptBtn>
           </Row>
           <span className="map-toolbar-hint">
@@ -536,14 +569,14 @@ export function MapToolbar({
               title="Direct-manipulate the grid: hover a grid point and drag it to resize, drag anywhere else to move"
               onClick={() => onCalibrateMode("adjust")}
             >
-              ✥⤢ Move + Resize
+              <Move size={13} strokeWidth={2.2} /> Move + Resize
             </OptBtn>
             <OptBtn
               active={calibrateMode === "box"}
               title="Drag a fresh box over exactly one map square — sets the grid size and offset from scratch"
               onClick={() => onCalibrateMode("box")}
             >
-              ▦ Box a cell
+              <LayoutGrid size={13} strokeWidth={2.2} /> Box a cell
             </OptBtn>
           </Row>
           <span className="map-toolbar-hint">
@@ -586,7 +619,7 @@ export function MapToolbar({
               title="Show wall lines on the board while the walls tool is inactive (always shown while editing)"
               onClick={onToggleShowWalls}
             >
-              {showWalls ? "👁 Walls shown off-tool" : "🚫 Walls hidden off-tool"}
+              {showWalls ? <><Eye size={13} strokeWidth={2.2} /> Walls shown off-tool</> : <><EyeOff size={13} strokeWidth={2.2} /> Walls hidden off-tool</>}
             </OptBtn>
           </Row>
           <Row>
@@ -595,7 +628,7 @@ export function MapToolbar({
               title="When on, movement-blocking walls stop players' tokens (the DM always passes through)"
               onClick={onToggleWallsBlockMovement}
             >
-              {wallsBlockMovement ? "🚧 Walls block movement" : "🚶 Movement unblocked"}
+              {wallsBlockMovement ? <><Construction size={13} strokeWidth={2.2} /> Walls block movement</> : <><Footprints size={13} strokeWidth={2.2} /> Movement unblocked</>}
             </OptBtn>
           </Row>
           <Row>
@@ -604,7 +637,7 @@ export function MapToolbar({
               disabled={wallCount === 0}
               onClick={onClearWalls}
             >
-              🗑 Clear walls{wallCount ? ` (${wallCount})` : ""}
+              <Trash2 size={13} strokeWidth={2.2} /> Clear walls{wallCount ? ` (${wallCount})` : ""}
             </OptBtn>
           </Row>
           <span className="map-toolbar-hint">
@@ -636,7 +669,7 @@ export function MapToolbar({
               disabled={lightCount === 0}
               onClick={onClearLights}
             >
-              🗑 Clear lights{lightCount ? ` (${lightCount})` : ""}
+              <Trash2 size={13} strokeWidth={2.2} /> Clear lights{lightCount ? ` (${lightCount})` : ""}
             </OptBtn>
           </Row>
           <span className="map-toolbar-hint">

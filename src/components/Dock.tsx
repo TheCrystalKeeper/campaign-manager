@@ -1,9 +1,11 @@
+import type { ReactNode } from "react";
+import { ChevronLeft, ChevronRight, SquareArrowOutUpRight } from "lucide-react";
 import type { PanelContext, PanelDef, PanelId } from "../panels/registry";
 
 /** A non-tab rail button (sheet / dice tray / settings toggles). */
 export type DockAction = {
   id: string;
-  icon: string;
+  icon: ReactNode;
   title: string;
   active?: boolean;
   onClick: () => void;
@@ -104,7 +106,11 @@ export function Dock({
           title={open ? "Collapse" : "Expand"}
           onClick={onToggleOpen}
         >
-          {open ? "▶" : "◀"}
+          {open ? (
+            <ChevronRight size={17} strokeWidth={2.6} />
+          ) : (
+            <ChevronLeft size={17} strokeWidth={2.6} />
+          )}
         </button>
       </div>
 
@@ -119,7 +125,7 @@ export function Dock({
                   title="Pop out into a window"
                   onClick={() => onPopOut(active.id)}
                 >
-                  ⇱
+                  <SquareArrowOutUpRight size={14} strokeWidth={2.2} />
                 </button>
               </div>
               <div className="dock-panel-body">{active.render(context)}</div>

@@ -23,6 +23,7 @@
   "dependencies": {
     "@dimforge/rapier3d-compat": "^0.19.3",
     "konva": "^10.3.0",
+    "lucide-react": "^1.24.0",
     "partykit": "^0.0.115",
     "partysocket": "^1.2.0",
     "react": "^19.2.7",

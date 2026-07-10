@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { RefreshCw, Trash2 } from "lucide-react";
 import { PageSwitcher, type PageId } from "./PageSwitcher";
 import {
   deleteAsset,
@@ -126,7 +127,7 @@ export function AssetsPage({
           {uploading ? "Uploading…" : "＋ Upload image"}
         </button>
         <button className="btn-ghost" disabled={loading} onClick={() => void refresh()}>
-          {loading ? "Refreshing…" : "↻ Refresh"}
+          {loading ? "Refreshing…" : <><RefreshCw size={13} strokeWidth={2.2} /> Refresh</>}
         </button>
         <input
           ref={fileRef}
@@ -182,7 +183,7 @@ export function AssetsPage({
                           Copy URL
                         </button>
                         <button className="btn-ghost asset-del" title="Delete this image" onClick={() => void handleDelete(asset)}>
-                          🗑
+                          <Trash2 size={14} strokeWidth={2.2} />
                         </button>
                       </div>
                     </div>
