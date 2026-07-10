@@ -1264,6 +1264,65 @@ textarea,
   font-size: 0.75rem;
   color: var(--danger);
 }
+/* Whisper recipient autocomplete — floats above the chat input while typing `/w …`. */
+.whisper-anchor {
+  position: relative;
+}
+.whisper-menu {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 40;
+  max-height: 12rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  padding: 0.25rem;
+  background-color: var(--surface-solid);
+  background-image: var(--paper-layers);
+  background-size: var(--paper-sizes);
+  border: 2px solid var(--border);
+  border-radius: var(--r-wob-sm);
+  box-shadow: var(--shadow-pop);
+}
+.whisper-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.3rem 0.5rem;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.whisper-option.is-active {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.whisper-option__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.whisper-option__tag {
+  flex-shrink: 0;
+  font-size: 0.62rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  padding: 0 0.35rem;
+}
+.whisper-menu__hint {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  padding: 0.3rem 0.5rem 0.1rem;
+  margin-top: 0.1rem;
+  border-top: 1px solid var(--border-subtle);
+}
 .roll-btn {
   cursor: pointer;
 }
