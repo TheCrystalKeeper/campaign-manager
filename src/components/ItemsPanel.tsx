@@ -1,4 +1,5 @@
 import { Directory, type DirectoryRowData } from "./Directory";
+import { confirmDelete } from "./ConfirmDeleteDialog";
 import { DEFAULT_ICON_CROP, inventoryRowFromItem, type GameState } from "../lib/types";
 import type { useDmActions } from "../hooks/useGameRoom";
 
@@ -101,7 +102,18 @@ export function ItemsPanel({ state, dm, openItemSheet, dropItemAt }: ItemsPanelP
         }
       }}
       onRowClick={(itemId) => openItemSheet(itemId)}
-      onDeleteSelected={(ids) => ids.forEach((id) => dm.deleteItem(id))}
+      onDeleteSelected={(ids) => {
+        if (ids.length === 0) return;
+        const name =
+          ids.length === 1 ? state.items[ids[0]]?.name || "item" : `${ids.length} items`;
+        void confirmDelete({
+          kind: "item",
+          name,
+          detail: "Sheet inventories keep their copies. Undoable with the undo button.",
+        }).then((ok) => {
+          if (ok) ids.forEach((id) => dm.deleteItem(id));
+        });
+      }}
       renderRowActions={(itemId) => (
         <>
           <button
@@ -114,7 +126,15 @@ export function ItemsPanel({ state, dm, openItemSheet, dropItemAt }: ItemsPanelP
           <button
             className="btn-ghost icon-btn"
             title="Delete item (sheet inventories keep their copies)"
-            onClick={() => dm.deleteItem(itemId)}
+            onClick={() => {
+              void confirmDelete({
+                kind: "item",
+                name: state.items[itemId]?.name || "item",
+                detail: "Sheet inventories keep their copies. Undoable with the undo button.",
+              }).then((ok) => {
+                if (ok) dm.deleteItem(itemId);
+              });
+            }}
           >
             ✕
           </button>

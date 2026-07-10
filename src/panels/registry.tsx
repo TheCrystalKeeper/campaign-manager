@@ -23,6 +23,7 @@ import { SettingsPanel } from "../components/SettingsPanel";
 import type { WindowPos } from "../components/FloatingWindow";
 import type { DiceOverlayController } from "../dice/useDiceOverlay";
 import type { GameRoom, RollOptions, useDmActions } from "../hooks/useGameRoom";
+import type { History } from "../lib/history";
 import type { CharacterSheet, CheckSpec, GameState, Role, UiAccent } from "../lib/types";
 import { buildConditionsControl } from "../components/sheet/conditionsControl";
 
@@ -83,6 +84,11 @@ export type PanelContext = {
   /** Per-client accent variation (sky/moss/ember/lapis). */
   accent: UiAccent;
   setAccent: (accent: UiAccent) => void;
+  /** Per-client: ask "are you sure?" before deleting NPCs/items/players. */
+  confirmDeletes: boolean;
+  setConfirmDeletes: (on: boolean) => void;
+  /** DM client-side undo/redo (board edits + directory create/delete). */
+  history?: History;
   /** Clears saved window/tray positions and returns floating UI to defaults. */
   resetUiLayout: () => void;
   /** Leaves the campaign (back to the lobby). */

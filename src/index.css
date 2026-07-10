@@ -284,6 +284,16 @@ input[type="file"] {
 input[type="range"] {
   width: 100%;
 }
+/* Color wells: an inked swatch chip (native pickers collapse without a size). */
+input[type="color"] {
+  width: 2.4rem;
+  height: 1.7rem;
+  padding: 2px;
+  border: 2px solid var(--border);
+  border-radius: var(--r-wob-sm);
+  box-shadow: var(--shadow-ledge);
+  cursor: pointer;
+}
 textarea {
   resize: vertical;
   min-height: 3.25rem;
@@ -327,8 +337,19 @@ textarea,
   position: fixed;
   inset: 0;
   z-index: 0;
+  /* Instant fallback only — MapCanvas overrides inline with the scene's backdrop
+     color (DM-set, or auto-derived very dark from the map's average color). */
   background: var(--map-bg);
   cursor: grab;
+}
+/* Optional backdrop image behind the map: a PRE-blurred small bitmap stretched to
+   cover (the blur is baked in — no runtime CSS filter, so no per-frame GPU cost). */
+.map-backdrop {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  pointer-events: none;
 }
 .map-root:active {
   cursor: grabbing;
@@ -425,6 +446,36 @@ textarea,
   min-width: 0;
   font-size: 12px;
   padding: 3px 4px;
+}
+
+/* Board-backdrop preset swatches: a 3-up grid (never squeezes labels off the
+   buttons like the flex dice-quick row did), each with its color as a dot. */
+.backdrop-presets {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.25rem;
+}
+.backdrop-presets button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  min-width: 0;
+  padding: 0.28rem 0.3rem;
+  font-size: 0.76rem;
+}
+.backdrop-preset-dot {
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 50%;
+  border: 1.5px solid var(--border);
+  flex-shrink: 0;
+}
+.backdrop-preset-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Scene settings: map image upload — a clickable dropzone-style button. */
@@ -867,6 +918,18 @@ textarea,
   border-radius: var(--r-wob-lg);
   box-shadow: var(--shadow-pop);
   padding: 0.9rem;
+}
+
+/* Delete confirmation ("are you sure?") — the don't-ask row reads as one line. */
+.confirm-delete-dontask {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  user-select: none;
 }
 
 /* --- Image crop modal ----------------------------------------------------- */

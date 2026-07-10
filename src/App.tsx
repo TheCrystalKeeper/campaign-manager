@@ -4,6 +4,7 @@ import { MapCanvas } from "./components/MapCanvas";
 import { FloatingCluster } from "./components/FloatingCluster";
 import { FloatingWindow } from "./components/FloatingWindow";
 import { Dock, type DockAction } from "./components/Dock";
+import { ConfirmDeleteHost, CONFIRM_DELETES_KEY } from "./components/ConfirmDeleteDialog";
 import { DiceTray } from "./components/DiceTray";
 import { LogToasts } from "./components/LogToasts";
 import { TokenEditor } from "./components/TokenEditor";
@@ -138,6 +139,9 @@ export default function App() {
   const [hiResRender, setHiResRenderState] = useState(() => readLocalFlag(HI_RES_KEY, true));
   const [nightMode, setNightModeState] = useState(() => readLocalFlag(NIGHT_KEY, false));
   const [accent, setAccentState] = useState<UiAccent>(() => readStoredAccent());
+  const [confirmDeletes, setConfirmDeletesState] = useState(() =>
+    readLocalFlag(CONFIRM_DELETES_KEY, true),
+  );
   /** Bumped by "Reset UI layout" — remounts windows / repositions the tray. */
   const [layoutEpoch, setLayoutEpoch] = useState(0);
   const lastSceneRef = useRef<string | null>(null);
@@ -376,6 +380,10 @@ export default function App() {
     }
     setAccentState(next);
   }, []);
+  const setConfirmDeletes = useCallback((on: boolean) => {
+    writeLocalFlag(CONFIRM_DELETES_KEY, on);
+    setConfirmDeletesState(on);
+  }, []);
   // The theme lives on <html> so every token (day parchment / night stone,
   // accent family) flips everywhere at once — lobby, portaled modals, and
   // toasts included. A DM room override (state.uiOverride) beats device prefs
@@ -588,6 +596,9 @@ export default function App() {
     setNightMode,
     accent,
     setAccent,
+    confirmDeletes,
+    setConfirmDeletes,
+    history: isDm ? history : undefined,
     resetUiLayout,
     leave,
   };
@@ -659,6 +670,7 @@ export default function App() {
 
   return (
     <div className="app">
+      <ConfirmDeleteHost onDisableConfirms={() => setConfirmDeletesState(false)} />
       <MapCanvas
         state={state}
         sceneId={state.activeSceneId}

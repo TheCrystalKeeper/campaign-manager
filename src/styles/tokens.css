@@ -41,7 +41,7 @@
   --surface-wood: #8a6e52; /* frames, ribbons */
   --surface-wood-2: #66503a; /* deep wood, stepper plates */
   --surface-slate: #56688a; /* painted night-sky band (window headers) */
-  --map-bg: #ead9d3; /* the tabletop behind/around the scene image */
+  --map-bg: #1e1a15; /* tabletop fallback while the scene backdrop loads — always dark */
   --primary: #e2b458; /* gold — the one main action per view */
   --primary-strong: #c2913c;
   --primary-soft: #f1dfae;
@@ -121,7 +121,6 @@
 [data-accent="moss"] {
   /* Moss & Loam — forest library */
   --bg: #e6e7d6;
-  --map-bg: #dcdec8;
   --accent: #6f8a48;
   --accent-bright: #93ac66;
   --accent-soft: #dce3c2;
@@ -130,7 +129,6 @@
 [data-accent="ember"] {
   /* Ember & Wine — tavern hearth */
   --bg: #f0dcd0;
-  --map-bg: #e8cfc0;
   --accent: #b05f33;
   --accent-bright: #d08153;
   --accent-soft: #f2d9c4;
@@ -139,7 +137,6 @@
 [data-accent="lapis"] {
   /* Tide & Lapis — coastal ruins */
   --bg: #e3e5ec;
-  --map-bg: #d8dbe5;
   --accent: #4b69a6;
   --accent-bright: #6d8cc7;
   --accent-soft: #d3dcef;
@@ -208,7 +205,6 @@
    the bundle's variation cards are day-only.) */
 [data-theme="night"][data-accent="moss"] {
   --bg: #26282e;
-  --map-bg: #1f2126;
   --accent: #a3bc74;
   --accent-bright: #bcd293;
   --accent-soft: #3c452d;
@@ -217,7 +213,6 @@
 }
 [data-theme="night"][data-accent="ember"] {
   --bg: #26282e;
-  --map-bg: #1f2126;
   --accent: #d98f63;
   --accent-bright: #e7ac85;
   --accent-soft: #4e3327;
@@ -226,7 +221,6 @@
 }
 [data-theme="night"][data-accent="lapis"] {
   --bg: #26282e;
-  --map-bg: #1f2126;
   --accent: #8aa4d8;
   --accent-bright: #a8bee8;
   --accent-soft: #303c57;

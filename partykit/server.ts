@@ -2342,9 +2342,16 @@ export default class GameServer implements Party.Server {
           (slot) => slot.id !== parsed.slotId,
         );
         delete this.state.sheets[parsed.slotId];
-        this.state.tokens = this.state.tokens.map((token) =>
-          token.ownerPlayerId === parsed.slotId ? { ...token, ownerPlayerId: null } : token,
-        );
+        // The player is gone — their character tokens leave the board with them. NPC
+        // tokens they merely CONTROLLED (mind-control) stay, but revert to DM control.
+        this.state.tokens = this.state.tokens
+          .filter(
+            (token) =>
+              !(token.kind === "player" && (token.ownerPlayerId === parsed.slotId || token.sheetId === parsed.slotId)),
+          )
+          .map((token) =>
+            token.ownerPlayerId === parsed.slotId ? { ...token, ownerPlayerId: null } : token,
+          );
         void this.broadcastState();
         break;
       }

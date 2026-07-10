@@ -1,9 +1,9 @@
 import { useState } from "react";
-import { Image } from "lucide-react";
+import { Image, X } from "lucide-react";
 import type { Scene } from "../lib/types";
-import { SCENE_BACKGROUND_PRESETS } from "../lib/types";
+import { BOARD_BACKDROP_PRESETS } from "../lib/types";
 import { gridSizeForMapHeight } from "../lib/sceneUtils";
-import { uploadMapImage } from "../lib/uploadAsset";
+import { uploadLibraryImage, uploadMapImage } from "../lib/uploadAsset";
 
 type SceneSettingsProps = {
   scene: Scene;
@@ -38,6 +38,20 @@ export function SceneSettings({ scene, roomId, onPatch, onSetFog, onResetFog }: 
     }
   };
 
+  const [backdropBusy, setBackdropBusy] = useState(false);
+  const handleBackdropUpload = async (file: File) => {
+    setBackdropBusy(true);
+    setError(null);
+    try {
+      const { url } = await uploadLibraryImage(roomId, file);
+      onPatch({ boardBgImageUrl: url });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Backdrop upload failed.");
+    } finally {
+      setBackdropBusy(false);
+    }
+  };
+
   return (
     <>
       <div className="field">
@@ -67,7 +81,7 @@ export function SceneSettings({ scene, roomId, onPatch, onSetFog, onResetFog }: 
           }}
         />
       </label>
-      {error ? <span className="muted" style={{ color: "#ffb4ab" }}>{error}</span> : null}
+      {error ? <span className="muted" style={{ color: "var(--danger-text)" }}>{error}</span> : null}
 
       <div className="row" style={{ justifyContent: "space-between" }}>
         <label style={{ margin: 0 }}>Show grid</label>
@@ -188,20 +202,114 @@ export function SceneSettings({ scene, roomId, onPatch, onSetFog, onResetFog }: 
         {scene.lights.length} light{scene.lights.length === 1 ? "" : "s"}.
       </span>
 
-      <div className="field">
-        <label>Background</label>
-        <div className="dice-quick">
-          {SCENE_BACKGROUND_PRESETS.map((preset) => (
-            <button
-              key={preset.value}
-              className={scene.backgroundColor === preset.value ? "btn-active" : ""}
-              onClick={() => onPatch({ backgroundColor: preset.value })}
-            >
-              {preset.label}
-            </button>
-          ))}
+      <div className="section-title">Board backdrop</div>
+      <span className="muted" style={{ fontSize: "0.75rem" }}>
+        The tabletop around the map. Auto picks a very dark tone from the map's average
+        color; or set your own color, or an image (blurred, behind the map).
+      </span>
+      <div className="row" style={{ justifyContent: "space-between" }}>
+        <label style={{ margin: 0 }}>Backdrop color</label>
+        <div className="row" style={{ gap: "0.25rem" }}>
+          <button
+            className={scene.boardBgColor == null ? "btn-active" : ""}
+            title="Derive a very dark backdrop from the map image's average color"
+            onClick={() => onPatch({ boardBgColor: null })}
+          >
+            Auto
+          </button>
+          <button
+            className={scene.boardBgColor != null ? "btn-active" : ""}
+            title="Pick the backdrop color yourself"
+            onClick={() => {
+              if (scene.boardBgColor == null) {
+                onPatch({ boardBgColor: "#1e1a15" });
+              }
+            }}
+          >
+            Custom
+          </button>
         </div>
       </div>
+      {scene.boardBgColor != null ? (
+        <>
+          <div className="row" style={{ justifyContent: "space-between" }}>
+            <label style={{ margin: 0 }}>Pick a color</label>
+            <input
+              type="color"
+              value={scene.boardBgColor}
+              onChange={(e) => onPatch({ boardBgColor: e.target.value })}
+              title="Backdrop color"
+            />
+          </div>
+          <div className="backdrop-presets">
+            {BOARD_BACKDROP_PRESETS.map((preset) => (
+              <button
+                key={preset.value}
+                className={scene.boardBgColor === preset.value ? "btn-active" : ""}
+                title={preset.label}
+                onClick={() => onPatch({ boardBgColor: preset.value })}
+              >
+                <span className="backdrop-preset-dot" style={{ backgroundColor: preset.value }} />
+                <span className="backdrop-preset-label">{preset.label}</span>
+              </button>
+            ))}
+          </div>
+        </>
+      ) : null}
+      <div className="row">
+        <label
+          className={`map-upload${backdropBusy ? " map-upload--busy" : ""}`}
+          style={{ flex: 1 }}
+        >
+          {scene.boardBgImageUrl ? (
+            <img className="map-upload-thumb" src={scene.boardBgImageUrl} alt="" draggable={false} />
+          ) : (
+            <span className="map-upload-ico" aria-hidden>
+              <Image size={22} strokeWidth={2.2} />
+            </span>
+          )}
+          <span className="map-upload-text">
+            {backdropBusy
+              ? "Uploading…"
+              : scene.boardBgImageUrl
+                ? "Replace backdrop image"
+                : "Backdrop image (optional)"}
+            <small>Click to choose a file</small>
+          </span>
+          <input
+            type="file"
+            accept="image/*"
+            style={{ display: "none" }}
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) void handleBackdropUpload(file);
+            }}
+          />
+        </label>
+        {scene.boardBgImageUrl ? (
+          <button
+            className="btn-ghost icon-btn"
+            title="Remove backdrop image"
+            onClick={() => onPatch({ boardBgImageUrl: null })}
+          >
+            <X size={14} strokeWidth={2.2} />
+          </button>
+        ) : null}
+      </div>
+      {scene.boardBgImageUrl ? (
+        <div className="field">
+          <label>Backdrop blur ({scene.boardBgBlur ?? 12})</label>
+          <input
+            type="range"
+            min={0}
+            max={30}
+            step={1}
+            value={scene.boardBgBlur ?? 12}
+            title="Blur is pre-baked into a small bitmap — heavier blur costs nothing at runtime"
+            onChange={(e) => onPatch({ boardBgBlur: Number(e.target.value) })}
+          />
+        </div>
+      ) : null}
     </>
   );
 }

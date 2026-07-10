@@ -150,6 +150,12 @@ export function SettingsPanel({ ctx }: { ctx: PanelContext }) {
         onToggle={() => ctx.toggleSnap()}
       />
       <ToggleRow
+        label="Confirm deletions"
+        hint='Ask "are you sure?" before deleting NPCs, items, or players.'
+        on={ctx.confirmDeletes}
+        onToggle={ctx.setConfirmDeletes}
+      />
+      <ToggleRow
         label="Roll & chat toasts"
         hint="Pop-up notifications for new log entries while the Log panel is closed."
         on={ctx.toastsEnabled}

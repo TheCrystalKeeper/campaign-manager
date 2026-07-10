@@ -1,4 +1,5 @@
 import { Directory, type DirectoryRowData } from "./Directory";
+import { confirmDelete } from "./ConfirmDeleteDialog";
 import { startPointerDrag } from "../lib/pointerDrag";
 import { playerTokenColorForSlot, TOKEN_ENEMY_COLOR, type GameState } from "../lib/types";
 import type { useDmActions } from "../hooks/useGameRoom";
@@ -143,12 +144,22 @@ export function ActorsPanel({
       }
       onExternalDrop={dropOnBoard}
       onRowClick={(sheetId) => openSheet(sheetId)}
-      onDeleteSelected={(ids) =>
+      onDeleteSelected={(ids) => {
         // Only NPC sheets can be deleted; player sheets are tied to slots.
-        ids.forEach((id) => {
-          if (state.sheets[id]?.kind === "npc") dm.deleteSheet(id);
-        })
-      }
+        const npcIds = ids.filter((id) => state.sheets[id]?.kind === "npc");
+        if (npcIds.length === 0) return;
+        const name =
+          npcIds.length === 1
+            ? state.sheets[npcIds[0]]?.data.characterName || "NPC"
+            : `${npcIds.length} NPCs`;
+        void confirmDelete({
+          kind: "NPC",
+          name,
+          detail: "Board tokens lose their sheet link. Undoable with the undo button.",
+        }).then((ok) => {
+          if (ok) npcIds.forEach((id) => dm.deleteSheet(id));
+        });
+      }}
       renderRowActions={(sheetId) => {
         const record = state.sheets[sheetId];
         if (!record || record.kind !== "npc") {
@@ -166,7 +177,15 @@ export function ActorsPanel({
             <button
               className="btn-ghost icon-btn"
               title="Delete sheet (unlinks its tokens)"
-              onClick={() => dm.deleteSheet(sheetId)}
+              onClick={() => {
+                void confirmDelete({
+                  kind: "NPC",
+                  name: record.data.characterName || "NPC",
+                  detail: "Board tokens lose their sheet link. Undoable with the undo button.",
+                }).then((ok) => {
+                  if (ok) dm.deleteSheet(sheetId);
+                });
+              }}
             >
               ✕
             </button>

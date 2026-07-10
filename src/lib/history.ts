@@ -3,21 +3,29 @@ import type { ClientMessage, GameState } from "./types";
 import { sceneMessageSceneId } from "./sceneMessages";
 
 /// <summary>
-/// Client-side, DM-only undo/redo for map edits (annotations, fog, walls, lights) and
-/// tokens (add / move / update / delete). Each edit is recorded as a command/inverse pair
-/// built from existing messages — no server or protocol changes. Undo/redo replay the
-/// stored messages through the same `send` channel the edit used.
+/// Client-side, DM-only undo/redo for map edits (annotations, fog, walls, lights),
+/// tokens (add / move / update / delete), and directory entities (NPC sheets + items:
+/// create / duplicate / delete). Each edit is recorded as a command/inverse pair built
+/// from existing messages — no server or protocol changes. Undo/redo replay the stored
+/// messages through the same `send` channel the edit used. An inverse may be several
+/// messages (e.g. un-deleting an NPC = CREATE_SHEET + UPDATE_SHEET restoring its data).
 /// </summary>
 
 const MAX_HISTORY = 40;
 
 type HistoryEntry = {
   send: (msg: ClientMessage) => void;
-  /** Message that reverses the edit. */
-  undo: ClientMessage;
-  /** Message that re-applies it. */
-  redo: ClientMessage;
+  /** Message(s) that reverse the edit, sent in order. */
+  undo: ClientMessage | ClientMessage[];
+  /** Message(s) that re-apply it. */
+  redo: ClientMessage | ClientMessage[];
 };
+
+function sendAll(send: (msg: ClientMessage) => void, msgs: ClientMessage | ClientMessage[]) {
+  for (const msg of Array.isArray(msgs) ? msgs : [msgs]) {
+    send(msg);
+  }
+}
 
 /// <summary>
 /// Builds the inverse of a mutating message from the pre-edit state, or null when the
@@ -27,7 +35,7 @@ type HistoryEntry = {
 export function buildInverse(
   state: GameState,
   msg: ClientMessage,
-): { undo: ClientMessage; redo: ClientMessage } | null {
+): { undo: ClientMessage | ClientMessage[]; redo: ClientMessage | ClientMessage[] } | null {
   // Ephemeral annotations (pointer-arrow pings, fading strokes) auto-expire — keep them
   // out of the undo history so a "look here" ping isn't an undo step.
   if (msg.type === "ADD_ANNOTATION" && (msg.annotation.ephemeral || msg.annotation.kind === "arrow")) {
@@ -55,6 +63,50 @@ export function buildInverse(
     case "UPDATE_TOKEN": {
       const token = state.tokens.find((t) => t.id === msg.token.id);
       return token ? { undo: { type: "UPDATE_TOKEN", token }, redo: msg } : null;
+    }
+    // Directory entities (NPCs page / Items page). Ids are client-generated, so a
+    // deleted record can be recreated under its old id and re-filled. Continuous
+    // field edits (UPDATE_SHEET / UPDATE_ITEM) are deliberately NOT recorded —
+    // debounced typing would flood the stack with per-keystroke steps.
+    case "CREATE_SHEET":
+      return { undo: { type: "DELETE_SHEET", sheetId: msg.sheetId }, redo: msg };
+    case "DUPLICATE_SHEET":
+      return { undo: { type: "DELETE_SHEET", sheetId: msg.newSheetId }, redo: msg };
+    case "DELETE_SHEET": {
+      const record = state.sheets[msg.sheetId];
+      if (!record || record.kind !== "npc") {
+        return null; // PC sheets are tied to slots — not deletable/undoable here
+      }
+      const undo: ClientMessage[] = [
+        { type: "CREATE_SHEET", sheetId: msg.sheetId, name: record.data.characterName || "NPC" },
+        { type: "UPDATE_SHEET", sheetId: msg.sheetId, sheet: record.data },
+      ];
+      if (record.folderId) {
+        undo.push({ type: "SET_SHEET_FOLDER", sheetId: msg.sheetId, folderId: record.folderId, tree: "actor" });
+      }
+      if (record.npcFolderId) {
+        undo.push({ type: "SET_SHEET_FOLDER", sheetId: msg.sheetId, folderId: record.npcFolderId, tree: "npc" });
+      }
+      // Known limitation: board tokens that pointed at this sheet were unlinked by the
+      // delete and stay unlinked after the undo.
+      return { undo, redo: msg };
+    }
+    case "CREATE_ITEM":
+      return { undo: { type: "DELETE_ITEM", itemId: msg.itemId }, redo: msg };
+    case "DUPLICATE_ITEM":
+      return { undo: { type: "DELETE_ITEM", itemId: msg.newItemId }, redo: msg };
+    case "DELETE_ITEM": {
+      const item = state.items[msg.itemId];
+      if (!item) {
+        return null;
+      }
+      return {
+        undo: [
+          { type: "CREATE_ITEM", itemId: msg.itemId, name: item.name },
+          { type: "UPDATE_ITEM", item },
+        ],
+        redo: msg,
+      };
     }
     default:
       return null;
@@ -96,7 +148,7 @@ export function useHistory(): History {
     const entry = stack[stack.length - 1];
     undoRef.current = stack.slice(0, -1);
     redoRef.current = [...redoRef.current, entry];
-    entry.send(entry.undo);
+    sendAll(entry.send, entry.undo);
     bump();
   }, [bump]);
 
@@ -108,7 +160,7 @@ export function useHistory(): History {
     const entry = stack[stack.length - 1];
     redoRef.current = stack.slice(0, -1);
     undoRef.current = [...undoRef.current, entry];
-    entry.send(entry.redo);
+    sendAll(entry.send, entry.redo);
     bump();
   }, [bump]);
 

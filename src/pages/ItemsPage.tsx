@@ -31,7 +31,7 @@ export function ItemsPage({
   return (
     <div className="npcs-page">
       <div className="chip-tabs npcs-topbar">
-        <PageSwitcher active={activePage} onSelect={onNavigate} className="page-switcher--inline" />
+        <PageSwitcher active={activePage} onSelect={onNavigate} className="page-switcher--inline" history={ctx.history} />
       </div>
       <div className="npcs-page-body">
         <PageShell

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { confirmDelete } from "./ConfirmDeleteDialog";
 import type { GameState } from "../lib/types";
 import type { useDmActions } from "../hooks/useGameRoom";
 
@@ -52,7 +53,19 @@ export function PartyPanel({ state, dm, onViewSheet }: PartyPanelProps) {
             <button onClick={() => onViewSheet(slot.id)} title="View sheet">
               Sheet
             </button>
-            <button className="btn-danger" onClick={() => dm.removePlayerSlot(slot.id)} title="Remove">
+            <button
+              className="btn-danger"
+              title="Remove"
+              onClick={() => {
+                void confirmDelete({
+                  kind: "player",
+                  name: slot.name,
+                  detail: "This removes their slot, character sheet, and board tokens.",
+                }).then((ok) => {
+                  if (ok) dm.removePlayerSlot(slot.id);
+                });
+              }}
+            >
               ✕
             </button>
           </div>

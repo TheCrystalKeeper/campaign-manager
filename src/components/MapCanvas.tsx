@@ -59,6 +59,7 @@ import {
 } from "../lib/renderQuality";
 import type { MeasureEvent, TemplateEvent } from "../hooks/useGameRoom";
 import type { History } from "../lib/history";
+import { blurredBackdropUrl, deriveBoardColor, DEFAULT_BOARD_BG } from "../lib/boardBackdrop";
 import { clampMove, movementSegments } from "../lib/visibility";
 import { toolsForRole } from "../map/tools/registry";
 import { selectTool } from "../map/tools/select";
@@ -486,6 +487,7 @@ function TokenNode({
   onMove,
   onRotate,
   onDragActive,
+  onHover,
 }: {
   token: GameState["tokens"][number];
   /** Portrait to render on the token (resolved live from the linked sheet). */
@@ -513,6 +515,8 @@ function TokenNode({
   /** Fires true when a real move-drag starts, false when it ends — lets the board hide the
    *  duplicate above-darkness name label for this token while it's being dragged. */
   onDragActive?: (active: boolean) => void;
+  /** Mirrors the node's hover state up to the board (powers the X-to-delete hotkey). */
+  onHover?: (hovered: boolean) => void;
 }) {
   const img = useImage(imageUrl);
   // Render a crisp, size-appropriate copy so large uploads don't look soft in a small token.
@@ -648,8 +652,14 @@ function TokenNode({
         onSelect?.();
       }}
       onTap={onSelect}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+      onMouseEnter={() => {
+        setHovered(true);
+        onHover?.(true);
+      }}
+      onMouseLeave={() => {
+        setHovered(false);
+        onHover?.(false);
+      }}
       onDblClick={onOpenSheet}
       onDblTap={onOpenSheet}
       onDragStart={(e) => {
@@ -875,6 +885,45 @@ export function MapCanvas({
   const scene = state.scenes.find((item) => item.id === sceneId) ?? state.scenes[0];
   const mapImg = useImage(scene?.mapUrl ?? null);
   const sceneWalls = scene?.walls;
+
+  // Board backdrop: the DM's explicit color, else a very dark tone derived from
+  // the map image's average color (cached per URL — see boardBackdrop.ts).
+  const [derivedBoardColor, setDerivedBoardColor] = useState<string>(DEFAULT_BOARD_BG);
+  useEffect(() => {
+    if (scene?.boardBgColor) {
+      return; // explicit color wins — skip the sampling work entirely
+    }
+    let alive = true;
+    void deriveBoardColor(scene?.mapUrl ?? null).then((color) => {
+      if (alive) {
+        setDerivedBoardColor(color);
+      }
+    });
+    return () => {
+      alive = false;
+    };
+  }, [scene?.mapUrl, scene?.boardBgColor]);
+  const boardBgColor = scene?.boardBgColor || derivedBoardColor;
+
+  // Optional backdrop image, PRE-blurred into a small bitmap (progressive downscale)
+  // so the live page never runs a CSS filter — zero per-frame blur cost.
+  const [backdropUrl, setBackdropUrl] = useState<string | null>(null);
+  useEffect(() => {
+    const src = scene?.boardBgImageUrl ?? null;
+    if (!src) {
+      setBackdropUrl(null);
+      return;
+    }
+    let alive = true;
+    void blurredBackdropUrl(src, scene?.boardBgBlur ?? 12).then((url) => {
+      if (alive) {
+        setBackdropUrl(url);
+      }
+    });
+    return () => {
+      alive = false;
+    };
+  }, [scene?.boardBgImageUrl, scene?.boardBgBlur]);
   // The canvas pixel ratio (devicePixelRatio, or ≥2 with the hi-res setting) — reactive so
   // toggling hi-res re-sizes image caches and re-snaps text without a remount.
   const renderRatio = useSyncExternalStore(subscribeRenderPixelRatio, getRenderPixelRatio);
@@ -944,6 +993,8 @@ export function MapCanvas({
   const [editingWallId, setEditingWallId] = useState<string | null>(null);
   /** The wall currently under the cursor — lets X/Delete remove it without selecting first. */
   const [hoveredWallId, setHoveredWallId] = useState<string | null>(null);
+  /** Token under the cursor (DM only) — powers the X-to-delete-token hotkey. */
+  const [hoveredTokenId, setHoveredTokenId] = useState<string | null>(null);
 
   /**
    * Snap a world point for wall placement/editing: first to a nearby existing endpoint (so chains
@@ -1482,6 +1533,18 @@ export function MapCanvas({
         deleteHoveredOrSelectedWalls();
         return;
       }
+      // X / Delete over a token (DM): remove the TOKEN only — the linked character/item
+      // record survives in its directory. Undoable via Ctrl+Z / the toolbar buttons.
+      if (
+        isDm &&
+        hoveredTokenId &&
+        (event.key === "x" || event.key === "X" || event.key === "Delete" || event.key === "Backspace")
+      ) {
+        event.preventDefault();
+        send({ type: "REMOVE_TOKEN", tokenId: hoveredTokenId });
+        setHoveredTokenId(null);
+        return;
+      }
       // Rotate the selected token's facing: [ / ] nudge 15°, { / } (shift) 45°.
       if (
         selectedTokenId &&
@@ -1516,6 +1579,8 @@ export function MapCanvas({
     activeToolId,
     selectedWallIds,
     hoveredWallId,
+    hoveredTokenId,
+    send,
     onCloneWalls,
     deleteHoveredOrSelectedWalls,
   ]);
@@ -1866,11 +1931,14 @@ export function MapCanvas({
     <div
       className={`map-root${embedded ? " map-root--embedded" : ""}`}
       ref={rootRef}
-      style={rootCursor ? { cursor: rootCursor } : undefined}
+      style={{ backgroundColor: boardBgColor, ...(rootCursor ? { cursor: rootCursor } : {}) }}
       // Right-click is a game gesture here (delete wall/light, etc.) — never the browser's
       // save/copy/inspect menu.
       onContextMenu={(e) => e.preventDefault()}
     >
+      {backdropUrl ? (
+        <div className="map-backdrop" style={{ backgroundImage: `url("${backdropUrl}")` }} aria-hidden />
+      ) : null}
       <Stage
         ref={stageRef}
         width={stageW}
@@ -2063,6 +2131,14 @@ export function MapCanvas({
                 }}
                 onRotate={draggable ? (facing) => onMoveToken(token.id, token.x, token.y, facing) : undefined}
                 onDragActive={(active) => setTokenDragActive(token.id, active)}
+                onHover={
+                  isDm
+                    ? (hovered) =>
+                        setHoveredTokenId((current) =>
+                          hovered ? token.id : current === token.id ? null : current,
+                        )
+                    : undefined
+                }
               />
             );
           })}

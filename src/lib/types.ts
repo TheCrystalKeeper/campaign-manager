@@ -298,6 +298,15 @@ export type Scene = {
   darkness?: number;
   /** How colored-light tint composites over the scene (default "screen"). Phase 6.6b. */
   lightBlendMode?: LightBlendMode;
+  /**
+   * Board backdrop (Phase 8): the tabletop AROUND the map. null = auto, a very
+   * dark tone derived from the map image's average color.
+   */
+  boardBgColor?: string | null;
+  /** Optional backdrop image behind the map (rendered pre-blurred, viewport-filling). */
+  boardBgImageUrl?: string | null;
+  /** Backdrop image blur strength 0–30 (default 12). */
+  boardBgBlur?: number;
 };
 
 /** Token groups. "item" = a catalog object dropped on the board (Phase 6.7). */
@@ -1486,7 +1495,14 @@ export const DEFAULT_VIEWPORT: Viewport = { x: 0, y: 0, scale: 1 };
 
 export const DEFAULT_SCENE_BACKGROUND = "#0d0f14";
 
-export const SCENE_BACKGROUND_PRESETS = [
+/**
+ * Quick-pick swatches for the BOARD BACKDROP (the tabletop around the map).
+ * (Formerly SCENE_BACKGROUND_PRESETS for `scene.backgroundColor` — the color
+ * UNDER the map image, which opaque maps cover completely, so that UI row was
+ * dead in practice and was removed. The field itself remains: it still paints
+ * under transparent/missing maps.)
+ */
+export const BOARD_BACKDROP_PRESETS = [
   { label: "Dark", value: "#0d0f14" },
   { label: "Stone", value: "#1c1a18" },
   { label: "Parchment", value: "#2a2418" },
@@ -2610,6 +2626,10 @@ export function normalizeScene(scene: Partial<Scene> & Record<string, unknown>):
     lightBlendMode: LIGHT_BLEND_MODES.includes(scene.lightBlendMode as LightBlendMode)
       ? (scene.lightBlendMode as LightBlendMode)
       : "screen",
+    boardBgColor: typeof scene.boardBgColor === "string" ? scene.boardBgColor.slice(0, 32) : null,
+    boardBgImageUrl:
+      typeof scene.boardBgImageUrl === "string" ? scene.boardBgImageUrl.slice(0, 600) : null,
+    boardBgBlur: Math.min(Math.max(numberOr(scene.boardBgBlur, 12), 0), 30),
   };
 }
 

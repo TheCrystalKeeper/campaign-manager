@@ -11,7 +11,16 @@ overrides, trait/condition-aware rolls, real rests/casting/death saves — see i
 
 ## STATUS (2026-07-10) — read this first in a fresh session
 
-**Latest (2026-07-10): Phase 8 rounds 1+2 shipped — "Quill & Ember" aesthetic revamp.**
+**Latest (2026-07-10): Phase 8 rounds 1–3 shipped — "Quill & Ember" revamp + board
+backdrop + destructive-action safety.** Round 3: the board's tabletop is now a very dark
+color auto-derived from the map's average (DM-overridable per scene via an Auto|Custom
+picker with preset swatches, or a pre-blurred backdrop image with an efficient baked
+blur; the old dead "Background" preset row — invisible under opaque maps — was removed),
+X over a hovered token deletes the token only, removing a player also removes their
+tokens (server), a confirm-delete dialog with "don't ask again" guards NPC/item/player
+deletion (Settings toggle), and the Players/NPCs/Items pages grew undo/redo buttons
+backed by new directory-entity inverses in `history.ts`. Details in Phase 8's round-3
+note.
 The full parchment/ink visual identity arrived as a ready-made design system
 (claude.ai/design handoff bundle at `Blue Turtle UI V2-handoff/` — treat it as the design
 source of truth) and is applied app-wide. Round 1: `tokens.css` rewritten with day +
@@ -2418,6 +2427,56 @@ scoped placeholder).
 > restored device prefs; zero console errors. (`npm i` note: adding `lucide-react`
 > prunes the unlisted `playwright-core` the verify skill uses — reinstall with
 > `npm i --no-save playwright-core`.)
+>
+> **As built — round 3: board backdrop + destructive-action safety (2026-07-10):**
+>
+> - **Board backdrop rework** (user: the light-pink tabletop looked odd): `.map-root`
+> now defaults to a **very dark tone auto-derived from the map image's average color**
+> (`src/lib/boardBackdrop.ts` — whole image downsampled into a 4×4 canvas, average
+> darkened to ~near-black, cached per URL; cross-origin/no-map falls back to a dark
+> constant). New per-scene fields `boardBgColor` (null = auto) / `boardBgImageUrl` /
+> `boardBgBlur` (0–30, default 12) in `normalizeScene`; Scene settings grew a "Board
+> backdrop" section — a segmented **[Auto | Custom]** button pair (two visible
+> options, active one highlighted — clearer than one label-flipping toggle, user
+> feedback), and under Custom a color picker plus six quick-pick swatches
+> (`BOARD_BACKDROP_PRESETS`: Dark/Stone/Parchment/Forest/Ocean/Night) rendered as a
+> 3-up `.backdrop-presets` grid with color dots + ellipsizing labels (the first cut
+> reused the `.dice-quick` flex row and squeezed the text off the buttons, user
+> feedback); plus backdrop-image upload (library key) / remove / blur slider.
+> **Blur is pre-baked** — progressive canvas downscaling produces a small
+> bitmap that CSS stretches (`.map-backdrop`), so there is NO runtime `filter: blur()`
+> and zero per-frame GPU cost at any blur strength. `--map-bg` is now just a dark
+> loading fallback; the accent variations no longer retint it. The old "Background"
+> preset row was removed — it set `scene.backgroundColor`, the color UNDER the map,
+> which opaque map images cover completely (dead UI in practice; the user asked
+> "fix or remove?"); its six swatches are what became the backdrop quick-picks, and
+> the underlying field still paints under transparent/missing maps.
+> - **X-to-delete-token:** hovering a token and pressing X/Delete/Backspace (DM, board
+> hotkey path) removes the TOKEN only — never the linked sheet/item. Mirrors the
+> walls-tool hover-delete idiom; undoable (`REMOVE_TOKEN` inverse already existed).
+> - **Removing a player removes their tokens** (server `REMOVE_PLAYER_SLOT`): the
+> slot's character tokens are deleted with the slot+sheet; NPC tokens they merely
+> controlled revert to DM control instead.
+> - **Confirm-delete dialog** (`ConfirmDeleteDialog.tsx`): imperative
+> `confirmDelete({kind,name,detail})` service + one host in App — parchment modal,
+> terracotta Delete, **"Don't ask again" checkbox** backed by the `cm-confirm-deletes`
+> device flag, surfaced as Settings → "Confirm deletions" (default on). Wrapped call
+> sites: Actors panel (row ✕ + multi-select delete), Items panel (both), Players page
+> chip ✕, Party panel remove.
+> - **Undo/redo on prep pages:** `PageSwitcher` takes an optional `history` and appends
+> undo/redo buttons; Players/NPCs/Items pass `ctx.history` (added to `PanelContext`).
+> `buildInverse` extended to directory entities — NPC/item create/duplicate/delete
+> (delete restores via CREATE+UPDATE(+folder) under the same client-generated id;
+> `HistoryEntry.undo/redo` may now be a message LIST). Deliberately NOT recorded:
+> `UPDATE_SHEET`/`UPDATE_ITEM` (debounced typing would flood the 40-entry stack) and
+> player-slot ops (server-generated ids can't round-trip; the confirm dialog guards
+> those instead). Known limitation: undoing an NPC delete doesn't relink board tokens.
+> - **Verified:** build + unit suites green (`unit-history`, `unit-scene-editor`,
+> `unit-redaction`, `unit-sheets`); headless-Chrome E2E — backdrop computed
+> `rgb(12,10,8)` on the sample dungeon, token dropped then X-deleted (toasts confirm),
+> confirm dialog shown, confirmed delete → undo from the NPCs-page toolbar restored
+> the NPC; zero console errors. Also fixed en route: `input[type="color"]` swatches
+> had collapsed to a sliver since round 1.
 >
 > **Still open in Phase 8 (next rounds):** (a) **motion language** micro-animations (the
 > token sheet already carries the durations/easings + the bundle has keyframe specs);

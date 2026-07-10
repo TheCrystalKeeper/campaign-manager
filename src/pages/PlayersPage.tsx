@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { SheetCards } from "./SheetCards";
 import { PageSwitcher, type PageId } from "./PageSwitcher";
+import { confirmDelete } from "../components/ConfirmDeleteDialog";
 import type { PanelContext } from "../panels/registry";
 
 /// <summary>
@@ -48,7 +49,7 @@ export function PlayersPage({
   return (
     <div className="players-page">
       <div className="chip-tabs player-tabs">
-        <PageSwitcher active={activePage} onSelect={onNavigate} className="page-switcher--inline" />
+        <PageSwitcher active={activePage} onSelect={onNavigate} className="page-switcher--inline" history={ctx.history} />
         <span className="page-topbar-sep" aria-hidden />
         {state.playerSlots.map((slot) => (
           <div
@@ -111,8 +112,15 @@ export function PlayersPage({
               title="Remove slot"
               onClick={(e) => {
                 e.stopPropagation();
-                close(slot.id);
-                dm.removePlayerSlot(slot.id);
+                void confirmDelete({
+                  kind: "player",
+                  name: slot.name,
+                  detail: "This removes their slot, character sheet, and board tokens.",
+                }).then((ok) => {
+                  if (!ok) return;
+                  close(slot.id);
+                  dm.removePlayerSlot(slot.id);
+                });
               }}
             >
               ✕
