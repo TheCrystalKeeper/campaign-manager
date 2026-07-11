@@ -52,6 +52,7 @@ const SNAP_KEY = "cm-map-snap";
 const TOASTS_KEY = "cm-log-toasts";
 const SPACE_CLICK_KEY = "cm-space-click";
 const TOKEN_PANEL_KEY = "cm-token-panel-on-click";
+const LIVE_DRAGS_KEY = "cm-live-drags";
 const HI_RES_KEY = "cm-hi-res";
 const NIGHT_KEY = "cm-night-mode";
 const ACCENT_KEY = "cm-ui-accent";
@@ -153,6 +154,7 @@ export default function App() {
   const [toastsEnabled, setToastsEnabledState] = useState(() => readLocalFlag(TOASTS_KEY, true));
   const [spaceClick, setSpaceClickState] = useState(() => readLocalFlag(SPACE_CLICK_KEY, false));
   const [tokenPanelOnClick, setTokenPanelOnClickState] = useState(() => readLocalFlag(TOKEN_PANEL_KEY, true));
+  const [showLiveDrags, setShowLiveDragsState] = useState(() => readLocalFlag(LIVE_DRAGS_KEY, true));
   const [hiResRender, setHiResRenderState] = useState(() => readLocalFlag(HI_RES_KEY, true));
   const [nightMode, setNightModeState] = useState(() => readLocalFlag(NIGHT_KEY, false));
   const [accent, setAccentState] = useState<UiAccent>(() => readStoredAccent());
@@ -372,6 +374,14 @@ export default function App() {
     [roomId],
   );
 
+  const setShowLiveDrags = useCallback(
+    (on: boolean) => {
+      if (roomId) writeCampaignFlag(roomId, "live-drags", on);
+      setShowLiveDragsState(on);
+    },
+    [roomId],
+  );
+
   const setHiResRender = useCallback(
     (on: boolean) => {
       if (roomId) writeCampaignFlag(roomId, "hi-res", on);
@@ -453,6 +463,7 @@ export default function App() {
     setToastsEnabledState(readCampaignFlag(roomId, "toasts", true, TOASTS_KEY));
     setSpaceClickState(readCampaignFlag(roomId, "space-click", false, SPACE_CLICK_KEY));
     setTokenPanelOnClickState(readCampaignFlag(roomId, "token-panel", true, TOKEN_PANEL_KEY));
+    setShowLiveDragsState(readCampaignFlag(roomId, "live-drags", true, LIVE_DRAGS_KEY));
     setHiResRenderState(readCampaignFlag(roomId, "hi-res", true, HI_RES_KEY));
   }, [roomId]);
 
@@ -668,6 +679,8 @@ export default function App() {
     setSpaceClick,
     tokenPanelOnClick,
     setTokenPanelOnClick,
+    showLiveDrags,
+    setShowLiveDrags,
     hiResRender,
     setHiResRender,
     nightMode,
@@ -784,6 +797,8 @@ export default function App() {
         send={isDm ? historySend : room.send}
         subscribeMeasure={room.subscribeMeasure}
         subscribeTemplate={room.subscribeTemplate}
+        subscribeTokenDrag={room.subscribeTokenDrag}
+        showLiveDrags={showLiveDrags}
         snap={snap}
         onToggleSnap={toggleSnap}
         hotkeysEnabled={onBoard}

@@ -58,7 +58,7 @@ import {
   getRenderPixelRatio,
   subscribeRenderPixelRatio,
 } from "../lib/renderQuality";
-import type { MeasureEvent, TemplateEvent } from "../hooks/useGameRoom";
+import type { MeasureEvent, TemplateEvent, TokenDragEvent } from "../hooks/useGameRoom";
 import type { History } from "../lib/history";
 import { blurredBackdropUrl, deriveBoardColor, DEFAULT_BOARD_BG } from "../lib/boardBackdrop";
 import { clampMove, movementSegments } from "../lib/visibility";
@@ -67,6 +67,17 @@ import { selectTool } from "../map/tools/select";
 import { LIGHT_PRESETS, type LightPreset } from "../map/tools/lights";
 import { RulerShape } from "../map/tools/measure";
 import { TemplateShapeView } from "../map/tools/template";
+import {
+  applyLift,
+  applyStaticLift,
+  beginLift,
+  createLiftState,
+  liftSettled,
+  reducedMotionNow,
+  resetLift,
+  stepLift,
+  type TokenLiftState,
+} from "../map/tokenLift";
 import { commitPin, updatePin, movePin, PinMarker, PinNoteEditor, type PinDraft } from "../map/tools/pin";
 import type { CalibrateMode, ToolPointerEvent, ToolRuntime } from "../map/tools/types";
 import { MapToolbar } from "./MapToolbar";
@@ -88,6 +99,17 @@ import {
 
 /** The classic pointer-arrow palette (dark outline + cream fill), from the v1 system. */
 const ARROW_COLOR = "#f0e6d2";
+
+/** Live token-drag relay: sender throttle (~25Hz, matches the ruler relay). */
+const TOKEN_DRAG_RELAY_MS = 40;
+/** Receiver position-lerp rate (s^-1): ~95% caught up to the streamed position in ~165ms. */
+const REMOTE_SMOOTH = 18;
+/** Drop a remote-drag session whose frames stopped arriving (disconnect / dropped clear frame). */
+const REMOTE_STALE_MS = 2500;
+/** Reconcile fallback when the drag-end echo doesn't move the token (wall-rejected / same cell). */
+const REMOTE_SETTLE_FALLBACK_MS = 600;
+/** Stable empty set for the "no remote drags in flight" state (avoids needless re-renders). */
+const EMPTY_ID_SET: ReadonlySet<string> = new Set();
 
 /** A scene's effective darkness 0..1, migrating the legacy `globalIllumination` boolean. */
 function sceneDarkness(scene: { darkness?: number; globalIllumination: boolean }): number {
@@ -201,6 +223,10 @@ type MapCanvasProps = {
   subscribeMeasure: (listener: (event: MeasureEvent) => void) => () => void;
   /** Live area-template relay subscription (transient TEMPLATE messages). */
   subscribeTemplate: (listener: (event: TemplateEvent) => void) => () => void;
+  /** Live token-drag relay subscription (transient TOKEN_DRAG messages). */
+  subscribeTokenDrag: (listener: (event: TokenDragEvent) => void) => () => void;
+  /** Per-client: show other players' tokens sliding live while they drag (default on). */
+  showLiveDrags: boolean;
   /** Per-client snap-to-grid — owned by App (settings + the toolbar 🧲 share it). */
   snap: boolean;
   onToggleSnap: () => void;
@@ -471,6 +497,34 @@ function useGlowFade(target: number): number {
   return value;
 }
 
+/** Live Konva nodes a mounted TokenNode exposes to the board, so a remote drag can move the real
+ *  token imperatively (and drive its lift/wobble) without walking the stage. */
+type TokenNodeHandle = {
+  group: Konva.Group;
+  lift: Konva.Group;
+  shadow: Konva.Node | null;
+  radius: number;
+};
+
+/** An in-flight remote drag the receiver is mirroring onto a real token node. */
+type RemoteDrag = {
+  /** Latest streamed world position we're easing the node toward. */
+  targetX: number;
+  targetY: number;
+  /** Last frame timestamp (for the stale prune). */
+  at: number;
+  /** Lift/wobble springs, driven by the node's interpolated motion. */
+  lift: TokenLiftState;
+  /** Reduced-motion receiver: lerp position but skip the springs (still show a static shadow). */
+  reduced: boolean;
+  /** Clear frame seen — now reconciling with the authoritative STATE echo. */
+  ended: boolean;
+  endedAt: number;
+  /** token.x/y captured when the drag ended, to detect whether the echo actually moved it. */
+  baseX: number;
+  baseY: number;
+};
+
 const TokenNode = memo(function TokenNode({
   token,
   imageUrl,
@@ -488,6 +542,8 @@ const TokenNode = memo(function TokenNode({
   onMove,
   onRotate,
   onDragActive,
+  onDragFrame,
+  onNodeRef,
   onHover,
 }: {
   token: GameState["tokens"][number];
@@ -516,6 +572,10 @@ const TokenNode = memo(function TokenNode({
   /** Fires true when a real move-drag starts, false when it ends — lets the board hide the
    *  duplicate above-darkness name label for this token while it's being dragged. */
   onDragActive?: (token: GameState["tokens"][number], active: boolean) => void;
+  /** Streams the live drag position (world coords) to the board for relaying; null on drag end. */
+  onDragFrame?: (token: GameState["tokens"][number], pos: { x: number; y: number } | null) => void;
+  /** Registers/unregisters this token's live Konva nodes so remote drags can move it imperatively. */
+  onNodeRef?: (tokenId: string, handle: TokenNodeHandle | null) => void;
   /** Mirrors the node's hover state up to the board (powers the X-to-delete hotkey). */
   onHover?: (token: GameState["tokens"][number], hovered: boolean) => void;
 }) {
@@ -523,6 +583,16 @@ const TokenNode = memo(function TokenNode({
   // Render a crisp, size-appropriate copy so large uploads don't look soft in a small token.
   const crispImg = useCrispImage(img, radius);
   const groupRef = useRef<Konva.Group>(null);
+  // Pick-up/wobble/drop animation nodes: `liftRef` is an inner group holding every visual child
+  // (so scaling/tilting it never fights Konva's drag-managed x/y on the outer group), `shadowRef`
+  // is the ground shadow that separates beneath the token as it rises. Driven imperatively by an
+  // rAF loop — never React state — per PERFORMANCE_PLAN.md.
+  const liftRef = useRef<Konva.Group>(null);
+  const shadowRef = useRef<Konva.Circle>(null);
+  const liftStateRef = useRef<TokenLiftState | null>(null);
+  if (liftStateRef.current === null) liftStateRef.current = createLiftState();
+  const liftRafRef = useRef(0);
+  const liftPrevTsRef = useRef(0);
   const rotatingRef = useRef(false);
   const [dragFacing, setDragFacing] = useState<number | null>(null);
   const [hovered, setHovered] = useState(false);
@@ -632,6 +702,92 @@ const TokenNode = memo(function TokenNode({
     window.addEventListener("pointerup", onUp);
   };
 
+  // Imperatively drive the pick-up/wobble/drop springs on the inner group. One rAF loop runs from
+  // drag-start until the token has fully settled after release; an idle token schedules nothing.
+  const runLiftLoop = () => {
+    if (liftRafRef.current) return; // already running
+    liftPrevTsRef.current = 0;
+    const state = liftStateRef.current!;
+    const tick = (ts: number) => {
+      const group = groupRef.current;
+      const lift = liftRef.current;
+      if (!group || !lift) {
+        liftRafRef.current = 0;
+        return;
+      }
+      const prev = liftPrevTsRef.current || ts;
+      liftPrevTsRef.current = ts;
+      stepLift(state, (ts - prev) / 1000, group.x(), group.y());
+      applyLift(state, lift, shadowRef.current, radius);
+      lift.getLayer()?.batchDraw();
+      if (state.lifted || !liftSettled(state)) {
+        liftRafRef.current = requestAnimationFrame(tick);
+      } else {
+        resetLift(state, lift, shadowRef.current);
+        lift.getLayer()?.batchDraw();
+        liftRafRef.current = 0;
+      }
+    };
+    liftRafRef.current = requestAnimationFrame(tick);
+  };
+
+  /** Pointer-down on a real move-drag: lift the token off the table. */
+  const startLift = () => {
+    const group = groupRef.current;
+    const lift = liftRef.current;
+    if (!group || !lift) return;
+    const state = liftStateRef.current!;
+    if (reducedMotionNow()) {
+      // A still affordance, no motion: pop to a small lifted pose and stop.
+      if (liftRafRef.current) {
+        cancelAnimationFrame(liftRafRef.current);
+        liftRafRef.current = 0;
+      }
+      state.lifted = true;
+      applyStaticLift(lift, shadowRef.current, radius, true);
+      lift.getLayer()?.batchDraw();
+      return;
+    }
+    beginLift(state, group.x(), group.y());
+    runLiftLoop();
+  };
+
+  /** Drag released: drop the token back down (the loop eases it and stops itself once settled). */
+  const endLift = () => {
+    const state = liftStateRef.current!;
+    state.lifted = false;
+    const lift = liftRef.current;
+    if (reducedMotionNow()) {
+      if (liftRafRef.current) {
+        cancelAnimationFrame(liftRafRef.current);
+        liftRafRef.current = 0;
+      }
+      if (lift) {
+        applyStaticLift(lift, shadowRef.current, radius, false);
+        lift.getLayer()?.batchDraw();
+      }
+      return;
+    }
+    runLiftLoop(); // resume if the loop stalled; it now eases down and stops once settled
+  };
+
+  // Cancel any in-flight animation frame if the token unmounts mid-drag/settle.
+  useEffect(
+    () => () => {
+      if (liftRafRef.current) cancelAnimationFrame(liftRafRef.current);
+    },
+    [],
+  );
+
+  // Publish this token's live Konva nodes so a remote drag can move it imperatively (Feature B).
+  useEffect(() => {
+    const group = groupRef.current;
+    const lift = liftRef.current;
+    if (!group || !lift || !onNodeRef) return;
+    onNodeRef(token.id, { group, lift, shadow: shadowRef.current, radius });
+    return () => onNodeRef(token.id, null);
+  }, [token.id, radius, onNodeRef]);
+
   const dead = hp !== null && hp.max > 0 && hp.current <= 0;
   const showBar = hp !== null && hp.max > 0;
   const ratio = showBar ? Math.min(Math.max(hp.current / hp.max, 0), 1) : 0;
@@ -672,12 +828,37 @@ const TokenNode = memo(function TokenNode({
         // A real move begins: let the board suppress the duplicate above-darkness name label,
         // which is pinned to the (not-yet-updated) React position and would otherwise trail.
         onDragActive?.(token, true);
+        startLift();
+      }}
+      onDragMove={(e) => {
+        // Stream the live position so other clients can mirror the drag (board throttles it).
+        onDragFrame?.(token, { x: e.target.x(), y: e.target.y() });
       }}
       onDragEnd={(e) => {
         onDragActive?.(token, false);
+        onDragFrame?.(token, null); // clear frame: tells receivers to reconcile with the echo
         onMove(token, e.target.x(), e.target.y());
+        endLift();
       }}
     >
+      {/* Ground shadow: stays on the table (outside the lift group) and separates down-right from
+          the token as it rises. A radial-gradient fill, not Konva shadowBlur (which would re-blur
+          the whole token every frame). Hidden until a lift begins. */}
+      <Circle
+        ref={shadowRef}
+        visible={false}
+        listening={false}
+        radius={radius * 1.05}
+        fillRadialGradientStartPoint={{ x: 0, y: 0 }}
+        fillRadialGradientEndPoint={{ x: 0, y: 0 }}
+        fillRadialGradientStartRadius={0}
+        fillRadialGradientEndRadius={radius * 1.05}
+        fillRadialGradientColorStops={[0, "rgba(0,0,0,1)", 0.6, "rgba(0,0,0,0.55)", 1, "rgba(0,0,0,0)"]}
+      />
+      {/* Every visual child lives in this inner group so the lift/wobble transform (scale, tilt,
+          rise offset) applies to the whole miniature without touching the outer group's
+          Konva-drag-managed x/y. */}
+      <Group ref={liftRef} name="token-lift">
       {isCurrentTurn ? (
         <Circle radius={radius + 4} stroke={CURRENT_TURN_COLOR} strokeWidth={2.5} listening={false} />
       ) : null}
@@ -802,6 +983,7 @@ const TokenNode = memo(function TokenNode({
         </>
       ) : null}
       <TokenNameLabel token={token} radius={radius} showBar={showBar} showHpValues={showHpValues} />
+      </Group>
     </Group>
   );
 });
@@ -859,6 +1041,8 @@ export function MapCanvas({
   send,
   subscribeMeasure,
   subscribeTemplate,
+  subscribeTokenDrag,
+  showLiveDrags,
   snap,
   onToggleSnap,
   hotkeysEnabled = true,
@@ -1726,6 +1910,187 @@ export function MapCanvas({
     [],
   );
 
+  // ─── Live token-drag broadcasting (Feature B) ──────────────────────────────────────────────
+  // Refs that mirror the current props so the once-created relay callbacks below never go stale.
+  const stateRef = useRef(state);
+  stateRef.current = state;
+  const showLiveDragsRef = useRef(showLiveDrags);
+  showLiveDragsRef.current = showLiveDrags;
+
+  // Sender: stream the dragged position, throttled to ~25Hz (null = drag end, sent immediately).
+  // One pointer drags one token at a time, so a single throttle gate is enough.
+  const dragRelayRef = useRef(0);
+  const handleTokenDragFrame = useCallback(
+    (token: GameState["tokens"][number], pos: { x: number; y: number } | null) => {
+      if (pos === null) {
+        dragRelayRef.current = 0;
+        send({ type: "TOKEN_DRAG", tokenId: token.id, pos: null });
+        return;
+      }
+      const now = Date.now();
+      if (now - dragRelayRef.current < TOKEN_DRAG_RELAY_MS) return;
+      dragRelayRef.current = now;
+      send({ type: "TOKEN_DRAG", tokenId: token.id, pos });
+    },
+    [send],
+  );
+
+  // A live registry of each mounted token's Konva nodes, so a remote drag can move the real node
+  // imperatively (no stage walking, no duplicated "ghost" token).
+  const tokenNodesRef = useRef(new Map<string, TokenNodeHandle>());
+  const handleTokenNodeRef = useCallback((tokenId: string, handle: TokenNodeHandle | null) => {
+    if (handle) tokenNodesRef.current.set(tokenId, handle);
+    else tokenNodesRef.current.delete(tokenId);
+  }, []);
+
+  // Receiver: mirror other clients' streamed drags onto the real token node (position lerp + the
+  // same lift/wobble springs), reconciling with the authoritative STATE echo once the drag ends.
+  const remoteDragsRef = useRef(new Map<string, RemoteDrag>());
+  const remoteRafRef = useRef(0);
+  const [remoteDragIds, setRemoteDragIds] = useState<ReadonlySet<string>>(EMPTY_ID_SET);
+  const syncRemoteIds = useCallback(() => {
+    const sessions = remoteDragsRef.current;
+    setRemoteDragIds(sessions.size === 0 ? EMPTY_ID_SET : new Set(sessions.keys()));
+  }, []);
+
+  const runRemoteDragLoop = useCallback(() => {
+    if (remoteRafRef.current) return;
+    let prevTs = 0;
+    const tick = (ts: number) => {
+      const dt = prevTs ? (ts - prevTs) / 1000 : 0;
+      prevTs = ts;
+      const sessions = remoteDragsRef.current;
+      const now = Date.now();
+      let idsChanged = false;
+      let layer: Konva.Layer | null = null;
+      for (const [tokenId, entry] of sessions) {
+        const handle = tokenNodesRef.current.get(tokenId);
+        // Node unmounted (scene switch / token removed) or a local drag took over → drop it.
+        if (!handle || handle.group.isDragging()) {
+          sessions.delete(tokenId);
+          idsChanged = true;
+          continue;
+        }
+        const group = handle.group;
+        // No clear frame arrived (sender disconnected / dropped frames) → treat as ended.
+        if (!entry.ended && now - entry.at > REMOTE_STALE_MS) {
+          entry.ended = true;
+          entry.endedAt = now;
+          entry.lift.lifted = false;
+          const tok = stateRef.current.tokens.find((t) => t.id === tokenId);
+          entry.baseX = tok?.x ?? group.x();
+          entry.baseY = tok?.y ?? group.y();
+        }
+        if (!entry.ended) {
+          // Ease toward the streamed position (movement is real info — applies even under reduced
+          // motion). react-konva won't fight this: token.x/y hasn't changed (no echo mid-drag).
+          const k = 1 - Math.exp(-REMOTE_SMOOTH * dt);
+          group.x(group.x() + (entry.targetX - group.x()) * k);
+          group.y(group.y() + (entry.targetY - group.y()) * k);
+        }
+        if (entry.reduced) {
+          applyStaticLift(handle.lift, handle.shadow, handle.radius, !entry.ended);
+        } else {
+          stepLift(entry.lift, dt, group.x(), group.y());
+          applyLift(entry.lift, handle.lift, handle.shadow, handle.radius);
+        }
+        layer = handle.lift.getLayer();
+        if (entry.ended) {
+          const tok = stateRef.current.tokens.find((t) => t.id === tokenId);
+          const echoMoved = !!tok && (tok.x !== entry.baseX || tok.y !== entry.baseY);
+          const animDone = entry.reduced || liftSettled(entry.lift);
+          if (animDone && (echoMoved || now - entry.endedAt > REMOTE_SETTLE_FALLBACK_MS)) {
+            // A same-cell / wall-rejected echo doesn't change token.x/y, so react-konva's
+            // non-strict prop diff won't reset the node — snap it to authority ourselves.
+            if (tok) group.position({ x: tok.x, y: tok.y });
+            if (entry.reduced) applyStaticLift(handle.lift, handle.shadow, handle.radius, false);
+            else resetLift(entry.lift, handle.lift, handle.shadow);
+            sessions.delete(tokenId);
+            idsChanged = true;
+          }
+        }
+      }
+      layer?.batchDraw();
+      if (idsChanged) syncRemoteIds();
+      remoteRafRef.current = sessions.size > 0 ? requestAnimationFrame(tick) : 0;
+    };
+    remoteRafRef.current = requestAnimationFrame(tick);
+  }, [syncRemoteIds]);
+
+  useEffect(() => {
+    return subscribeTokenDrag((event) => {
+      if (!showLiveDragsRef.current) return; // this viewer opted out of live drags
+      const sessions = remoteDragsRef.current;
+      if (event.pos) {
+        let entry = sessions.get(event.tokenId);
+        if (!entry) {
+          entry = {
+            targetX: event.pos.x,
+            targetY: event.pos.y,
+            at: Date.now(),
+            lift: createLiftState(),
+            reduced: reducedMotionNow(),
+            ended: false,
+            endedAt: 0,
+            baseX: 0,
+            baseY: 0,
+          };
+          const handle = tokenNodesRef.current.get(event.tokenId);
+          if (handle) {
+            entry.lift.prevX = handle.group.x();
+            entry.lift.prevY = handle.group.y();
+          }
+          entry.lift.lifted = true;
+          sessions.set(event.tokenId, entry);
+          syncRemoteIds();
+        } else {
+          entry.targetX = event.pos.x;
+          entry.targetY = event.pos.y;
+          entry.at = Date.now();
+          entry.ended = false;
+          entry.lift.lifted = true;
+        }
+        runRemoteDragLoop();
+      } else {
+        const entry = sessions.get(event.tokenId);
+        if (entry && !entry.ended) {
+          entry.ended = true;
+          entry.endedAt = Date.now();
+          entry.lift.lifted = false;
+          const tok = stateRef.current.tokens.find((t) => t.id === event.tokenId);
+          const handle = tokenNodesRef.current.get(event.tokenId);
+          entry.baseX = tok?.x ?? handle?.group.x() ?? entry.targetX;
+          entry.baseY = tok?.y ?? handle?.group.y() ?? entry.targetY;
+          runRemoteDragLoop();
+        }
+      }
+    });
+  }, [subscribeTokenDrag, runRemoteDragLoop, syncRemoteIds]);
+
+  // Viewer disabled live drags mid-session: restore every mirrored node to its authoritative
+  // position and end the sessions (the loop stops itself once the map empties).
+  useEffect(() => {
+    if (showLiveDrags) return;
+    for (const [tokenId, entry] of remoteDragsRef.current) {
+      const handle = tokenNodesRef.current.get(tokenId);
+      const tok = stateRef.current.tokens.find((t) => t.id === tokenId);
+      if (handle) {
+        if (tok) handle.group.position({ x: tok.x, y: tok.y });
+        resetLift(entry.lift, handle.lift, handle.shadow);
+        handle.lift.getLayer()?.batchDraw();
+      }
+    }
+    remoteDragsRef.current.clear();
+    setRemoteDragIds(EMPTY_ID_SET);
+  }, [showLiveDrags]);
+
+  useEffect(
+    () => () => {
+      if (remoteRafRef.current) cancelAnimationFrame(remoteRafRef.current);
+    },
+    [],
+  );
+
   if (!scene) {
     return <div className={`map-root${embedded ? " map-root--embedded" : ""}`} ref={rootRef} />;
   }
@@ -2233,6 +2598,8 @@ export function MapCanvas({
                 onMove={handleTokenMove}
                 onRotate={draggable ? handleTokenRotate : undefined}
                 onDragActive={handleTokenDragActive}
+                onDragFrame={draggable ? handleTokenDragFrame : undefined}
+                onNodeRef={handleTokenNodeRef}
                 onHover={isDm ? handleTokenHover : undefined}
               />
             );
@@ -2296,9 +2663,10 @@ export function MapCanvas({
           <Layer listening={false}>
             {sceneTokens.map((token) => {
               if (!tokenLabelIds.has(token.id)) return null;
-              // Skip the bright copy for a token being dragged: the in-token label carries it
-              // live meanwhile, so the two never separate into a trailing duplicate.
-              if (token.id === draggingLabelId) return null;
+              // Skip the bright copy for a token being dragged — locally, or by a remote player we're
+              // mirroring: the in-token label carries it live meanwhile, so the two never separate
+              // into a trailing duplicate pinned to the not-yet-updated React position.
+              if (token.id === draggingLabelId || remoteDragIds.has(token.id)) return null;
               const linkedSheetId = token.sheetId ?? token.ownerPlayerId;
               const sheet = linkedSheetId ? state.sheets[linkedSheetId] : undefined;
               const sheetHp = sheet?.data.hp;

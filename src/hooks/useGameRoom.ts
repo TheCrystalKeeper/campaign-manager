@@ -61,6 +61,8 @@ export type DiceThrowEvent = Extract<ServerMessage, { type: "DICE_THROW" }>;
 export type MeasureEvent = Extract<ServerMessage, { type: "MEASURE" }>;
 /** Another client's live area template (transient relay). */
 export type TemplateEvent = Extract<ServerMessage, { type: "TEMPLATE" }>;
+/** Another client's live token drag (transient relay); null pos = drag ended. */
+export type TokenDragEvent = Extract<ServerMessage, { type: "TOKEN_DRAG" }>;
 
 export type GameRoom = {
   status: ConnectionStatus;
@@ -78,6 +80,8 @@ export type GameRoom = {
   subscribeMeasure: (listener: (event: MeasureEvent) => void) => () => void;
   /** Listen for other clients' live area templates; returns an unsubscribe function. */
   subscribeTemplate: (listener: (event: TemplateEvent) => void) => () => void;
+  /** Listen for other clients' live token drags; returns an unsubscribe function. */
+  subscribeTokenDrag: (listener: (event: TokenDragEvent) => void) => () => void;
   clearError: () => void;
 };
 
@@ -254,6 +258,7 @@ export function useGameRoom(roomId: string | null): GameRoom {
   const diceListenersRef = useRef<Set<(event: DiceThrowEvent) => void>>(new Set());
   const measureListenersRef = useRef<Set<(event: MeasureEvent) => void>>(new Set());
   const templateListenersRef = useRef<Set<(event: TemplateEvent) => void>>(new Set());
+  const tokenDragListenersRef = useRef<Set<(event: TokenDragEvent) => void>>(new Set());
 
   const send = useCallback((message: ClientMessage) => {
     const socket = socketRef.current;
@@ -356,6 +361,10 @@ export function useGameRoom(roomId: string | null): GameRoom {
         for (const listener of templateListenersRef.current) {
           listener(message);
         }
+      } else if (message.type === "TOKEN_DRAG") {
+        for (const listener of tokenDragListenersRef.current) {
+          listener(message);
+        }
       } else if (message.type === "CAMPAIGN_EXPORT") {
         // The DM's full-campaign backup → download it as a JSON file.
         try {
@@ -438,6 +447,13 @@ export function useGameRoom(roomId: string | null): GameRoom {
     };
   }, []);
 
+  const subscribeTokenDrag = useCallback((listener: (event: TokenDragEvent) => void) => {
+    tokenDragListenersRef.current.add(listener);
+    return () => {
+      tokenDragListenersRef.current.delete(listener);
+    };
+  }, []);
+
   return {
     status,
     error,
@@ -451,6 +467,7 @@ export function useGameRoom(roomId: string | null): GameRoom {
     subscribeDice,
     subscribeMeasure,
     subscribeTemplate,
+    subscribeTokenDrag,
     clearError,
   };
 }

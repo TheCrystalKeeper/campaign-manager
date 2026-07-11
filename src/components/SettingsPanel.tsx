@@ -201,6 +201,12 @@ export function SettingsPanel({ ctx }: { ctx: PanelContext }) {
         on={ctx.hiResRender}
         onToggle={ctx.setHiResRender}
       />
+      <ToggleRow
+        label="Show live token drags"
+        hint="See other players' tokens slide in real time while they drag them, with a little lift-and-wobble. Off = tokens simply appear at their destination when the drag ends. This device only."
+        on={ctx.showLiveDrags}
+        onToggle={ctx.setShowLiveDrags}
+      />
       <div className="row" style={{ justifyContent: "space-between" }}>
         <label style={{ margin: 0 }} title="Windows and the dice tray return to their default spots">
           UI layout

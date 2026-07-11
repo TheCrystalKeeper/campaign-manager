@@ -321,6 +321,8 @@ export function ScenesPage({
               send={historyEditorSend}
               subscribeMeasure={room.subscribeMeasure}
               subscribeTemplate={room.subscribeTemplate}
+              subscribeTokenDrag={room.subscribeTokenDrag}
+              showLiveDrags={false}
               snap={ctx.snap}
               onToggleSnap={ctx.toggleSnap}
               history={history}

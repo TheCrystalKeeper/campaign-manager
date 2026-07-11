@@ -61,6 +61,12 @@ export function createLiftState(): TokenLiftState {
   return { L: 0, Ldot: 0, theta: 0, thetaDot: 0, vx: 0, vy: 0, prevX: 0, prevY: 0, lifted: false };
 }
 
+/** One-shot read of the OS prefers-reduced-motion setting — checked at drag-start to decide whether
+ *  the springs run, without adding a media-query listener per token. */
+export function reducedMotionNow(): boolean {
+  return typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+}
+
 /** Begin a lift from the token's current world position (seeds velocity tracking so the first
  *  frame doesn't register a huge jump). */
 export function beginLift(s: TokenLiftState, x: number, y: number): void {

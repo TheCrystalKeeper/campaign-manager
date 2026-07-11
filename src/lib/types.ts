@@ -1441,6 +1441,8 @@ export type ClientMessage =
   | { type: "MEASURE"; sceneId: string; points: number[] | null }
   /** Live area template — transient relay like MEASURE, null = cleared. */
   | { type: "TEMPLATE"; sceneId: string; shape: TemplateShape | null }
+  /** Live token drag position (world coords) — transient relay like MEASURE, null = drag ended. */
+  | { type: "TOKEN_DRAG"; tokenId: string; pos: { x: number; y: number } | null }
   | { type: "ADD_ANNOTATION"; sceneId: string; annotation: Annotation }
   | { type: "REMOVE_ANNOTATION"; sceneId: string; annotationId: string }
   /** Edit an existing annotation in place (pins): note text and/or position. */
@@ -1506,6 +1508,13 @@ export type ServerMessage =
       color: string;
       sceneId: string;
       shape: TemplateShape | null;
+    }
+  /** Another client's live token drag (transient; null pos = dropped/cancelled). */
+  | {
+      type: "TOKEN_DRAG";
+      clientId: string;
+      tokenId: string;
+      pos: { x: number; y: number } | null;
     }
   | { type: "ERROR"; message: string }
   | { type: "JOINED"; role: Role; playerId: string }
