@@ -20,7 +20,7 @@ export async function handleImageUpload(
   request: Request,
   env: { UPLOADS: R2Bucket },
   options: {
-    folder: "portraits" | "tokens" | "maps";
+    folder: "portraits" | "tokens" | "maps" | "campaign-icons";
     buildKey: (body: UploadBody & Record<string, unknown>, ext: string) => string;
     buildUrl: (key: string) => string;
     extraFields?: (body: UploadBody & Record<string, unknown>) => Record<string, unknown>;
@@ -85,7 +85,7 @@ type ServeImageContext = {
 /// </summary>
 export async function serveStoredImageOrNext(
   context: ServeImageContext,
-  folder: "portraits" | "tokens" | "maps",
+  folder: "portraits" | "tokens" | "maps" | "campaign-icons",
   filename: string,
 ): Promise<Response> {
   if (!context.env.UPLOADS) {

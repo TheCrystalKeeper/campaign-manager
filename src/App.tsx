@@ -293,6 +293,24 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state?.activeSceneId, status]);
 
+  // Players mirror DM pan/zoom when a VIEWPORT delta arrives (server relay).
+  // Keyed on viewportRevision so full STATE updates do not yank a player's local pan.
+  useEffect(() => {
+    if (isDm || !state?.viewport || room.viewportRevision === 0) {
+      return;
+    }
+    setViewport(state.viewport);
+  }, [isDm, room.viewportRevision, state?.viewport]);
+
+  // On join, adopt the room's authoritative viewport so late joiners match the DM.
+  useEffect(() => {
+    if (isDm || status !== "joined" || !state?.viewport) {
+      return;
+    }
+    setViewport(state.viewport);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isDm, status]);
+
   // DM undo/redo shortcuts (board only; ignored while typing).
   const historyUndo = history.undo;
   const historyRedo = history.redo;

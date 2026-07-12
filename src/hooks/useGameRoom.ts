@@ -71,6 +71,11 @@ export type GameRoom = {
   yourClientId: string | null;
   yourRole: Role | null;
   yourPlayerId: string | null;
+  /**
+   * Bumps only when a hot-path VIEWPORT delta arrives (not on full STATE).
+   * Players use this to mirror the DM camera without fighting local pan on every state sync.
+   */
+  viewportRevision: number;
   send: (message: ClientMessage) => void;
   join: (params: JoinParams) => void;
   rollDice: (expression: string, options?: RollOptions) => void;
@@ -252,6 +257,7 @@ export function useGameRoom(roomId: string | null): GameRoom {
   const [yourClientId, setYourClientId] = useState<string | null>(null);
   const [yourRole, setYourRole] = useState<Role | null>(null);
   const [yourPlayerId, setYourPlayerId] = useState<string | null>(null);
+  const [viewportRevision, setViewportRevision] = useState(0);
   const socketRef = useRef<PartySocket | null>(null);
   const pendingJoinRef = useRef<JoinMessage | null>(null);
   const everJoinedRef = useRef(false);
@@ -317,6 +323,8 @@ export function useGameRoom(roomId: string | null): GameRoom {
     setStatus("connecting");
     setError(null);
     everJoinedRef.current = false;
+    // Drop any join meant for a previous room when switching campaigns.
+    pendingJoinRef.current = null;
 
     const socket = new PartySocket({
       host: getPartyKitHost(),
@@ -349,6 +357,7 @@ export function useGameRoom(roomId: string | null): GameRoom {
         setState((current) =>
           current ? { ...current, viewport: message.viewport } : current,
         );
+        setViewportRevision((current) => current + 1);
       } else if (message.type === "DICE_THROW") {
         for (const listener of diceListenersRef.current) {
           listener(message);
@@ -390,8 +399,10 @@ export function useGameRoom(roomId: string | null): GameRoom {
       } else if (message.type === "KICKED") {
         // Prevent PartySocket's auto-reconnect from silently rejoining after a kick.
         pendingJoinRef.current = null;
+        everJoinedRef.current = false;
         setError(message.message);
         setStatus("disconnected");
+        socket.close();
       } else if (message.type === "ERROR") {
         // Never downgrade the connection status: an in-game rules error
         // ("cannot remove that slot", …) must not eject a joined client.
@@ -461,6 +472,7 @@ export function useGameRoom(roomId: string | null): GameRoom {
     yourClientId,
     yourRole,
     yourPlayerId,
+    viewportRevision,
     send,
     join,
     rollDice,

@@ -65,8 +65,8 @@ jobs:
       - name: Build frontend
         run: npm run build
         env:
-          # PartyKit host without https:// — e.g. party.jaronerba.com
-          VITE_PARTYKIT_HOST: ${{ vars.VITE_PARTYKIT_HOST }}
+          # Must match `partykit deploy --domain` above (no https://).
+          VITE_PARTYKIT_HOST: party.jaronerba.com
 
       - name: Publish to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3

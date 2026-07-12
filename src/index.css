@@ -911,9 +911,13 @@ textarea,
   place-items: center;
   padding: 1rem;
   overflow: auto;
-  background-color: var(--bg);
-  background-image: var(--tex-grain);
-  background-size: 280px;
+  background-color: #0d0f14;
+  background-image:
+    linear-gradient(180deg, rgba(8, 10, 14, 0.55) 0%, rgba(8, 10, 14, 0.72) 100%),
+    url("/backgrounds/Dnd-background.jpg");
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
 }
 .lobby-card {
   width: min(880px, 100%);
