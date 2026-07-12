@@ -287,29 +287,13 @@ export default function App() {
     history.reset();
     const fitted = fitViewportToScene(scene, window.innerWidth, window.innerHeight);
     setViewport(fitted);
-    if (isDm) {
-      dm.updateViewport(fitted);
-    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state?.activeSceneId, status]);
 
-  // Players mirror DM pan/zoom when a VIEWPORT delta arrives (server relay).
-  // Keyed on viewportRevision so full STATE updates do not yank a player's local pan.
-  useEffect(() => {
-    if (isDm || !state?.viewport || room.viewportRevision === 0) {
-      return;
-    }
-    setViewport(state.viewport);
-  }, [isDm, room.viewportRevision, state?.viewport]);
-
-  // On join, adopt the room's authoritative viewport so late joiners match the DM.
-  useEffect(() => {
-    if (isDm || status !== "joined" || !state?.viewport) {
-      return;
-    }
-    setViewport(state.viewport);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isDm, status]);
+  // Each client owns its own camera: players never adopt the DM's (or any other client's)
+  // viewport. This is what keeps a token move — or the DM panning — from yanking a player's
+  // pan/zoom. Initial framing on join and on scene switch is handled by the scene-fit effect
+  // above, which fits the map to *this* client's own window.
 
   // DM undo/redo shortcuts (board only; ignored while typing).
   const historyUndo = history.undo;
@@ -501,31 +485,6 @@ export default function App() {
     });
   }, [roomId, dockOpen, dockTab, popped, trayOpen, page, settingsOpen]);
 
-  // Relay the DM's viewport to players as a lightweight VIEWPORT delta, trailing-throttled to
-  // ~30/s. A fast pan/zoom fires far more often, and each echo re-renders every player's board —
-  // unthrottled it floods them. The DM's own view tracks the Konva drag directly (no dependence
-  // on this relay), so local smoothness is unaffected; the trailing timer guarantees players
-  // still land on the final resting viewport. Declared here (before the early returns below) so
-  // its hooks always run — see the Rules of Hooks.
-  const latestViewportRef = useRef<Viewport | null>(null);
-  const viewportBroadcastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const scheduleViewportBroadcast = useCallback(
-    (next: Viewport) => {
-      latestViewportRef.current = next;
-      if (viewportBroadcastTimerRef.current != null) return;
-      viewportBroadcastTimerRef.current = setTimeout(() => {
-        viewportBroadcastTimerRef.current = null;
-        if (latestViewportRef.current) dm.updateViewport(latestViewportRef.current);
-      }, 33);
-    },
-    [dm],
-  );
-  useEffect(
-    () => () => {
-      if (viewportBroadcastTimerRef.current != null) clearTimeout(viewportBroadcastTimerRef.current);
-    },
-    [],
-  );
 
   // Keep the client-side upload optimizer in sync with the DM's synced setting, so every client
   // (DM and players) compresses new uploads the same way. Default on when state is absent.
@@ -666,9 +625,6 @@ export default function App() {
 
   const handleViewportChange = (next: Viewport) => {
     setViewport(next);
-    if (isDm) {
-      scheduleViewportBroadcast(next);
-    }
   };
 
   const panelContext: PanelContext = {
