@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Image, X } from "lucide-react";
 import type { Scene } from "../lib/types";
 import { BOARD_BACKDROP_PRESETS } from "../lib/types";
@@ -14,6 +14,65 @@ type SceneSettingsProps = {
   onSetFog: (patch: { enabled?: boolean; inverted?: boolean }) => void;
   onResetFog: () => void;
 };
+
+type NumberInputProps = {
+  value: number;
+  min?: number;
+  onCommit: (value: number) => void;
+};
+
+/// <summary>
+/// Number field that defers to blur / Enter before applying, so the value can be edited freely
+/// (cleared, retyped) without snapping mid-edit the way a live-controlled input does. On commit,
+/// empty / non-numeric input is REJECTED (the field reverts to the last good value); a valid number
+/// is clamped to `min` and committed. Escape cancels the edit; external changes to `value` sync in
+/// while the field isn't focused.
+/// </summary>
+function NumberInput({ value, min, onCommit }: NumberInputProps) {
+  const [text, setText] = useState(String(value));
+  const [editing, setEditing] = useState(false);
+  const cancelledRef = useRef(false);
+
+  useEffect(() => {
+    if (!editing) setText(String(value));
+  }, [value, editing]);
+
+  const commit = () => {
+    setEditing(false);
+    if (cancelledRef.current) {
+      cancelledRef.current = false;
+      setText(String(value)); // Escape — discard the edit
+      return;
+    }
+    const n = Number(text);
+    if (text.trim() === "" || !Number.isFinite(n)) {
+      setText(String(value)); // invalid — reject and restore the last good value
+      return;
+    }
+    const next = min != null ? Math.max(n, min) : n;
+    setText(String(next));
+    if (next !== value) onCommit(next);
+  };
+
+  return (
+    <input
+      type="number"
+      min={min}
+      value={text}
+      onFocus={() => setEditing(true)}
+      onChange={(e) => setText(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          e.currentTarget.blur();
+        } else if (e.key === "Escape") {
+          cancelledRef.current = true;
+          e.currentTarget.blur();
+        }
+      }}
+    />
+  );
+}
 
 /// <summary>
 /// Per-scene settings form (name, map image, grid calibration, fog, dynamic
@@ -101,39 +160,21 @@ export function SceneSettings({ scene, roomId, onPatch, onSetFog, onResetFog }: 
       <div className="row">
         <div className="field" style={{ flex: 1 }}>
           <label>Cell size</label>
-          <input
-            type="number"
-            min={10}
-            value={scene.gridSize}
-            onChange={(e) => onPatch({ gridSize: Math.max(Number(e.target.value) || 10, 10) })}
-          />
+          <NumberInput value={scene.gridSize} min={10} onCommit={(v) => onPatch({ gridSize: v })} />
         </div>
         <div className="field" style={{ flex: 1 }}>
           <label>Feet / square</label>
-          <input
-            type="number"
-            min={1}
-            value={scene.feetPerSquare}
-            onChange={(e) => onPatch({ feetPerSquare: Math.max(Number(e.target.value) || 5, 1) })}
-          />
+          <NumberInput value={scene.feetPerSquare} min={1} onCommit={(v) => onPatch({ feetPerSquare: v })} />
         </div>
       </div>
       <div className="row">
         <div className="field" style={{ flex: 1 }}>
           <label>Offset X</label>
-          <input
-            type="number"
-            value={scene.gridOffsetX}
-            onChange={(e) => onPatch({ gridOffsetX: Number(e.target.value) || 0 })}
-          />
+          <NumberInput value={scene.gridOffsetX} onCommit={(v) => onPatch({ gridOffsetX: v })} />
         </div>
         <div className="field" style={{ flex: 1 }}>
           <label>Offset Y</label>
-          <input
-            type="number"
-            value={scene.gridOffsetY}
-            onChange={(e) => onPatch({ gridOffsetY: Number(e.target.value) || 0 })}
-          />
+          <NumberInput value={scene.gridOffsetY} onCommit={(v) => onPatch({ gridOffsetY: v })} />
         </div>
       </div>
       <div className="row">

@@ -6,9 +6,11 @@ import type { MapTool } from "./types";
 /// <summary>
 /// Grid calibration gesture (DM). Two modes chosen in the tool's options popup:
 ///   • "adjust" (default) — direct manipulation via grid POINTS. Hover near any grid intersection
-///     and a handle circle pops up there; drag it to resize the grid — the cell's diagonally
-///     opposite corner stays pinned, so the grid scales in place. Drag anywhere ELSE (away from a
-///     point) to slide the whole grid. Move + resize in one seamless mode, no button switching.
+///     and a handle circle pops up there; drag it to resize the grid. The FIRST diagonal of the drag
+///     picks the pinned corner — the diagonal cell corner you drag TOWARD (drag a point up-right and
+///     the corner up-right of it pins); it then stays locked for the rest of the drag, so drag away to
+///     grow / back toward it to shrink without the anchor flipping. Drag anywhere ELSE (away from a
+///     point) to slide the whole grid. No button switching.
 ///   • "box" — drag a fresh box over exactly one map square to set the grid size + offset from
 ///     scratch. Handy for an initial calibration when the grid is way off.
 /// Both preview the whole grid live (MapCanvas) and commit one `UPDATE_SCENE` on release.
@@ -22,14 +24,17 @@ type MoveDraft = { mode: "move"; startX: number; startY: number; dx: number; dy:
 /** Adjust/hover: a handle popped up at grid intersection (x,y) — the "grab me to resize" affordance. */
 type HoverDraft = { mode: "hover"; x: number; y: number };
 /**
- * Adjust/resize: grabbed grid point (px,py) + the cell size at grab (g0); the pinned diagonal corner
- * (ox,oy), the drag-direction signs (sx,sy) and the live size are recomputed from the cursor.
+ * Adjust/resize: the grabbed grid point (px,py) + the cell size at grab (g0). Until `locked`, the
+ * anchor is undecided; on the first clear diagonal drag we pick the pinned corner (ox,oy) + the
+ * drag-direction signs (sx,sy) and LOCK them for the rest of the gesture — only `size` tracks the
+ * cursor after that.
  */
 type ResizeDraft = {
   mode: "resize";
   px: number;
   py: number;
   g0: number;
+  locked: boolean;
   ox: number;
   oy: number;
   sx: number;
@@ -42,6 +47,8 @@ type CalibrateDraft = BoxDraft | MoveDraft | HoverDraft | ResizeDraft;
 const MIN_CELL = 10;
 /** A press/hover within this many SCREEN px of a grid point grabs it to resize (else: move). */
 const HANDLE_HIT_PX = 16;
+/** Diagonal drag (SCREEN px) needed before the resize anchor is chosen + locked. */
+const DIR_LOCK_PX = 6;
 /** Handle-circle radius, in screen px (kept constant across zoom). */
 const HANDLE_PX = 7;
 
@@ -56,19 +63,32 @@ function nearestGridPoint(scene: Scene, wx: number, wy: number) {
   return { ix, iy, dist: Math.hypot(wx - ix, wy - iy), within };
 }
 
+/** Square cell size from the pinned corner (ox,oy) to the cursor — dominant axis, floored at MIN_CELL. */
+function sizeFrom(ox: number, oy: number, cx: number, cy: number) {
+  return Math.max(Math.round(Math.max(Math.abs(cx - ox), Math.abs(cy - oy))), MIN_CELL);
+}
+
 /**
- * Resize geometry for dragging grid point (px,py) toward the cursor: the pinned corner is the
- * diagonal grid point one original cell (g0) away, on the side OPPOSITE the drag — so pulling the
- * point outward grows the cell and there's no collapse at the start (the point begins a full cell
- * from its pivot). Size = the dominant-axis distance from that pivot to the cursor.
+ * Advance a resize drag toward cursor (cx,cy). The anchor is chosen ONCE — the first time the cursor
+ * has moved a clear diagonal (DIR_LOCK_PX) from the grabbed point (px,py) — as the grid point one
+ * original cell (g0) away in the SAME direction as the drag (the diagonal corner you're pulling
+ * toward), then LOCKED for the rest of the gesture. The old code recomputed the anchor every move, so
+ * it flipped across the point whenever the cursor crossed back and the cell could never shrink. Once
+ * locked, only `size` follows the cursor: drag away from the anchor to grow, back toward it to shrink.
  */
-function resizeGeom(px: number, py: number, g0: number, cx: number, cy: number) {
-  const sx = cx - px >= 0 ? 1 : -1;
-  const sy = cy - py >= 0 ? 1 : -1;
-  const ox = px - sx * g0;
-  const oy = py - sy * g0;
-  const size = Math.max(Math.round(Math.max(Math.abs(cx - ox), Math.abs(cy - oy))), MIN_CELL);
-  return { sx, sy, ox, oy, size };
+function resizeStep(draft: ResizeDraft, cx: number, cy: number, scale: number): ResizeDraft {
+  if (!draft.locked) {
+    const lockDist = DIR_LOCK_PX / Math.max(scale, 0.0001);
+    if (Math.hypot(cx - draft.px, cy - draft.py) < lockDist) {
+      return draft; // not enough movement yet to read a direction — hold at the original size
+    }
+    const sx = cx - draft.px >= 0 ? 1 : -1;
+    const sy = cy - draft.py >= 0 ? 1 : -1;
+    const ox = draft.px + sx * draft.g0;
+    const oy = draft.py + sy * draft.g0;
+    return { ...draft, locked: true, sx, sy, ox, oy, size: sizeFrom(ox, oy, cx, cy) };
+  }
+  return { ...draft, size: sizeFrom(draft.ox, draft.oy, cx, cy) };
 }
 
 /** A pop-up grab handle at a grid point (screen-constant radius). */
@@ -97,8 +117,10 @@ export const calibrateTool: MapTool = {
       const { ix, iy, dist, within } = nearestGridPoint(rt.scene, event.world.x, event.world.y);
       const thr = HANDLE_HIT_PX / Math.max(rt.viewportScale, 0.0001);
       if (within && dist <= thr) {
-        const geom = resizeGeom(ix, iy, g, event.world.x, event.world.y);
-        rt.setDraft({ mode: "resize", px: ix, py: iy, g0: g, ...geom } satisfies ResizeDraft);
+        // Grab the point; the anchor/direction is chosen on the first diagonal drag (see resizeStep)
+        // and then locked, so it can't flip back and forth mid-drag. Start held at the current size
+        // (ox,oy default to the grabbed grid point — neutral until a direction locks in).
+        rt.setDraft({ mode: "resize", px: ix, py: iy, g0: g, locked: false, sx: 1, sy: 1, ox: ix, oy: iy, size: g } satisfies ResizeDraft);
         return;
       }
     }
@@ -111,7 +133,7 @@ export const calibrateTool: MapTool = {
       return;
     }
     if (draft?.mode === "resize") {
-      rt.setDraft({ ...draft, ...resizeGeom(draft.px, draft.py, draft.g0, event.world.x, event.world.y) });
+      rt.setDraft(resizeStep(draft, event.world.x, event.world.y, rt.viewportScale));
       return;
     }
     if (draft?.mode === "box") {
@@ -148,15 +170,15 @@ export const calibrateTool: MapTool = {
   onUp: (event, rt) => {
     const draft = rt.draft as CalibrateDraft | null;
     if (draft?.mode === "resize") {
-      const { ox, oy, size } = resizeGeom(draft.px, draft.py, draft.g0, event.world.x, event.world.y);
+      const next = resizeStep(draft, event.world.x, event.world.y, rt.viewportScale);
       rt.setDraft(null);
-      if (size === rt.scene.gridSize) {
-        return; // a click on a point with no real drag — nothing to change
+      if (!next.locked || next.size === rt.scene.gridSize) {
+        return; // a click / no committed direction, or no size change — nothing to do
       }
       // Keep the pinned diagonal corner a grid corner so the grid stays where it was anchored.
       rt.send({
         type: "UPDATE_SCENE",
-        scene: { ...rt.scene, gridSize: size, gridOffsetX: mod(ox, size), gridOffsetY: mod(oy, size), showGrid: true },
+        scene: { ...rt.scene, gridSize: next.size, gridOffsetX: mod(next.ox, next.size), gridOffsetY: mod(next.oy, next.size), showGrid: true },
       });
       return;
     }
@@ -223,13 +245,18 @@ export const calibrateTool: MapTool = {
       // The whole grid previews sliding (MapCanvas) — no overlay needed.
       return null;
     }
-    // Resize: highlight the cell at the new size (pinned at the diagonal corner), mark the pivot,
-    // and show the dragged handle + a px readout. The full grid previews at the new size beneath.
+    // Resize. Before a direction locks in, just show the grabbed handle — no anchor chosen yet.
+    if (!d.locked) {
+      return <PointHandle x={d.px} y={d.py} scale={scale} />;
+    }
+    // Highlight the cell at the new size, pinned at the diagonal corner (ox,oy) the drag points toward,
+    // mark that pivot, and show the dragged corner + a px readout. The dragged corner sits on the side
+    // OPPOSITE the anchor; the full grid previews at the new size beneath.
     const s = Math.max(scale, 0.0001);
-    const cellX = d.sx > 0 ? d.ox : d.ox - d.size;
-    const cellY = d.sy > 0 ? d.oy : d.oy - d.size;
-    const dragX = d.ox + d.sx * d.size;
-    const dragY = d.oy + d.sy * d.size;
+    const cellX = d.sx > 0 ? d.ox - d.size : d.ox;
+    const cellY = d.sy > 0 ? d.oy - d.size : d.oy;
+    const dragX = d.ox - d.sx * d.size;
+    const dragY = d.oy - d.sy * d.size;
     return (
       <Group listening={false}>
         <Rect x={cellX} y={cellY} width={d.size} height={d.size} stroke="#e9c176" strokeWidth={2 / s} dash={[6 / s, 4 / s]} fill="rgba(233,193,118,0.15)" />
