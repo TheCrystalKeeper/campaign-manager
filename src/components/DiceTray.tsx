@@ -60,7 +60,10 @@ function loadPos(roomId: string): TrayPos {
     if (raw) {
       const parsed = JSON.parse(raw) as TrayPos;
       if (typeof parsed?.x === "number" && typeof parsed?.y === "number") {
-        return clampPos(parsed);
+        // Return the stored spot as-is; the mount effect re-clamps it with the tray's REAL
+        // measured size. Clamping here with EST_SIZE would nudge a bottom-anchored position
+        // (saved from the real size) up/sideways, so it wouldn't land where it was saved.
+        return parsed;
       }
     }
   } catch {
@@ -119,14 +122,18 @@ export function DiceTray({
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
-  // "Reset UI layout" (settings): back to the default bottom-center spot.
+  // "Reset UI layout" (settings): back to the default bottom-center spot. Persist it (like
+  // the drag and double-click resets) so a reload returns here — otherwise the last SAVED
+  // position (from an earlier drag) is restored instead of this reset.
   useEffect(() => {
     if (lastResetRef.current === resetSignal) {
       return;
     }
     lastResetRef.current = resetSignal;
-    setPos(clampPos(defaultPos(measure()), measure()));
-  }, [resetSignal]);
+    const next = clampPos(defaultPos(measure()), measure());
+    setPos(next);
+    savePos(roomId, next);
+  }, [resetSignal, roomId]);
 
   // Esc puts readied dice back.
   useEffect(() => {

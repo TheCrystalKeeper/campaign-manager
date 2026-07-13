@@ -145,10 +145,16 @@ export const PANELS: PanelDef[] = [
       }
       return record.data.characterName || (record.redacted ? "???" : "Character");
     },
-    defaultPos: (vw) => ({ x: Math.max(16, vw - 760), y: 60 }),
-    width: 560,
-    height: 620,
-    minWidth: 420,
+    // Centered horizontally, opening tall and biased above the vertical center (the sheet
+    // has a lot of content).
+    defaultPos: (vw, vh) => ({ x: Math.max(16, Math.round((vw - 800) / 2)), y: Math.max(16, Math.round((vh - 860) / 2 - 60)) }),
+    // Min width measured so the Main page shows TWO columns (container query flips at a
+    // .sheet7 inline-size of 680px ≈ a 690px window) AND every skill name fits on ONE line
+    // (the last skill stops wrapping at ~750px). 760 keeps a small safety margin; the
+    // default opens a touch wider so both columns breathe.
+    width: 800,
+    height: 860,
+    minWidth: 760,
     minHeight: 480,
     render: (ctx) => {
       const sheetId = resolveSheetId(ctx);
@@ -347,8 +353,14 @@ export const PANELS: PanelDef[] = [
     dockable: false,
     roles: ["dm", "player"],
     title: () => "Settings",
-    defaultPos: (vw, vh) => ({ x: Math.max(16, vw - 400), y: Math.max(60, vh - 480) }),
-    width: 320,
+    // Bigger by default and centered horizontally, biased slightly above the vertical
+    // center (the panel has a lot of rows, especially for the DM) — the width/height here
+    // must match the centering math.
+    defaultPos: (vw, vh) => ({ x: Math.max(16, Math.round((vw - 460) / 2)), y: Math.max(16, Math.round((vh - 640) / 2 - 70)) }),
+    width: 460,
+    height: 640,
+    minWidth: 360,
+    minHeight: 320,
     render: (ctx) => <SettingsPanel ctx={ctx} />,
   },
 ];
