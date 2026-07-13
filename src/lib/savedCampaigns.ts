@@ -61,6 +61,40 @@ export function generateRoomId(): string {
 }
 
 /// <summary>
+/// Turns a user-facing campaign name into a filename-safe slug: apostrophes are
+/// dropped so contractions stay tight ("Dragon's" → "Dragons"), every other run of
+/// spaces/punctuation/Windows-illegal characters collapses to a single hyphen, and
+/// the result is capped at `maxLen`. Returns "" when nothing usable survives (e.g. an
+/// emoji- or non-Latin-only name), letting callers fall back to the room id alone.
+/// </summary>
+export function slugifyCampaignName(name: string, maxLen = 40): string {
+  return name
+    .trim()
+    .replace(/['’"]/g, "")            // drop apostrophes/quotes so contractions stay tight
+    .replace(/[^a-zA-Z0-9]+/g, "-")   // spaces + illegal chars → a single hyphen
+    .replace(/^-+|-+$/g, "")           // no leading/trailing hyphens
+    .slice(0, maxLen)                  // cap length so the full path stays well under Windows' limit
+    .replace(/-+$/g, "");              // tidy a hyphen the length cap may have left dangling
+}
+
+/// <summary>
+/// Builds the download filename for a full-campaign export:
+/// `campaign-{roomId}-{slug(name)}-{YYYY-MM-DD}.json`. The name segment is omitted when
+/// it slugifies to nothing, matching the older room-id-only filename.
+/// </summary>
+export function campaignExportFilename(
+  roomId: string,
+  name: string | undefined | null,
+  date: Date = new Date(),
+): string {
+  const datePart = date.toISOString().slice(0, 10);
+  const slug = name ? slugifyCampaignName(name) : "";
+  return slug
+    ? `campaign-${roomId}-${slug}-${datePart}.json`
+    : `campaign-${roomId}-${datePart}.json`;
+}
+
+/// <summary>
 /// Adds or updates a campaign entry and moves it to the top of the list.
 /// </summary>
 export function upsertSavedCampaign(

@@ -20,6 +20,7 @@ import type {
 } from "../lib/types";
 import { normalizeGameState } from "../lib/types";
 import type { CampaignManifest } from "../lib/campaignManifest";
+import { campaignExportFilename, loadSavedCampaigns } from "../lib/savedCampaigns";
 
 /// <summary>
 /// Resolves the PartyKit host for dev (Vite proxy) or production (env var).
@@ -382,7 +383,11 @@ export function useGameRoom(roomId: string | null): GameRoom {
           const url = URL.createObjectURL(blob);
           const anchor = document.createElement("a");
           anchor.href = url;
-          anchor.download = `campaign-${message.manifest.state.roomId}-${new Date().toISOString().slice(0, 10)}.json`;
+          // Fold the human-readable campaign name (looked up locally by room id) into
+          // the filename; falls back to a room-id-only name if it isn't saved here.
+          const { roomId } = message.manifest.state;
+          const name = loadSavedCampaigns().find((c) => c.roomId === roomId)?.name;
+          anchor.download = campaignExportFilename(roomId, name);
           document.body.appendChild(anchor);
           anchor.click();
           anchor.remove();
