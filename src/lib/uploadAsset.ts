@@ -105,6 +105,22 @@ export async function uploadLibraryImage(roomId: string, file: File): Promise<{ 
   return uploadTokenImage(roomId, `asset-${crypto.randomUUID().slice(0, 8)}`, file);
 }
 
+/// <summary>
+/// Uploads a scene backdrop image (stored under the room's token prefix, like the
+/// library). Uses the MAP cap (2560), not the token cap: a backdrop fills the whole
+/// viewport, so a sharp/low-blur backdrop needs the extra resolution to stay crisp.
+/// </summary>
+export async function uploadBackdropImage(roomId: string, file: File): Promise<{ url: string }> {
+  const { dataUrl } = await readImageFromFile(file, uploadOpts(CAP_MAP));
+  const path = import.meta.env.DEV ? "/__dev/upload-token-image" : "/api/upload-token-image";
+  const payload = await postUpload(path, {
+    roomId,
+    tokenId: `asset-${crypto.randomUUID().slice(0, 8)}`,
+    dataUrl,
+  });
+  return { url: payload.url! };
+}
+
 export type AssetInfo = { key: string; url: string; kind: string; size: number; uploaded: string };
 
 /// <summary>

@@ -3,17 +3,14 @@
 /// - deriveBoardColor: a very dark tone based on the map image's average color —
 ///   computed by downsampling the whole image into a 4×4 canvas (16 pixels to
 ///   average, one drawImage: effectively free) and crushing the lightness.
-/// - blurredBackdropUrl: pre-blurs a backdrop image by progressive downscaling
-///   (each halving is a cheap box filter; CSS upscaling smooths the rest), so
-///   the live page renders a plain stretched image with NO runtime CSS filter —
-///   zero per-frame GPU blur cost, regardless of blur strength.
+/// (The backdrop IMAGE is blurred at render time with a real CSS/GPU filter on a
+/// static, screen-fixed layer — see MapCanvas — so no pre-blur pass is needed here.)
 /// Results are cached per input, so scene switches and re-renders are instant.
 /// </summary>
 
 export const DEFAULT_BOARD_BG = "#191712";
 
 const colorCache = new Map<string, Promise<string>>();
-const blurCache = new Map<string, Promise<string>>();
 
 function loadImage(url: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
@@ -61,66 +58,6 @@ export function deriveBoardColor(mapUrl: string | null): Promise<string> {
       })
       .catch(() => DEFAULT_BOARD_BG); // cross-origin taint / broken URL → dark default
     colorCache.set(mapUrl, cached);
-  }
-  return cached;
-}
-
-/**
- * Pre-blur a backdrop image. `blur` is 0–30 (≈ the Gaussian radius it emulates):
- * the image is progressively halved down to ~1/blur scale, then the browser's
- * bilinear upscale of the small bitmap does the smoothing. Returns a data URL
- * (or the original URL for blur 0 / on any failure).
- */
-export function blurredBackdropUrl(url: string, blur: number): Promise<string> {
-  const strength = Math.max(0, Math.min(30, Math.round(blur)));
-  if (strength <= 0) {
-    return Promise.resolve(url);
-  }
-  const key = `${url}|${strength}`;
-  let cached = blurCache.get(key);
-  if (!cached) {
-    cached = loadImage(url)
-      .then((img) => {
-        // Cap the working size so huge uploads cost the same as small ones.
-        const maxSide = Math.max(img.naturalWidth, img.naturalHeight, 1);
-        const startScale = Math.min(1, 1024 / maxSide);
-        let w = Math.max(2, Math.round(img.naturalWidth * startScale));
-        let h = Math.max(2, Math.round(img.naturalHeight * startScale));
-        let source: HTMLImageElement | HTMLCanvasElement = img;
-        const targetW = Math.max(16, Math.round(w / strength));
-        // Progressive halving (each step is a clean 2× box filter).
-        while (w / 2 >= targetW) {
-          w = Math.max(targetW, Math.round(w / 2));
-          h = Math.max(2, Math.round(h / 2));
-          const step = document.createElement("canvas");
-          step.width = w;
-          step.height = h;
-          const ctx = step.getContext("2d");
-          if (!ctx) {
-            return url;
-          }
-          ctx.imageSmoothingEnabled = true;
-          ctx.imageSmoothingQuality = "high";
-          ctx.drawImage(source, 0, 0, w, h);
-          source = step;
-        }
-        if (source === img) {
-          // No halving happened (tiny image / low blur): still normalize through
-          // one draw so the data URL below has a canvas to read.
-          const step = document.createElement("canvas");
-          step.width = w;
-          step.height = h;
-          const ctx = step.getContext("2d");
-          if (!ctx) {
-            return url;
-          }
-          ctx.drawImage(img, 0, 0, w, h);
-          source = step;
-        }
-        return (source as HTMLCanvasElement).toDataURL("image/jpeg", 0.75);
-      })
-      .catch(() => url); // taint/failure → show it unblurred rather than not at all
-    blurCache.set(key, cached);
   }
   return cached;
 }

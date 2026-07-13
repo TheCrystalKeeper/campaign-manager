@@ -6,17 +6,20 @@ import { listAssets, type AssetInfo } from "../lib/uploadAsset";
 /// "Choose from library" modal: a thumbnail grid of the room's already-uploaded
 /// images (R2), so a portrait / item icon / token can REUSE an existing asset
 /// instead of re-uploading a fresh copy. Click a thumbnail to pick it. Battlemaps
-/// are excluded (they aren't portraits). In local dev (no R2 bound) the list comes
-/// back unconfigured/empty with a note — same as the Assets page.
+/// are excluded by default (they aren't portraits) — pass `includeMaps` to offer
+/// them too (e.g. reusing a map as a scene backdrop). In local dev (no R2 bound) the
+/// list comes back unconfigured/empty with a note — same as the Assets page.
 /// </summary>
 export function AssetPickerModal({
   roomId,
   title = "Choose from library",
+  includeMaps = false,
   onPick,
   onClose,
 }: {
   roomId: string;
   title?: string;
+  includeMaps?: boolean;
   onPick: (url: string) => void;
   onClose: () => void;
 }) {
@@ -29,15 +32,15 @@ export function AssetPickerModal({
     setLoading(true);
     void listAssets(roomId).then((res) => {
       if (cancelled) return;
-      // Portraits + token art are reusable as images; full battlemaps are not.
-      setAssets(res.assets.filter((asset) => asset.kind !== "maps"));
+      // Portraits + token art are reusable as images; battlemaps only when includeMaps.
+      setAssets(res.assets.filter((asset) => includeMaps || asset.kind !== "maps"));
       setUnconfigured(res.unconfigured);
       setLoading(false);
     });
     return () => {
       cancelled = true;
     };
-  }, [roomId]);
+  }, [roomId, includeMaps]);
 
   // Esc closes — the modal is exclusive, so no topmost/typing guards needed.
   useEffect(() => {

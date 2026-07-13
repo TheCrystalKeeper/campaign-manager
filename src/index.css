@@ -410,8 +410,9 @@ textarea,
 .map-root .konvajs-content {
   touch-action: none;
 }
-/* Optional backdrop image behind the map: a PRE-blurred small bitmap stretched to
-   cover (the blur is baked in — no runtime CSS filter, so no per-frame GPU cost). */
+/* Optional backdrop image behind the map: the full-res image stretched to cover, with a
+   real GPU blur + slight scale applied inline (from the scene's blur setting). Static +
+   screen-fixed, so the blur rasterizes once — no per-frame cost while panning the map. */
 .map-backdrop {
   position: absolute;
   inset: 0;

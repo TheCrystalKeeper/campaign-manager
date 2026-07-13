@@ -3,7 +3,8 @@ import { Image, RotateCw, X } from "lucide-react";
 import type { Scene } from "../lib/types";
 import { BOARD_BACKDROP_PRESETS } from "../lib/types";
 import { gridSizeForMapHeight } from "../lib/sceneUtils";
-import { uploadLibraryImage, uploadMapImage } from "../lib/uploadAsset";
+import { uploadBackdropImage, uploadMapImage } from "../lib/uploadAsset";
+import { AssetPickerModal } from "./AssetPickerModal";
 
 type SceneSettingsProps = {
   scene: Scene;
@@ -145,11 +146,12 @@ export function SceneSettings({ scene, roomId, onPatch, onSetFog, onResetFog, on
   };
 
   const [backdropBusy, setBackdropBusy] = useState(false);
+  const [libOpen, setLibOpen] = useState(false);
   const handleBackdropUpload = async (file: File) => {
     setBackdropBusy(true);
     setError(null);
     try {
-      const { url } = await uploadLibraryImage(roomId, file);
+      const { url } = await uploadBackdropImage(roomId, file);
       onPatch({ boardBgImageUrl: url });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Backdrop upload failed.");
@@ -316,17 +318,18 @@ export function SceneSettings({ scene, roomId, onPatch, onSetFog, onResetFog, on
         <label style={{ margin: 0 }}>Backdrop color</label>
         <div className="row" style={{ gap: "0.25rem" }}>
           <button
-            className={scene.boardBgColor == null ? "btn-active" : ""}
-            title="Derive a very dark backdrop from the map image's average color"
-            onClick={() => onPatch({ boardBgColor: null })}
+            className={scene.boardBgColor == null && !scene.boardBgImageUrl ? "btn-active" : ""}
+            title="Derive a very dark backdrop from the map image's average color (clears any custom color or image)"
+            onClick={() => onPatch({ boardBgColor: null, boardBgImageUrl: null })}
           >
             Auto
           </button>
           <button
-            className={scene.boardBgColor != null ? "btn-active" : ""}
-            title="Pick the backdrop color yourself"
+            className={scene.boardBgColor != null || scene.boardBgImageUrl ? "btn-active" : ""}
+            title="Use your own backdrop color or image"
             onClick={() => {
-              if (scene.boardBgColor == null) {
+              // Only seed a color when fully auto; an image alone already counts as Custom.
+              if (scene.boardBgColor == null && !scene.boardBgImageUrl) {
                 onPatch({ boardBgColor: "#1e1a15" });
               }
             }}
@@ -391,6 +394,13 @@ export function SceneSettings({ scene, roomId, onPatch, onSetFog, onResetFog, on
             }}
           />
         </label>
+        <button
+          className="btn-ghost"
+          title="Reuse an already-uploaded image as the backdrop"
+          onClick={() => setLibOpen(true)}
+        >
+          Library
+        </button>
         {scene.boardBgImageUrl ? (
           <button
             className="btn-ghost icon-btn"
@@ -401,6 +411,15 @@ export function SceneSettings({ scene, roomId, onPatch, onSetFog, onResetFog, on
           </button>
         ) : null}
       </div>
+      {libOpen ? (
+        <AssetPickerModal
+          roomId={roomId}
+          title="Choose a backdrop"
+          includeMaps
+          onPick={(url) => onPatch({ boardBgImageUrl: url })}
+          onClose={() => setLibOpen(false)}
+        />
+      ) : null}
       {scene.boardBgImageUrl ? (
         <div className="field">
           <label>Backdrop blur ({scene.boardBgBlur ?? 12})</label>
@@ -410,7 +429,7 @@ export function SceneSettings({ scene, roomId, onPatch, onSetFog, onResetFog, on
             max={30}
             step={1}
             value={scene.boardBgBlur ?? 12}
-            title="Blur is pre-baked into a small bitmap — heavier blur costs nothing at runtime"
+            title="Blurs the backdrop image (GPU). The backdrop is a static layer, so heavier blur costs nothing while you pan/zoom."
             onChange={(e) => onPatch({ boardBgBlur: Number(e.target.value) })}
           />
         </div>

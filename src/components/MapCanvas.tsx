@@ -61,7 +61,7 @@ import {
 } from "../lib/renderQuality";
 import type { MeasureEvent, TemplateEvent, TokenDragEvent } from "../hooks/useGameRoom";
 import type { History } from "../lib/history";
-import { blurredBackdropUrl, deriveBoardColor, DEFAULT_BOARD_BG } from "../lib/boardBackdrop";
+import { deriveBoardColor, DEFAULT_BOARD_BG } from "../lib/boardBackdrop";
 import { clampMove, movementSegments } from "../lib/visibility";
 import { toolsForRole } from "../map/tools/registry";
 import { selectTool } from "../map/tools/select";
@@ -1152,25 +1152,14 @@ export function MapCanvas({
   }, [scene?.mapUrl, scene?.boardBgColor]);
   const boardBgColor = scene?.boardBgColor || derivedBoardColor;
 
-  // Optional backdrop image, PRE-blurred into a small bitmap (progressive downscale)
-  // so the live page never runs a CSS filter — zero per-frame blur cost.
-  const [backdropUrl, setBackdropUrl] = useState<string | null>(null);
-  useEffect(() => {
-    const src = scene?.boardBgImageUrl ?? null;
-    if (!src) {
-      setBackdropUrl(null);
-      return;
-    }
-    let alive = true;
-    void blurredBackdropUrl(src, scene?.boardBgBlur ?? 12).then((url) => {
-      if (alive) {
-        setBackdropUrl(url);
-      }
-    });
-    return () => {
-      alive = false;
-    };
-  }, [scene?.boardBgImageUrl, scene?.boardBgBlur]);
+  // Optional backdrop image, rendered at full resolution with a real GPU blur (CSS
+  // filter). The backdrop div is screen-fixed and static — it never carries the viewport
+  // transform — so the browser rasterizes the blur once and composites it; panning/zooming
+  // the map never re-blurs it. The div is scaled up so the blur's transparent edge-fade is
+  // pushed off-screen, leaving only fully-covered interior visible.
+  const backdropUrl = scene?.boardBgImageUrl ?? null;
+  const backdropBlurPx = (scene?.boardBgBlur ?? 12) * 2;
+  const backdropScale = 1 + Math.min(0.3, backdropBlurPx / 260);
   // The canvas pixel ratio (devicePixelRatio, or ≥2 with the hi-res setting) — reactive so
   // toggling hi-res re-sizes image caches and re-snaps text without a remount.
   const renderRatio = useSyncExternalStore(subscribeRenderPixelRatio, getRenderPixelRatio);
@@ -2525,7 +2514,15 @@ export function MapCanvas({
       onContextMenu={(e) => e.preventDefault()}
     >
       {backdropUrl ? (
-        <div className="map-backdrop" style={{ backgroundImage: `url("${backdropUrl}")` }} aria-hidden />
+        <div
+          className="map-backdrop"
+          style={{
+            backgroundImage: `url("${backdropUrl}")`,
+            filter: backdropBlurPx > 0 ? `blur(${backdropBlurPx}px)` : undefined,
+            transform: `scale(${backdropScale})`,
+          }}
+          aria-hidden
+        />
       ) : null}
       {/* Skeleton shimmer over the scene rect while the map image decodes (progressive load).
           Positioned in screen coords from the viewport; removed the instant the map is ready. */}

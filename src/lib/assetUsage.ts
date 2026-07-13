@@ -1,12 +1,16 @@
 import type { GameState } from "./types";
 
 /** One place a stored asset URL is referenced in the campaign. */
-export type AssetUsage = { kind: "token" | "sheet" | "scene" | "item"; id: string; label: string };
+export type AssetUsage = {
+  kind: "token" | "sheet" | "scene" | "backdrop" | "item";
+  id: string;
+  label: string;
+};
 
 /**
  * Finds everywhere a stored-asset URL is used across the campaign (Phase 7 Assets page):
- * token images, sheet portraits, scene maps, and item icons. Pure — the DM's "in use by N
- * places" delete warning scans this so an in-use image isn't dropped by accident.
+ * token images, sheet portraits, scene maps + backdrops, and item icons. Pure — the DM's
+ * "in use by N places" delete warning scans this so an in-use image isn't dropped by accident.
  */
 export function findAssetUsage(state: GameState, url: string): AssetUsage[] {
   const usage: AssetUsage[] = [];
@@ -30,6 +34,9 @@ export function findAssetUsage(state: GameState, url: string): AssetUsage[] {
     if (scene.mapUrl === url) {
       usage.push({ kind: "scene", id: scene.id, label: scene.name || "Scene" });
     }
+    if (scene.boardBgImageUrl === url) {
+      usage.push({ kind: "backdrop", id: scene.id, label: scene.name || "Scene" });
+    }
   }
   for (const item of Object.values(state.items)) {
     if (item.iconUrl === url) {
@@ -37,4 +44,16 @@ export function findAssetUsage(state: GameState, url: string): AssetUsage[] {
     }
   }
   return usage;
+}
+
+/**
+ * Which Assets-page section an image belongs in, usage-first: an unreferenced image goes
+ * to "unused" regardless of its folder; a map file OR any image used as a scene backdrop
+ * goes to "maps"; otherwise its stored folder kind (tokens/portraits). Pure, so the
+ * grouping is unit-testable independent of the R2 listing.
+ */
+export function assetSection(assetKind: string, usage: AssetUsage[]): string {
+  if (usage.length === 0) return "unused";
+  if (assetKind === "maps" || usage.some((u) => u.kind === "backdrop")) return "maps";
+  return assetKind;
 }

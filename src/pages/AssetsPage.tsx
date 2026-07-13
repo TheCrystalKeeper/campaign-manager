@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { RefreshCw, Trash2 } from "lucide-react";
 import { PageSwitcher, type PageId } from "./PageSwitcher";
 import {
@@ -7,15 +7,25 @@ import {
   uploadLibraryImage,
   type AssetInfo,
 } from "../lib/uploadAsset";
-import { findAssetUsage } from "../lib/assetUsage";
+import { assetSection, findAssetUsage, type AssetUsage } from "../lib/assetUsage";
+import type { Scene } from "../lib/types";
 import type { PanelContext } from "../panels/registry";
 
-const KIND_LABEL: Record<string, string> = { tokens: "Tokens", portraits: "Portraits", maps: "Maps" };
+// Section order shown on the page. "unused" collects every unreferenced image; "maps"
+// includes scene backdrops (which physically live in the token folder). See assetSection.
+const SECTIONS = ["maps", "tokens", "portraits", "unused"] as const;
+const KIND_LABEL: Record<string, string> = {
+  tokens: "Tokens",
+  portraits: "Portraits",
+  maps: "Maps",
+  unused: "Unused",
+};
 // How each usage reads in the delete warning (findAssetUsage kinds → a human word).
 const USAGE_LABEL: Record<string, string> = {
   token: "Token",
   sheet: "Portrait",
   scene: "Map",
+  backdrop: "Backdrop",
   item: "Item",
 };
 
@@ -105,8 +115,11 @@ export function AssetsPage({
       }
     }
     for (const scene of state.scenes) {
-      if (scene.mapUrl === asset.url) {
-        dm.updateScene({ ...scene, mapUrl: null });
+      const patch: Partial<Scene> = {};
+      if (scene.mapUrl === asset.url) patch.mapUrl = null;
+      if (scene.boardBgImageUrl === asset.url) patch.boardBgImageUrl = null;
+      if (Object.keys(patch).length > 0) {
+        dm.updateScene({ ...scene, ...patch });
       }
     }
     try {
@@ -117,7 +130,17 @@ export function AssetsPage({
     }
   };
 
-  const byKind = (kind: string) => assets.filter((a) => a.kind === kind);
+  // Usage per asset, computed once — reused for both the section grouping and the
+  // per-card "in use ×N / unused" badge.
+  const usageByUrl = useMemo(() => {
+    const map = new Map<string, AssetUsage[]>();
+    for (const asset of assets) {
+      if (!map.has(asset.url)) map.set(asset.url, findAssetUsage(state, asset.url));
+    }
+    return map;
+  }, [assets, state]);
+  const inSection = (kind: string) =>
+    assets.filter((a) => assetSection(a.kind, usageByUrl.get(a.url) ?? []) === kind);
 
   return (
     <div className="npcs-page">
@@ -154,15 +177,15 @@ export function AssetsPage({
           <p className="muted assets-hint">No uploaded images yet. Use ＋ Upload image.</p>
         ) : null}
 
-        {["tokens", "portraits", "maps"].map((kind) => {
-          const list = byKind(kind);
+        {SECTIONS.map((kind) => {
+          const list = inSection(kind);
           if (list.length === 0) return null;
           return (
             <section key={kind} className="assets-group">
               <h3 className="assets-group-title">{KIND_LABEL[kind] ?? kind}</h3>
               <div className="assets-grid">
                 {list.map((asset) => {
-                  const usage = findAssetUsage(state, asset.url);
+                  const usage = usageByUrl.get(asset.url) ?? [];
                   return (
                     <div className="asset-card" key={asset.key}>
                       <div className="asset-thumb">
