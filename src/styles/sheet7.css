@@ -85,12 +85,37 @@
   gap: 12px;
   z-index: 3;
 }
-/* Inline (prep-page column) rail: layer it UNDER the opaque `.sheet7-panel` so the
-   active button's extra "tab" width hides behind the sheet — same docked look as the
-   window case, where `.window-siderail` owns this. The buttons themselves live in the
-   44px gutter the panel reserves, so they stay fully visible and clickable. */
+/* Inline (prep-page column) rail. There's no window to hang off of here, so the
+   "tab that sticks out over the tabletop" look (see the window case below) falls flat —
+   the card clips it. Instead give it its OWN distinct full-height lane docked to the right
+   edge (mirroring the left vitals sidebar: inset background + divider border), with plain
+   square buttons and an accent-outlined active one — clearly a separate control strip. */
 .sheet7 > .sheet7-rail {
-  z-index: 0;
+  z-index: 3;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 44px;
+  align-items: center;
+  justify-content: flex-start;
+  padding-top: 14px;
+  gap: 8px;
+  background: var(--surface-inset);
+  border-left: 1px solid var(--border-subtle);
+}
+.sheet7 > .sheet7-rail .sheet-rail-btn:hover {
+  transform: none;
+}
+.sheet7 > .sheet7-rail .sheet-rail-btn--active {
+  width: 34px;
+  padding-right: 0;
+  justify-items: center;
+  border-radius: var(--radius);
+  border-color: var(--accent);
+  color: var(--accent);
+  /* Soft accent-tinted fill (not just the glyph) so selection reads at a glance. */
+  background: var(--accent-soft);
+  box-shadow: var(--elev-1);
 }
 /* Portaled into the window's side rail: let `.window-siderail` own the positioning. */
 .window-siderail .sheet7-rail {

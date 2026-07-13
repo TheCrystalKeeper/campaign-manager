@@ -6,11 +6,13 @@ import type { PanelContext } from "../panels/registry";
 import type { SheetRecord } from "../lib/types";
 
 /* One width shared by every sheet column on the Players AND NPCs pages,
-   persisted per campaign. Bounds/default match the floating sheet window. */
+   persisted per campaign. Bounds/default match the floating sheet window: min 760 keeps
+   the Main page at two columns with single-line skills; default opens a touch wider. An
+   old narrower saved width auto-clamps up to the new minimum. */
 const widthKey = (roomId: string) => campaignKey(roomId, "sheet-col-w");
-const MIN_W = 420;
+const MIN_W = 760;
 const MAX_W = 1200;
-const DEFAULT_W = 560;
+const DEFAULT_W = 800;
 
 function loadWidth(roomId: string): number {
   try {

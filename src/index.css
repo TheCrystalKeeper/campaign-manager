@@ -2990,7 +2990,9 @@ body.pointer-dragging * {
 .sheet-cards {
   display: flex;
   gap: 0.75rem;
-  align-items: flex-start;
+  /* Stretch each column to the full height so a short sheet's card still reaches the
+     bottom of the window (with its body filling), rather than stopping at its content. */
+  align-items: stretch;
   height: 100%;
   overflow-x: auto;
   overflow-y: hidden;
@@ -3024,7 +3026,13 @@ body.pointer-dragging * {
   background: var(--surface-inset);
   flex-shrink: 0;
 }
+/* This header is a LIGHT inset band (unlike the dark --surface-slate window/dock headers),
+   so the shared cream .window-title would wash out — use dark ink here. */
+.sheet-col-head .window-title {
+  color: var(--text);
+}
 .sheet-col-body {
+  flex: 1;
   min-height: 0;
   overflow-y: auto;
 }
