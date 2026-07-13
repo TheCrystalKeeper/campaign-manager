@@ -18,9 +18,13 @@
   line-height: 1.4;
   color: var(--text);
 
-  /* Docked sidebar geometry (shared by the dock and the toast offset). */
+  /* Docked sidebar geometry (shared by the dock and the toast offset). The gap
+     is the floating panel's inset from the window edges / rail; because the open
+     panel carries a left+right margin, the dock's open footprint is
+     rail + panel + 2*gap (see the --dock-open offsets below). */
   --dock-rail-w: 3.25rem;
   --dock-panel-w: 320px;
+  --dock-gap: 12px;
 
   /* The standard parchment fill: speckle + grain over the panel color.
      (Custom props can't carry background shorthand pairs, so classes set
@@ -475,7 +479,7 @@ textarea,
   transition: right 0.18s ease;
 }
 .map-light-config--dock-open {
-  right: calc(var(--dock-rail-w) + var(--dock-panel-w) + 12px);
+  right: calc(var(--dock-rail-w) + var(--dock-panel-w) + 2 * var(--dock-gap) + 12px);
 }
 /* Parchment backing so the panel's text stays legible over busy map art.
    No overflow clip (it would shave the edge notches); the slate header rounds
@@ -1994,8 +1998,11 @@ button.mod.roll-btn {
 }
 
 /* --- Docked sidebar (FoundryVTT-style) --------------------------------------
-   A vertical icon rail hugs the right window edge; the active panel expands
-   to its right (against the edge). The rail never disappears. */
+   A vertical icon rail sits to the LEFT of the active panel. The panel hugs the
+   right side but floats as a big rounded card — inset from the top, bottom, and
+   right edges so it reads like the pop-out windows instead of a full-height
+   slab, while still filling most of the window height. The rail never
+   disappears. */
 .dock {
   position: fixed;
   top: 0;
@@ -2005,6 +2012,7 @@ button.mod.roll-btn {
   pointer-events: none;
   display: flex;
   flex-direction: row;
+  align-items: stretch;
 }
 .dock-rail {
   display: flex;
@@ -2057,27 +2065,36 @@ button.mod.roll-btn {
   flex-shrink: 0;
 }
 .dock-panel {
+  /* Float as a big rounded card: stretch to fill the height, then pull in by a
+     uniform gap on every side (top/bottom/right from the window edges, left from
+     the rail) so it reads like the pop-out windows rather than a full-height
+     slab — while still filling most of the window height. */
   width: var(--dock-panel-w);
+  margin: var(--dock-gap);
+  display: flex;
+  flex-direction: column;
   min-height: 0;
   overflow: hidden;
   pointer-events: auto;
   background-color: var(--surface-solid);
   background-image: var(--paper-layers);
   background-size: var(--paper-sizes);
-  border-left: 2px solid var(--border);
-  box-shadow: var(--shadow-panel);
+  border: 2px solid var(--border);
+  border-radius: var(--r-wob-md);
+  box-shadow: var(--shadow-pop);
   transition: width 0.18s ease, opacity 0.18s ease;
 }
 .dock-panel--closed {
   width: 0;
+  margin: 0;
   opacity: 0;
   pointer-events: none;
-  border-left-color: transparent;
+  border-color: transparent;
   box-shadow: none;
 }
 .dock-panel-inner {
   width: var(--dock-panel-w);
-  height: 100%;
+  flex: 1 1 auto;
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -2128,7 +2145,7 @@ button.mod.roll-btn {
   transition: right 0.18s ease, bottom 0.15s ease;
 }
 .log-toasts--dock-open {
-  right: calc(var(--dock-rail-w) + var(--dock-panel-w));
+  right: calc(var(--dock-rail-w) + var(--dock-panel-w) + 2 * var(--dock-gap));
 }
 .log-toast {
   background-color: var(--surface-solid);
@@ -2479,7 +2496,7 @@ body.pointer-dragging * {
   transition: left 0.18s ease;
 }
 .avatar-strip--dock-open {
-  left: calc((100vw - var(--dock-rail-w) - var(--dock-panel-w)) / 2);
+  left: calc((100vw - var(--dock-rail-w) - var(--dock-panel-w) - 2 * var(--dock-gap)) / 2);
 }
 .npc-chip .chip-portrait {
   border-color: var(--danger);
