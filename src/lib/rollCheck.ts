@@ -414,3 +414,15 @@ export function partsFromExpression(rolls: number[], modifier: number, expressio
   }
   return parts;
 }
+
+/**
+ * Builds parts for a physical (3D) throw, labeling each die individually — a mixed pool
+ * like 2d6 + 1d8 must not label every chip with the expression's first die size.
+ */
+export function partsFromDice(rolls: number[], labels: string[], modifier: number): RollPart[] {
+  const parts: RollPart[] = rolls.map((v, i) => ({ kind: "die", value: v, label: labels[i] ?? "die" }));
+  if (modifier !== 0) {
+    parts.push({ kind: "flat", value: modifier });
+  }
+  return parts;
+}

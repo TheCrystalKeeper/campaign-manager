@@ -34,6 +34,8 @@ export type Annotation = {
   ephemeral: boolean;
   /** DM-only: stripped from player frames by redactStateFor (map pins). */
   dmOnly?: boolean;
+  /** Set on pinned area templates so the template panel's Clear can target only them. */
+  origin?: "template";
 };
 
 /**
@@ -268,6 +270,12 @@ export type Scene = {
   mapUrl: string | null;
   width: number;
   height: number;
+  /**
+   * How the background image is rotated when drawn (degrees CW). Absent = 0. Set by
+   * ROTATE_SCENE, which also swaps width/height and rotates all scene geometry — only
+   * the image node needs this at render time.
+   */
+  mapRotation?: 90 | 180 | 270;
   gridSize: number;
   /** Grid origin offset (world px) so the grid can align to commercial maps. */
   gridOffsetX: number;
@@ -338,6 +346,18 @@ export type Token = {
   showHp: TokenHpDisplay;
   /** DM-hidden: stripped from player frames entirely; DM sees it ghosted. */
   hidden?: boolean;
+  /** DM-concealed identity: players see "???" as the label (server-rewritten). */
+  nameConcealed?: boolean;
+  /** DM-concealed art: players get imageUrl null + a "?" glyph (server-stripped). */
+  portraitConcealed?: boolean;
+  /**
+   * Darkness visibility override (enemy/item tokens, client-enforced): absent = "auto"
+   * (each viewer's vision/lights/LOS decide), "always" = rendered for everyone even in
+   * the dark (the mask still dims it naturally).
+   */
+  dmVisibility?: "always";
+  /** Player ids force-shown this token in the dark even when their vision fails (auto mode). */
+  revealTo?: string[];
   /** Phase 6 vision: this token sees in the dark up to `rangeFt` (0 = only lit areas). */
   vision?: TokenVision;
   /** Silhouette override (Phase 6.7); unset falls back to the group's default shape. */
@@ -1343,6 +1363,8 @@ export type ClientMessage =
   | { type: "SET_SCENE"; sceneId: string }
   | { type: "ADD_SCENE"; scene: Scene }
   | { type: "UPDATE_SCENE"; scene: Scene }
+  /** Rotate the scene 90° CW: map image, geometry, AND its tokens — atomic, always live. */
+  | { type: "ROTATE_SCENE"; sceneId: string }
   | { type: "REMOVE_SCENE"; sceneId: string }
   | { type: "ADD_TOKEN"; token: Token }
   | { type: "MOVE_TOKEN"; tokenId: string; x: number; y: number; facing?: number }
@@ -1657,6 +1679,16 @@ export function normalizeToken(token: Token): Token {
     showHp: token.showHp === "bar" || token.showHp === "values" ? token.showHp : "none",
     color: token.color || defaultColor,
     ...(token.hidden ? { hidden: true } : { hidden: undefined }),
+    ...(token.nameConcealed ? { nameConcealed: true } : { nameConcealed: undefined }),
+    ...(token.portraitConcealed ? { portraitConcealed: true } : { portraitConcealed: undefined }),
+    dmVisibility: token.dmVisibility === "always" ? "always" : undefined,
+    revealTo: (() => {
+      if (!Array.isArray(token.revealTo)) return undefined;
+      const ids = Array.from(
+        new Set(token.revealTo.filter((id): id is string => typeof id === "string")),
+      ).slice(0, 16);
+      return ids.length > 0 ? ids : undefined;
+    })(),
     ...(vision ? { vision } : {}),
     // Override (not conditional-add) so the spread above can't carry invalid values through.
     shape: TOKEN_SHAPES.includes(token.shape as TokenShape) ? token.shape : undefined,
@@ -2375,6 +2407,7 @@ export function sanitizeAnnotation(annotation: unknown): Annotation | null {
     createdAt: numberOr(a.createdAt, Date.now()),
     ephemeral: Boolean(a.ephemeral),
     ...(a.dmOnly ? { dmOnly: true } : {}),
+    ...(a.origin === "template" ? { origin: "template" as const } : {}),
   };
 }
 
@@ -2626,6 +2659,10 @@ export function normalizeScene(scene: Partial<Scene> & Record<string, unknown>):
     mapUrl,
     width,
     height,
+    mapRotation:
+      scene.mapRotation === 90 || scene.mapRotation === 180 || scene.mapRotation === 270
+        ? scene.mapRotation
+        : undefined,
     gridSize: numberOr(scene.gridSize, 50),
     gridOffsetX: numberOr(scene.gridOffsetX, 0),
     gridOffsetY: numberOr(scene.gridOffsetY, 0),

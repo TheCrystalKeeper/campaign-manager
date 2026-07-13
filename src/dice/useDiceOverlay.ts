@@ -81,6 +81,11 @@ export interface DiceOverlayController {
   grabFromTray: (event: { clientX: number; clientY: number }) => boolean;
   /** Parse an expression and throw it physically. False → caller falls back to text. */
   throwExpression: (expression: string) => boolean;
+  /**
+   * Throws the current d#-button selection physically (mixed pools welcome) and clears
+   * it. False → 3D off/not ready or nothing selected; caller falls back to text.
+   */
+  throwSelection: () => boolean;
 }
 
 const uid = () => crypto.randomUUID().slice(0, 8);
@@ -500,6 +505,36 @@ export function useDiceOverlay(room: GameRoom, roomId: string | null): DiceOverl
     [ensureEngine, viewCenter],
   );
 
+  const throwSelection = useCallback((): boolean => {
+    if (!enabledRef.current || !engineRef.current) {
+      if (enabledRef.current) {
+        void ensureEngine(); // warm up for next time
+      }
+      return false;
+    }
+    // Same spec-building as grabFromTray, minus the tray lift: the dice drop in from
+    // the view center like an expression throw. decomposeDie handles the coin (d2)
+    // and splits a d100 into its d10 pair.
+    const current = selectionRef.current;
+    const specs: DieSpec[] = Object.entries(current).flatMap(([sides, count]) =>
+      Array.from({ length: count }, () =>
+        decomposeDie(Number(sides)).map((spec) => ({ ...spec, id: uid() })),
+      ).flat(),
+    );
+    if (specs.length === 0 || specs.length > MAX_DICE_PER_THROW) {
+      return false;
+    }
+    const engine = engineRef.current;
+    const rollId = uid();
+    armedRef.current.set(rollId, { specs, modifier: 0 });
+    ourRollIdsRef.current.add(rollId);
+    setSelection({});
+    audioRef.current?.resume();
+    engine.arm(rollId, specs, viewCenter());
+    engine.autoThrow(rollId);
+    return true;
+  }, [ensureEngine, viewCenter]);
+
   // Preload the engine as soon as 3D is enabled and the arena exists, so the first
   // grab doesn't stall on the three/rapier download.
   useEffect(() => {
@@ -523,5 +558,6 @@ export function useDiceOverlay(room: GameRoom, roomId: string | null): DiceOverl
     clearSelection,
     grabFromTray,
     throwExpression,
+    throwSelection,
   };
 }

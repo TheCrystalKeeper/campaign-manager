@@ -2754,6 +2754,32 @@ body.pointer-dragging * {
 .dice-tray-expr {
   width: 5.5rem;
 }
+/* The "provably fair" explainer — a small popover that sits just above the tray so it
+   doesn't reflow the controls row. Reuses the tray's paper/ink surface language. */
+.dice-fairness-note {
+  position: absolute;
+  left: 0.4rem;
+  right: 0.4rem;
+  bottom: calc(100% + 8px);
+  max-width: 22rem;
+  margin-left: auto;
+  padding: 0.5rem 0.6rem;
+  background-color: var(--surface-solid);
+  background-image: var(--paper-layers);
+  background-size: var(--paper-sizes);
+  border: 2px solid var(--border);
+  border-radius: var(--r-wob-sm);
+  box-shadow: var(--shadow-panel);
+  color: var(--text);
+  font-size: 0.74rem;
+  line-height: 1.35;
+  cursor: default;
+  user-select: text;
+  pointer-events: auto;
+}
+.dice-fairness-note strong {
+  color: var(--primary-strong);
+}
 
 /* --- Crystal: gem-cut arcane accent (Quill & Ember) --------------------------
    A real precious-opal photo behind an ink-outlined cut-gem silhouette, like a

@@ -7,10 +7,11 @@ const DEFAULT_SCENE_HEIGHT = 600;
 export const STANDARD_GRID_ROWS = 20;
 export const VIEWPORT_GRID_ROWS = 15;
 export const MIN_VIEWPORT_SCALE = 0.2;
-export const MAX_VIEWPORT_SCALE = 2;
+export const MAX_VIEWPORT_SCALE = 5;
 
 /// <summary>
-/// Clamps zoom scale so map images are not stretched past native resolution.
+/// Clamps zoom scale to the board's zoom limits. The max deliberately exceeds native map
+/// resolution (close-ups on a single token beat pixel-perfect fidelity).
 /// </summary>
 export function clampViewportScale(scale: number): number {
   return Math.min(MAX_VIEWPORT_SCALE, Math.max(MIN_VIEWPORT_SCALE, scale));

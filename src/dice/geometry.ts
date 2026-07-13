@@ -334,7 +334,11 @@ function buildD10(): { geometry: THREE.BufferGeometry; points: THREE.Vector3[]; 
 /// </summary>
 function buildCoin(): { geometry: THREE.BufferGeometry; points: THREE.Vector3[]; faceData: { normal: THREE.Vector3; centroid: THREE.Vector3 }[] } {
   const R = 1;
-  const halfH = 0.13; // thin disc (was 0.3) — reads like a coin, not a puck
+  // Thinner disc (was 0.3 → 0.13 → 0.07). thickness:diameter ≈ 0.07 is close to a real
+  // coin and, crucially, makes the rim so narrow the coin is unstable on its edge and
+  // topples to a face — so it rarely comes to rest balanced on its side. (The Heads/Tails
+  // value is server-picked and relabeled; this only shapes the cosmetic tumble/rest.)
+  const halfH = 0.07;
   const N = 20;
   const points: THREE.Vector3[] = [];
   for (let k = 0; k < N; k += 1) {

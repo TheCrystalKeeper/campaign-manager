@@ -431,16 +431,98 @@ export function TokenEditor({ token, state, dm, openSheet, openItemSheet, onClos
           </>
         )}
 
-        <div className="row" style={{ justifyContent: "space-between" }}>
-          <label style={{ margin: 0 }}>Hidden from players</label>
-          <button
-            className={token.hidden ? "btn-active" : ""}
-            title="Hidden tokens never reach player clients — you see them ghosted"
-            onClick={() => dm.updateToken({ ...token, hidden: !token.hidden })}
-          >
-            {token.hidden ? <><EyeOff size={13} strokeWidth={2.2} /> Hidden</> : "Visible"}
-          </button>
-        </div>
+        {isPlayerChar ? (
+          <div className="row" style={{ justifyContent: "space-between" }}>
+            <label style={{ margin: 0 }}>Hidden from players</label>
+            <button
+              className={token.hidden ? "btn-active" : ""}
+              title="Hidden tokens never reach player clients — you see them ghosted"
+              onClick={() => dm.updateToken({ ...token, hidden: !token.hidden })}
+            >
+              {token.hidden ? <><EyeOff size={13} strokeWidth={2.2} /> Hidden</> : "Visible"}
+            </button>
+          </div>
+        ) : (
+          <>
+            <div className="field">
+              <label>Player visibility</label>
+              <div className="row">
+                <button
+                  className={token.hidden ? "btn-active" : ""}
+                  title="Never sent to player clients — you see it ghosted (hotkey: hover + H)"
+                  onClick={() => dm.updateToken({ ...token, hidden: true, dmVisibility: undefined })}
+                >
+                  <EyeOff size={13} strokeWidth={2.2} /> Hidden
+                </button>
+                <button
+                  className={!token.hidden && token.dmVisibility !== "always" ? "btn-active" : ""}
+                  title="With dynamic lighting, each player's own vision decides: they see this token when it's lit, in line of sight, or within their darkvision"
+                  onClick={() => dm.updateToken({ ...token, hidden: undefined, dmVisibility: undefined })}
+                >
+                  Auto
+                </button>
+                <button
+                  className={!token.hidden && token.dmVisibility === "always" ? "btn-active" : ""}
+                  title="Everyone sees this token even in darkness (the darkness overlay still dims it)"
+                  onClick={() => dm.updateToken({ ...token, hidden: undefined, dmVisibility: "always" })}
+                >
+                  Always
+                </button>
+              </div>
+            </div>
+            {!token.hidden && token.dmVisibility !== "always" && state.playerSlots.length > 0 ? (
+              <div className="field">
+                <label>Reveal to specific players (even in darkness)</label>
+                <div className="row" style={{ flexWrap: "wrap" }}>
+                  {state.playerSlots.map((slot) => {
+                    const revealed = token.revealTo?.includes(slot.id) ?? false;
+                    return (
+                      <button
+                        key={slot.id}
+                        className={revealed ? "btn-active" : ""}
+                        title={
+                          revealed
+                            ? `${slot.name || "Player"} always sees this token — click to revert to their vision`
+                            : `Show this token to ${slot.name || "Player"} even when their vision fails`
+                        }
+                        onClick={() => {
+                          const next = revealed
+                            ? (token.revealTo ?? []).filter((id) => id !== slot.id)
+                            : [...(token.revealTo ?? []), slot.id];
+                          dm.updateToken({ ...token, revealTo: next.length > 0 ? next : undefined });
+                        }}
+                      >
+                        {slot.name || "Player"}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
+            <div className="row" style={{ justifyContent: "space-between" }}>
+              <label style={{ margin: 0 }}>Conceal name</label>
+              <button
+                className={token.nameConcealed ? "btn-active" : ""}
+                title={'Players see "???" as this token\'s name everywhere (board, combat, log)'}
+                onClick={() => dm.updateToken({ ...token, nameConcealed: !token.nameConcealed })}
+              >
+                {token.nameConcealed ? "??? ✓" : "Off"}
+              </button>
+            </div>
+            <div className="row" style={{ justifyContent: "space-between" }}>
+              <label style={{ margin: 0 }}>Conceal portrait</label>
+              <button
+                className={token.portraitConcealed ? "btn-active" : ""}
+                title={'Players see a "?" instead of this token\'s art'}
+                onClick={() =>
+                  dm.updateToken({ ...token, portraitConcealed: !token.portraitConcealed })
+                }
+              >
+                {token.portraitConcealed ? "? ✓" : "Off"}
+              </button>
+            </div>
+          </>
+        )}
 
         {!isItem ? (
           <>

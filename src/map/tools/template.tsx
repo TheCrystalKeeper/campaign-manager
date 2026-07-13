@@ -138,7 +138,7 @@ export function TemplateShapeView({
   );
 }
 
-const TEMPLATE_COLOR = "#7cc4ff";
+export const TEMPLATE_COLOR = "#7cc4ff";
 
 export const templateTool: MapTool = {
   id: "template",
@@ -185,6 +185,7 @@ export const templateTool: MapTool = {
           width: 2,
           createdAt: Date.now(),
           ephemeral: false,
+          origin: "template",
         },
       });
       relay(rt, null, true);

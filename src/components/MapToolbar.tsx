@@ -107,6 +107,9 @@ type MapToolbarProps = {
   onTemplateKind: (kind: TemplateKind) => void;
   templatePin: boolean;
   onToggleTemplatePin: () => void;
+  /** Pinned templates the current user may clear (DM: all; player: their own). */
+  templatePinCount: number;
+  onClearTemplates: () => void;
   /** Calibrate tool: box-over-one-square vs free-drag to slide the grid. */
   calibrateMode: CalibrateMode;
   onCalibrateMode: (mode: CalibrateMode) => void;
@@ -219,6 +222,8 @@ export function MapToolbar({
   onTemplateKind,
   templatePin,
   onToggleTemplatePin,
+  templatePinCount,
+  onClearTemplates,
   calibrateMode,
   onCalibrateMode,
   drawWidth,
@@ -470,6 +475,17 @@ export function MapToolbar({
               onClick={onToggleTemplatePin}
             >
               {templatePin ? <><Pin size={13} strokeWidth={2.2} /> Pin ✓</> : <><Pin size={13} strokeWidth={2.2} /> Pin</>}
+            </OptBtn>
+            <OptBtn
+              disabled={templatePinCount === 0}
+              title={
+                templatePinCount === 0
+                  ? "No pinned templates to clear"
+                  : `Remove ${templatePinCount} pinned template${templatePinCount === 1 ? "" : "s"}`
+              }
+              onClick={onClearTemplates}
+            >
+              <Trash2 size={13} strokeWidth={2.2} /> Clear
             </OptBtn>
           </Row>
           <span className="map-toolbar-hint">Drag from the origin to size the area.</span>

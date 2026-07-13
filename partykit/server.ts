@@ -51,14 +51,16 @@ import {
   type SheetRecord,
 } from "../src/lib/types";
 import { clampMove, movementSegments } from "../src/lib/visibility";
+import { rotateSceneCW, rotateTokenCW } from "../src/lib/sceneTransform";
 import { rollDiceExpression, rollWithAdvantage, secureRandInt } from "../src/lib/dice";
 import { computeDerived } from "../src/lib/rules5e";
-import { partsFromExpression, resolveCheck } from "../src/lib/rollCheck";
+import { partsFromDice, partsFromExpression, resolveCheck } from "../src/lib/rollCheck";
 import {
   buildExpressionLabel,
   coinFaceLabel,
   interpretRoll,
   rollFaceValues,
+  rollPartLabels,
   sanitizeThrow,
 } from "../src/lib/dice3d";
 import { redactStateFor, type StateView } from "../src/lib/redact";
@@ -1311,10 +1313,11 @@ export default class GameServer implements Party.Server {
         modifier,
         total: total + modifier,
         timestamp: Date.now(),
-        // Coins read Heads/Tails; other throws get a die/flat breakdown.
+        // Coins read Heads/Tails; other throws get a die/flat breakdown labeled per die
+        // (mixed pools like 2d6 + 1d8 keep each die's own size).
         parts: isCoin
           ? rolls.map((value) => ({ kind: "flat" as const, value, label: coinFaceLabel(value) }))
-          : partsFromExpression(rolls, modifier, throwExpression),
+          : partsFromDice(rolls, rollPartLabels(specs), modifier),
       };
       const secret = Boolean(parsed.private);
       const trayCenter: [number, number] = [
@@ -1679,6 +1682,22 @@ export default class GameServer implements Party.Server {
         void this.broadcastState();
         break;
       }
+      case "ROTATE_SCENE": {
+        // Atomic 90° CW rotation: the scene's geometry AND its tokens move in one
+        // broadcast, so no client ever sees them disagree.
+        const scene = this.state.scenes.find((item) => item.id === parsed.sceneId);
+        if (scene) {
+          const oldH = scene.height;
+          this.state.scenes = this.state.scenes.map((item) =>
+            item.id === parsed.sceneId ? rotateSceneCW(item) : item,
+          );
+          this.state.tokens = this.state.tokens.map((token) =>
+            token.sceneId === parsed.sceneId ? rotateTokenCW(token, oldH) : token,
+          );
+          void this.broadcastState();
+        }
+        break;
+      }
       case "REMOVE_SCENE": {
         if (this.state.scenes.length <= 1) {
           this.sendTo(sender, { type: "ERROR", message: "Cannot remove the last scene." });
@@ -1695,7 +1714,8 @@ export default class GameServer implements Party.Server {
       case "ADD_TOKEN": {
         const token = syncTokenFromState(normalizeToken(parsed.token), this.state);
         this.state.tokens.push(token);
-        this.logEvent(`Token “${token.label || "Token"}” placed.`);
+        // Log entries are shared with players — a concealed name must not leak here.
+        this.logEvent(`Token “${(token.nameConcealed ? "???" : token.label) || "Token"}” placed.`);
         void this.broadcastState();
         break;
       }
@@ -1721,7 +1741,7 @@ export default class GameServer implements Party.Server {
         const removed = this.state.tokens.find((token) => token.id === parsed.tokenId);
         this.state.tokens = this.state.tokens.filter((token) => token.id !== parsed.tokenId);
         if (removed) {
-          this.logEvent(`Token “${removed.label || "Token"}” removed.`);
+          this.logEvent(`Token “${(removed.nameConcealed ? "???" : removed.label) || "Token"}” removed.`);
         }
         void this.broadcastState();
         break;

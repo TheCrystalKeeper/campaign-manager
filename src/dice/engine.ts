@@ -506,6 +506,24 @@ export class DiceEngine {
       roll.k0,
     );
     const wobble = Math.sin(now / 40) * 0.15;
+
+    // Recent horizontal drag velocity (world units/s) — drives the coin's wobble tilt.
+    // Only "fresh" (still moving) samples count; a paused cursor reads as zero so the coin
+    // relaxes back to flat instead of holding a stale tilt.
+    let dragVX = 0;
+    let dragVZ = 0;
+    const samples = this.drag.samples;
+    if (samples.length >= 2) {
+      const a = samples[samples.length - 2];
+      const b = samples[samples.length - 1];
+      if (now - b.t < 120) {
+        const dt = Math.max((b.t - a.t) / 1000, 0.001);
+        dragVX = (b.x - a.x) / dt;
+        dragVZ = (b.z - a.z) / dt;
+      }
+    }
+    const dragSpeed = Math.hypot(dragVX, dragVZ);
+
     roll.dice.forEach((d) => {
       const off = this.drag!.offsets.get(d.spec.id);
       if (!off) {
@@ -513,7 +531,27 @@ export class DiceEngine {
       }
       off.cur.lerp(off.target, 0.18);
       d.mesh.position.set(world.x + off.cur.x, DIE_SCALE * 2.2 + wobble, world.z + off.cur.z);
-      d.mesh.quaternion.multiply(new THREE.Quaternion().setFromAxisAngle(SPIN_AXIS, 0.06));
+      if (d.spec.kind === "coin") {
+        // A held coin stays FACE-FLAT (caps up/down) and wobbles — it never spins toward
+        // upright, so it can't be released near-vertical and flip onto its edge. Target =
+        // flat (current yaw preserved) + a small idle micro-wobble + a drag-driven tilt
+        // whose axis is perpendicular to the motion (leading edge dips), clamped small so
+        // it can never approach vertical. Slerp toward it for a smooth, lively feel.
+        const yaw = new THREE.Euler().setFromQuaternion(d.mesh.quaternion, "YXZ").y;
+        const target = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, yaw, 0, "YXZ"));
+        const idle = new THREE.Quaternion().setFromEuler(
+          new THREE.Euler(Math.sin(now / 300) * 0.045, 0, Math.cos(now / 240) * 0.045, "XYZ"),
+        );
+        target.multiply(idle);
+        if (dragSpeed > 1e-3) {
+          const axis = new THREE.Vector3(dragVZ, 0, -dragVX).normalize();
+          const tilt = new THREE.Quaternion().setFromAxisAngle(axis, Math.min(dragSpeed * 0.03, 0.28));
+          target.premultiply(tilt); // tilt about a world-horizontal axis
+        }
+        d.mesh.quaternion.slerp(target, 0.25);
+      } else {
+        d.mesh.quaternion.multiply(new THREE.Quaternion().setFromAxisAngle(SPIN_AXIS, 0.06));
+      }
     });
   }
 
@@ -650,15 +688,25 @@ export class DiceEngine {
     const driftX = clamp(vx * 0.08, -0.8, 0.8); // barely any sideways travel
     const driftZ = clamp(vz * 0.1, -1.2, 0); // small forward-only nudge (up-screen is −z)
     const jitter = () => (Math.random() - 0.5) * 1.4; // a flip is clean — far less chaos than a die
+    // A hair of always-on lateral drift + a touch of off-axis (yaw) spin so the coin is
+    // essentially never launched to land perfectly balanced: a rim touchdown carries
+    // sideways momentum and topples to a face. Kept small so it still reads as a clean
+    // vertical flip, not a chaotic tumble.
+    const nudge = () => (Math.random() - 0.5) * 1.1;
     return roll.dice.map((d) => {
       const p = d.mesh.position;
-      const q = d.mesh.quaternion;
+      // Start the flip DEAD-FLAT (caps up/down), preserving only the held yaw. The held
+      // coin merely wobbles near-flat (see animateDrag), but we still zero the tilt at
+      // release so every end-over-end flip begins on a face and lands on a face — the
+      // surest cure for edge landings. This is orientation only; the value is server-picked.
+      const yaw = new THREE.Euler().setFromQuaternion(d.mesh.quaternion, "YXZ").y;
+      const flat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, yaw, 0, "YXZ"));
       return {
         id: d.spec.id,
         p: [p.x, p.y, p.z] as Vec3,
-        q: [q.x, q.y, q.z, q.w] as Quat,
-        lin: [driftX, pop, driftZ] as Vec3,
-        ang: [spin + jitter(), jitter(), jitter()] as Vec3,
+        q: [flat.x, flat.y, flat.z, flat.w] as Quat,
+        lin: [driftX + nudge(), pop, driftZ + nudge()] as Vec3,
+        ang: [spin + jitter(), jitter() * 1.6, jitter()] as Vec3,
       };
     });
   }
@@ -750,7 +798,10 @@ export class DiceEngine {
       const colliderDesc = (RAPIER.ColliderDesc.convexHull(scaled) ?? RAPIER.ColliderDesc.ball(DIE_SCALE))
         // A coin should land with a dead thud (no bounce) so the flip is one clean arc.
         .setRestitution(spec.kind === "coin" ? 0.02 : 0.3)
-        .setFriction(0.9)
+        // Lower friction on the coin (0.65 vs 0.9): a coin that touches down balanced on
+        // its narrow rim slips off to a flat face instead of gripping and standing on edge.
+        // Still high enough that a flat coin doesn't skate across the felt.
+        .setFriction(spec.kind === "coin" ? 0.65 : 0.9)
         .setDensity(1.2)
         .setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS);
       const collider = world.createCollider(colliderDesc, body);

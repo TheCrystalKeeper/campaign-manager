@@ -50,6 +50,11 @@ export function buildInverse(
     return { undo: { type: "UPDATE_SCENE", scene }, redo: msg };
   }
   switch (msg.type) {
+    // Deliberately NOT a scene-snapshot inverse (that would desync the scene from its
+    // tokens, which the server rotates alongside): three more CW quarter-turns are an
+    // exact −90°, tokens included.
+    case "ROTATE_SCENE":
+      return { undo: [msg, msg, msg], redo: msg };
     case "ADD_TOKEN":
       return { undo: { type: "REMOVE_TOKEN", tokenId: msg.token.id }, redo: msg };
     case "REMOVE_TOKEN": {

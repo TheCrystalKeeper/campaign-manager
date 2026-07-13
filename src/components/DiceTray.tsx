@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { CircleDollarSign, Lock, Undo2, Volume2, VolumeX, X } from "lucide-react";
+import { CircleDollarSign, Info, Lock, Undo2, Volume2, VolumeX, X } from "lucide-react";
 import { DICE_QUICK_SIDES } from "../lib/dice";
 import { playRollSound } from "../lib/rollSound";
 import { clampToViewport } from "../lib/clampToViewport";
@@ -91,9 +91,12 @@ export function DiceTray({
 }: DiceTrayProps) {
   const [expression, setExpression] = useState("1d20");
   const [pos, setPos] = useState<TrayPos>(() => loadPos(roomId));
+  const [showFairness, setShowFairness] = useState(false);
   const trayRef = useRef<HTMLDivElement>(null);
   const suppressClickRef = useRef(false);
   const lastResetRef = useRef(resetSignal);
+  const fairnessRef = useRef<HTMLDivElement>(null);
+  const fairnessBtnRef = useRef<HTMLButtonElement>(null);
 
   const selectionActive = Object.keys(controller.selection).length > 0;
 
@@ -139,7 +142,49 @@ export function DiceTray({
     return () => window.removeEventListener("keydown", onKey);
   }, [selectionActive, controller]);
 
+  // While the "how rolls are decided" note is open, a press anywhere outside it closes it.
+  // The info button itself is exempt so its own onClick handles the toggle (no reopen), and
+  // Esc closes it too. Capture phase so it fires even if an inner handler stops propagation.
+  useEffect(() => {
+    if (!showFairness) {
+      return;
+    }
+    const onDown = (event: PointerEvent) => {
+      const target = event.target as Node | null;
+      if (!target) return;
+      if (fairnessRef.current?.contains(target) || fairnessBtnRef.current?.contains(target)) {
+        return;
+      }
+      setShowFairness(false);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setShowFairness(false);
+      }
+    };
+    window.addEventListener("pointerdown", onDown, true);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("pointerdown", onDown, true);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [showFairness]);
+
   const rollExpression = () => {
+    // Highlighted dice win over the text box: Roll throws the readied selection.
+    if (selectionActive) {
+      if (!controller.throwSelection()) {
+        // 3D engine not ready — resolve as text rolls instead, one per die type
+        // (the roll parser only understands a single NdM±K term).
+        const picks = Object.entries(controller.selection);
+        playRollSound();
+        for (const [sides, count] of picks) {
+          onTextRoll(`${count}d${sides}`);
+        }
+        controller.clearSelection();
+      }
+      return;
+    }
     const expr = expression.trim();
     if (!expr) {
       return;
@@ -332,7 +377,11 @@ export function DiceTray({
           placeholder="2d6+3"
           aria-label="Dice expression"
         />
-        <button className="btn-primary" onClick={rollExpression}>
+        <button
+          className="btn-primary"
+          title={selectionActive ? "Roll the highlighted dice" : "Roll the expression"}
+          onClick={rollExpression}
+        >
           Roll
         </button>
 
@@ -361,10 +410,29 @@ export function DiceTray({
             {controller.muted ? <VolumeX size={14} strokeWidth={2.2} /> : <Volume2 size={14} strokeWidth={2.2} />}
           </button>
         ) : null}
+        <button
+          ref={fairnessBtnRef}
+          className={`chip-btn ${showFairness ? "btn-active" : ""}`}
+          title="How rolls are decided"
+          aria-label="How rolls are decided"
+          aria-expanded={showFairness}
+          onClick={() => setShowFairness((v) => !v)}
+        >
+          <Info size={14} strokeWidth={2.2} />
+        </button>
         <button className="btn-ghost icon-btn" title="Hide tray" onClick={onClose}>
           <X size={14} strokeWidth={2.2} />
         </button>
       </div>
+
+      {showFairness ? (
+        <div className="dice-fairness-note" role="note" ref={fairnessRef}>
+          <strong>Provably fair.</strong> Every roll's result — dice faces and coin
+          flips — is chosen on the server with a cryptographic random generator. The 3D
+          throw is just an animation: <em>how</em> you roll only changes how the dice
+          tumble, never the outcome, so a roll can't be nudged in anyone's favor.
+        </div>
+      ) : null}
     </div>
   );
 }

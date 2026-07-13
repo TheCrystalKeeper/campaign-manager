@@ -262,6 +262,19 @@ export function interpretRoll(specs: DieSpec[], faceValues: number[]): { rolls: 
 }
 
 /// <summary>
+/// Per-displayed-roll labels matching interpretRoll's output shape: the d100 pair
+/// collapses to a single "d100"; every other die is labeled by its own size. Fixes
+/// mixed pools (e.g. 2d6 + 1d8) whose parts used to all inherit the expression's
+/// FIRST die size.
+/// </summary>
+export function rollPartLabels(specs: DieSpec[]): string[] {
+  if (isPercentileSet(specs)) {
+    return ["d100"];
+  }
+  return specs.map((spec) => (spec.kind === "coin" ? "coin" : `d${sidesOf(spec)}`));
+}
+
+/// <summary>
 /// Builds a human-readable expression label (e.g. "1d20", "1d100", "2d6") from the
 /// physical dice, for the shared roll log.
 /// </summary>

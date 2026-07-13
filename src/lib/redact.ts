@@ -1,4 +1,5 @@
 import {
+  DEFAULT_ICON_CROP,
   SHEET_SECTIONS,
   SHEET_SECTION_FIELDS,
   createDefaultSheet,
@@ -22,7 +23,7 @@ export type StateView = { role: "dm" } | { role: "player"; playerId: string } | 
 /// `keepHp` is the deliberate exception for tokens whose HP display the DM
 /// turned on — players need the numbers to draw the bar.
 /// </summary>
-function redactSheetRecord(record: SheetRecord, keepHp: boolean): SheetRecord {
+function redactSheetRecord(record: SheetRecord, keepHp: boolean, concealPortrait: boolean): SheetRecord {
   if (record.kind !== "npc") {
     return record;
   }
@@ -43,11 +44,14 @@ function redactSheetRecord(record: SheetRecord, keepHp: boolean): SheetRecord {
   if (keepHp && !record.revealed.combat) {
     data.hp = { ...record.data.hp };
   }
-  // The portrait renders on every token linked to this sheet, so it is never a
-  // secret even while identity is hidden — keep it (and its framing) so player
-  // clients resolve token art live.
-  data.iconUrl = record.data.iconUrl;
-  data.iconCrop = record.data.iconCrop;
+  // The portrait renders on every token linked to this sheet, so it is normally kept
+  // (with its framing) even while identity is hidden, so player clients resolve token
+  // art live. Exception: when EVERY visible token linking this sheet is
+  // portrait-concealed and identity is unrevealed, the URL itself is the secret.
+  if (!concealPortrait || record.revealed.identity) {
+    data.iconUrl = record.data.iconUrl;
+    data.iconCrop = record.data.iconCrop;
+  }
   return { ...record, data, redacted: true };
 }
 
@@ -90,17 +94,41 @@ export function redactStateFor(state: GameState, view: StateView): GameState {
         ? { ...scene, annotations: scene.annotations.filter((annotation) => !annotation.dmOnly) }
         : scene,
     );
-  const tokens = state.tokens.filter(
-    (token) => !token.hidden && token.sceneId === state.activeSceneId,
-  );
+  // Concealed identity/art: rewrite the label to "???" and withhold the image URL
+  // (the client renders a "?" glyph off the kept flags). Done BEFORE anything below
+  // derives data from tokens, so sheet/item lookups see the concealed view too.
+  const tokens = state.tokens
+    .filter((token) => !token.hidden && token.sceneId === state.activeSceneId)
+    .map((token) =>
+      token.nameConcealed || token.portraitConcealed
+        ? {
+            ...token,
+            ...(token.nameConcealed ? { label: "???" } : {}),
+            ...(token.portraitConcealed ? { imageUrl: null } : {}),
+          }
+        : token,
+    );
   const hpVisibleSheetIds = new Set(
     tokens
       .filter((token) => token.showHp !== "none" && token.sheetId)
       .map((token) => token.sheetId as string),
   );
+  // A sheet's portrait URL is withheld only when EVERY visible token linking it is
+  // portrait-concealed (any unconcealed token already legitimately shows the art).
+  const portraitConcealedSheetIds = new Set<string>();
+  for (const token of tokens) {
+    if (token.sheetId && token.portraitConcealed) {
+      portraitConcealedSheetIds.add(token.sheetId);
+    }
+  }
+  for (const token of tokens) {
+    if (token.sheetId && !token.portraitConcealed) {
+      portraitConcealedSheetIds.delete(token.sheetId);
+    }
+  }
   const sheets: Record<string, SheetRecord> = {};
   for (const [id, record] of Object.entries(state.sheets)) {
-    sheets[id] = redactSheetRecord(record, hpVisibleSheetIds.has(id));
+    sheets[id] = redactSheetRecord(record, hpVisibleSheetIds.has(id), portraitConcealedSheetIds.has(id));
   }
   const log: LogEntry[] = [];
   for (const entry of state.log) {
@@ -144,6 +172,19 @@ export function redactStateFor(state: GameState, view: StateView): GameState {
   // Item tokens resolve their icon live from the catalog, so ship icon-only
   // stubs for the items visible tokens reference — never the DM's full catalog,
   // and never the item's real name/stats (the token label is what players see).
+  // Like sheets, the catalog icon is withheld when EVERY visible token that
+  // references the item is portrait-concealed.
+  const iconConcealedItemIds = new Set<string>();
+  for (const token of tokens) {
+    if (token.itemId && token.portraitConcealed) {
+      iconConcealedItemIds.add(token.itemId);
+    }
+  }
+  for (const token of tokens) {
+    if (token.itemId && !token.portraitConcealed) {
+      iconConcealedItemIds.delete(token.itemId);
+    }
+  }
   const items: Record<string, ItemRecord> = {};
   for (const token of tokens) {
     if (!token.itemId || items[token.itemId]) {
@@ -151,22 +192,29 @@ export function redactStateFor(state: GameState, view: StateView): GameState {
     }
     const item = state.items[token.itemId];
     if (item) {
+      const concealIcon = iconConcealedItemIds.has(token.itemId);
       items[token.itemId] = {
         id: item.id,
         name: "",
         description: "",
-        iconUrl: item.iconUrl,
-        iconCrop: item.iconCrop,
+        iconUrl: concealIcon ? null : item.iconUrl,
+        iconCrop: concealIcon ? { ...DEFAULT_ICON_CROP } : item.iconCrop,
         folderId: null,
       };
     }
   }
-  // Combatants tied to hidden tokens keep their slot in the order but lose the name.
+  // Combatants tied to hidden or name-concealed tokens keep their slot in the
+  // order but lose the name.
+  const nameConcealedTokenIds = new Set(
+    state.tokens.filter((token) => token.nameConcealed).map((token) => token.id),
+  );
   const combat = state.combat
     ? {
         ...state.combat,
         entries: state.combat.entries.map((entry) =>
-          entry.hidden ? { ...entry, name: "???" } : entry,
+          entry.hidden || (entry.tokenId && nameConcealedTokenIds.has(entry.tokenId))
+            ? { ...entry, name: "???" }
+            : entry,
         ),
       }
     : null;

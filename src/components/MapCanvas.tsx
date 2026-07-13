@@ -17,6 +17,7 @@ import {
   Image as KonvaImage,
   Layer,
   Line,
+  Path,
   Rect,
   RegularPolygon,
   Stage,
@@ -66,7 +67,7 @@ import { toolsForRole } from "../map/tools/registry";
 import { selectTool } from "../map/tools/select";
 import { LIGHT_PRESETS, type LightPreset } from "../map/tools/lights";
 import { RulerShape } from "../map/tools/measure";
-import { TemplateShapeView } from "../map/tools/template";
+import { TEMPLATE_COLOR, TemplateShapeView } from "../map/tools/template";
 import {
   applyLift,
   applyStaticLift,
@@ -529,6 +530,8 @@ const TokenNode = memo(function TokenNode({
   token,
   imageUrl,
   imageCrop,
+  concealedPortrait,
+  concealBadge,
   controllerColor,
   shapeDefaults,
   radius,
@@ -551,6 +554,10 @@ const TokenNode = memo(function TokenNode({
   imageUrl: string | null;
   /** Crop of that portrait/item icon, so the token follows the same framing as the sheet. */
   imageCrop?: IconCrop;
+  /** Player view of a portrait-concealed token: no art, a "?" glyph over the shape fill. */
+  concealedPortrait?: boolean;
+  /** DM indicator that this token's name and/or portrait is concealed from players. */
+  concealBadge?: boolean;
   /** When an NPC/enemy is controlled by a player ("mind control"), the controller's colour —
    *  drawn as a dashed ring so it's clear the token isn't DM-only. Null when not applicable. */
   controllerColor?: string | null;
@@ -926,6 +933,19 @@ const TokenNode = memo(function TokenNode({
           glow={glowShadow}
         />
       )}
+      {concealedPortrait ? (
+        // Player view of concealed art: a big "?" over the plain shape fill.
+        <CrispText
+          text="?"
+          fontSize={radius * 1.1}
+          fill="#e6e6e8"
+          align="center"
+          width={radius * 4}
+          offsetX={radius * 2}
+          y={-radius * 0.55}
+          listening={false}
+        />
+      ) : null}
       {dead ? (
         <CrispText
           text="💀"
@@ -982,6 +1002,41 @@ const TokenNode = memo(function TokenNode({
           ) : null}
         </>
       ) : null}
+      {concealBadge ? (
+        // DM indicator: this token's name/portrait shows as "???"/"?" to players.
+        <Group x={-radius * 0.72} y={-radius * 0.72} listening={false}>
+          <Circle radius={Math.max(7, radius * 0.28)} fill="rgba(8,10,16,0.85)" stroke="#00000088" strokeWidth={1} />
+          <CrispText
+            text="?"
+            fontSize={Math.max(8, radius * 0.32)}
+            fill="#e6e6e8"
+            align="center"
+            width={radius}
+            offsetX={radius / 2}
+            offsetY={Math.max(8, radius * 0.32) / 2}
+            listening={false}
+          />
+        </Group>
+      ) : null}
+      {token.hidden ? (
+        // Eye-off badge: unambiguous "players can't see this" marker on top of the ghost
+        // opacity. Hidden tokens never reach player clients (server-stripped), so this
+        // only ever renders for the DM.
+        <Group x={radius * 0.72} y={-radius * 0.72} listening={false}>
+          <Circle radius={Math.max(7, radius * 0.28)} fill="rgba(8,10,16,0.85)" stroke="#00000088" strokeWidth={1} />
+          <Path
+            data="M9.88 9.88a3 3 0 1 0 4.24 4.24M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61M2 2L22 22"
+            stroke="#e6e6e8"
+            strokeWidth={2}
+            lineCap="round"
+            lineJoin="round"
+            scaleX={(Math.max(7, radius * 0.28) * 1.4) / 24}
+            scaleY={(Math.max(7, radius * 0.28) * 1.4) / 24}
+            offsetX={12}
+            offsetY={12}
+          />
+        </Group>
+      ) : null}
       <TokenNameLabel token={token} radius={radius} showBar={showBar} showHpValues={showHpValues} />
       </Group>
     </Group>
@@ -991,7 +1046,7 @@ const TokenNode = memo(function TokenNode({
 /**
  * A token's name caption, positioned relative to the token's center (0,0). Rendered inside the
  * token itself AND — for tokens revealed by dynamic lighting — again in a top layer above the
- * darkness mask (see `tokenLabelIds`), so a lit token's name is always fully legible instead of
+ * darkness mask (see `visibleTokenIds`), so a lit token's name is always fully legible instead of
  * being swallowed by the surrounding dark. The two draws sit at identical coords, so the bright
  * copy simply overlays the masked one.
  */
@@ -1010,7 +1065,9 @@ function TokenNameLabel({
   return (
     <CrispText
       text={token.label}
-      fontSize={Math.max(10, radius * 0.7)}
+      // Gentle slope + cap: names stay readable on tiny tokens without ballooning on huge
+      // ones (a 4-cell giant's caption shouldn't be 4x a Medium creature's).
+      fontSize={Math.min(20, Math.max(11, 10 + radius * 0.18))}
       fill="#e6e6e8"
       align="center"
       width={radius * 4}
@@ -1394,23 +1451,37 @@ export function MapCanvas({
     }
   }, [committedDarkness, darknessDraft]);
 
-  // Which token NAME labels to draw ABOVE the darkness mask so a revealed token's name stays fully
-  // legible (and a hidden token's never leaks through). Computed up here — BEFORE the `!scene`
-  // guard below — so the hook count stays stable across renders. `null` unless the board is dark:
-  // the player/preview mask exposes a strict LOS-lit subset; the DM's own overview is omniscient
-  // (every name un-dimmed). Bucketed on an ambient-lit boolean so a day↔night tween doesn't rerun
-  // the LOS sweep every frame; `state.tokens`/`state.scenes` deps keep it off the pan/zoom path.
+  // Which tokens the current viewer actually SEES — the single source of truth for both the
+  // token sprites and the name labels drawn above the darkness mask (so an unseen NPC neither
+  // renders nor leaks its name). Computed up here — BEFORE the `!scene` guard below — so the
+  // hook count stays stable across renders. `null` unless the board is dark: the player/preview
+  // view exposes a strict LOS-lit subset; the DM's own overview is omniscient. Overrides union
+  // in on top of the vision test: PC tokens always render (the mask dims them naturally),
+  // `dmVisibility: "always"` force-shows to everyone, and `revealTo` force-shows to specific
+  // players (ignored in the DM's 👁 preview, which impersonates a generic player). Bucketed on
+  // an ambient-lit boolean so a day↔night tween doesn't rerun the LOS sweep every frame;
+  // `state.tokens`/`state.scenes` deps keep it off the pan/zoom path.
   const ambientLit = 1 - displayDarkness > 0.12;
-  const tokenLabelIds = useMemo<Set<string> | null>(() => {
+  const visibleTokenIds = useMemo<Set<string> | null>(() => {
     const sc = state.scenes.find((item) => item.id === sceneId) ?? state.scenes[0];
-    if (!sc || sc.globalIllumination) return null; // lit board: in-token labels already read fine
+    if (!sc || sc.globalIllumination) return null; // lit board: everything shows
     const scTokens = state.tokens.filter((t) => t.sceneId === sc.id);
-    if (isDm && !visionPreview) return new Set(scTokens.map((t) => t.id)); // DM overview: all names
+    if (isDm && !visionPreview) return new Set(scTokens.map((t) => t.id)); // DM overview: all
     const viewers = scTokens.filter(
       (t) => t.vision?.enabled && (isDm ? visionPreview : t.ownerPlayerId === yourPlayerId),
     );
     const ftToPx = sc.gridSize / Math.max(sc.feetPerSquare, 1);
-    return computeVisibleTokenIds(sc, viewers, scTokens, ftToPx, ambientLit ? 0 : 1);
+    const ids = computeVisibleTokenIds(sc, viewers, scTokens, ftToPx, ambientLit ? 0 : 1);
+    for (const t of scTokens) {
+      if (
+        t.kind === "player" ||
+        t.dmVisibility === "always" ||
+        (!isDm && t.revealTo !== undefined && t.revealTo.includes(yourPlayerId ?? ""))
+      ) {
+        ids.add(t.id);
+      }
+    }
+    return ids;
   }, [state.scenes, state.tokens, sceneId, isDm, yourPlayerId, visionPreview, ambientLit]);
 
   // The token currently being move-dragged, so the above-darkness label layer can skip its
@@ -1746,6 +1817,16 @@ export function MapCanvas({
         setHoveredTokenId(null);
         return;
       }
+      // H over a token (DM): toggle its player-visibility (Token.hidden). The DM keeps
+      // seeing it ghosted with an eye-off badge; players' copies vanish/return. Undoable.
+      if (isDm && hoveredTokenId && (event.key === "h" || event.key === "H")) {
+        const tok = state.tokens.find((item) => item.id === hoveredTokenId);
+        if (tok) {
+          event.preventDefault();
+          send({ type: "UPDATE_TOKEN", token: { ...tok, hidden: !tok.hidden } });
+        }
+        return;
+      }
       // Rotate the selected token's facing: [ / ] nudge 15°, { / } (shift) 45°.
       if (
         selectedTokenId &&
@@ -1808,6 +1889,18 @@ export function MapCanvas({
     ? modInto(calPreview?.oy ?? 0, previewGridSize)
     : (scene?.gridOffsetY ?? 0) + (calMoving ? calPreview?.dy ?? 0 : 0);
 
+  // The grid covers the visible VIEWPORT (not just the map rect), so panning past the map
+  // edge still shows squares — the tabletop feels endless. The covered cell range is
+  // quantized to 8-cell blocks (±1 block pad) and fed to the memo as four ints, so panning
+  // within a block recomputes nothing; only crossing a block boundary rebuilds the lines.
+  const GRID_BLOCK = 8;
+  const gridViewScale = viewport.scale > 0 ? viewport.scale : 1;
+  const gridCellSpan = previewGridSize > 0 ? previewGridSize * GRID_BLOCK : 1;
+  const gridBx0 = Math.floor((0 - viewport.x) / gridViewScale / gridCellSpan) - 1;
+  const gridBy0 = Math.floor((0 - viewport.y) / gridViewScale / gridCellSpan) - 1;
+  const gridBx1 = Math.ceil((stageW - viewport.x) / gridViewScale / gridCellSpan) + 1;
+  const gridBy1 = Math.ceil((stageH - viewport.y) / gridViewScale / gridCellSpan) + 1;
+
   const gridLines = useMemo(() => {
     const lines: number[][] = [];
     if (!scene || previewGridSize <= 0) {
@@ -1818,21 +1911,34 @@ export function MapCanvas({
     if (!scene.showGrid && !gridPreviewing) {
       return lines;
     }
-    const { width, height } = scene;
     const gridSize = previewGridSize;
-    if (width / gridSize + height / gridSize > 600) {
-      return lines; // guard against pathological grid counts
+    // Cap the line count (extreme zoom-out / tiny cells): shrink the covered range
+    // symmetrically toward the view center instead of blanking the grid outright.
+    const MAX_LINES_PER_AXIS = 400;
+    const clampAxis = (b0: number, b1: number): [number, number] => {
+      if ((b1 - b0) * GRID_BLOCK <= MAX_LINES_PER_AXIS) {
+        return [b0, b1];
+      }
+      const mid = (b0 + b1) / 2;
+      const half = MAX_LINES_PER_AXIS / GRID_BLOCK / 2;
+      return [Math.floor(mid - half), Math.ceil(mid + half)];
+    };
+    const [bx0, bx1] = clampAxis(gridBx0, gridBx1);
+    const [by0, by1] = clampAxis(gridBy0, gridBy1);
+    const x0 = bx0 * GRID_BLOCK * gridSize + previewOffsetX;
+    const x1 = bx1 * GRID_BLOCK * gridSize + previewOffsetX;
+    const y0 = by0 * GRID_BLOCK * gridSize + previewOffsetY;
+    const y1 = by1 * GRID_BLOCK * gridSize + previewOffsetY;
+    for (let cx = bx0 * GRID_BLOCK; cx <= bx1 * GRID_BLOCK; cx++) {
+      const x = cx * gridSize + previewOffsetX;
+      lines.push([x, y0, x, y1]);
     }
-    const startX = ((previewOffsetX % gridSize) + gridSize) % gridSize;
-    const startY = ((previewOffsetY % gridSize) + gridSize) % gridSize;
-    for (let x = startX; x <= width; x += gridSize) {
-      lines.push([x, 0, x, height]);
-    }
-    for (let y = startY; y <= height; y += gridSize) {
-      lines.push([0, y, width, y]);
+    for (let cy = by0 * GRID_BLOCK; cy <= by1 * GRID_BLOCK; cy++) {
+      const y = cy * gridSize + previewOffsetY;
+      lines.push([x0, y, x1, y]);
     }
     return lines;
-  }, [scene, previewGridSize, previewOffsetX, previewOffsetY, gridPreviewing]);
+  }, [scene, previewGridSize, previewOffsetX, previewOffsetY, gridPreviewing, gridBx0, gridBy0, gridBx1, gridBy1]);
 
   // Tokens on the active scene, memoized so a pan/zoom (which changes only the viewport, not
   // token state) doesn't hand the memoized vision layers a fresh array reference every frame —
@@ -2380,6 +2486,19 @@ export function MapCanvas({
     ([, tpl]) => tpl.sceneId === scene.id,
   );
 
+  // Pinned template annotations the current user may clear (DM: all; player: own).
+  // The color+kind fallback catches templates pinned before `origin` existed.
+  const clearableTemplateAnns = scene.annotations.filter(
+    (a) =>
+      (a.origin === "template" || (a.kind === "stroke" && a.color === TEMPLATE_COLOR)) &&
+      (isDm || a.authorId === yourPlayerId),
+  );
+  const clearTemplates = () => {
+    for (const a of clearableTemplateAnns) {
+      send({ type: "REMOVE_ANNOTATION", sceneId: scene.id, annotationId: a.id });
+    }
+  };
+
   // Calibrate "adjust" cursor: a resize cursor while a grid-point handle is hovered/dragged (so it
   // reads as grabbable), else the move cursor (drag anywhere else slides the grid).
   const calibrateDraftMode = (draft as { mode?: string } | null)?.mode;
@@ -2525,7 +2644,22 @@ export function MapCanvas({
         <Layer listening={false}>
           <Rect x={0} y={0} width={scene.width} height={scene.height} fill={scene.backgroundColor} />
           {crispMapImg ? (
-            <KonvaImage image={crispMapImg} x={0} y={0} width={scene.width} height={scene.height} />
+            // ROTATE_SCENE only rotates geometry — the stored image is untouched, so the
+            // image node alone is drawn rotated (its local width/height are the image's
+            // pre-rotation dims, positioned so the turned rect lands exactly on the
+            // scene rect at the origin).
+            (scene.mapRotation ?? 0) === 0 ? (
+              <KonvaImage image={crispMapImg} x={0} y={0} width={scene.width} height={scene.height} />
+            ) : (
+              <KonvaImage
+                image={crispMapImg}
+                rotation={scene.mapRotation}
+                x={scene.mapRotation === 270 ? 0 : scene.width}
+                y={scene.mapRotation === 90 ? 0 : scene.height}
+                width={scene.mapRotation === 180 ? scene.width : scene.height}
+                height={scene.mapRotation === 180 ? scene.height : scene.width}
+              />
+            )
           ) : null}
         </Layer>
 
@@ -2553,6 +2687,9 @@ export function MapCanvas({
 
         <Layer listening={activeTool.id === "select"}>
           {sceneTokens.map((token) => {
+            // Darkness gate: tokens the viewer can't see (out of LOS/light/darkvision, no
+            // override) don't render at all — not merely dimmed by the mask.
+            if (visibleTokenIds && !visibleTokenIds.has(token.id)) return null;
             const draggable =
               isDm || (token.ownerPlayerId === yourPlayerId && state.playersCanMove !== false);
             // Prefer the linked sheet's portrait so uploads/changes reflect live;
@@ -2560,9 +2697,15 @@ export function MapCanvas({
             const linkedSheetId = token.sheetId ?? token.ownerPlayerId;
             const sheet = linkedSheetId ? state.sheets[linkedSheetId] : undefined;
             const linkedItem = token.itemId ? state.items[token.itemId] : undefined;
+            // Concealed art: the server already withholds the URLs from players; this
+            // client-side gate also covers sheet portraits players legitimately know
+            // (revealed identity) that the DM still concealed on THIS token.
+            const concealedPortrait = Boolean(token.portraitConcealed) && !isDm;
             // The crop belongs to whichever source supplies the image: the sheet portrait, else
             // the item icon it mirrors. A standalone token image has no crop → centered.
-            const imageUrl = sheet?.data.iconUrl ?? linkedItem?.iconUrl ?? token.imageUrl ?? null;
+            const imageUrl = concealedPortrait
+              ? null
+              : sheet?.data.iconUrl ?? linkedItem?.iconUrl ?? token.imageUrl ?? null;
             const imageCrop = sheet?.data.iconUrl
               ? sheet.data.iconCrop
               : linkedItem?.iconUrl
@@ -2585,6 +2728,8 @@ export function MapCanvas({
                 token={token}
                 imageUrl={imageUrl}
                 imageCrop={imageCrop}
+                concealedPortrait={concealedPortrait}
+                concealBadge={isDm && Boolean(token.nameConcealed || token.portraitConcealed)}
                 controllerColor={controllerColor}
                 shapeDefaults={state.tokenShapeDefaults}
                 radius={radius}
@@ -2659,10 +2804,10 @@ export function MapCanvas({
             is always fully legible (the in-token label underneath, if any, is darkened/hidden by
             the mask). Rendered only while the board is dark; the bright copy overlays the masked
             one at the same coords. */}
-        {tokenLabelIds ? (
+        {visibleTokenIds ? (
           <Layer listening={false}>
             {sceneTokens.map((token) => {
-              if (!tokenLabelIds.has(token.id)) return null;
+              if (!visibleTokenIds.has(token.id)) return null;
               // Skip the bright copy for a token being dragged — locally, or by a remote player we're
               // mirroring: the in-token label carries it live meanwhile, so the two never separate
               // into a trailing duplicate pinned to the not-yet-updated React position.
@@ -2825,6 +2970,8 @@ export function MapCanvas({
         onTemplateKind={setTemplateKind}
         templatePin={templatePin}
         onToggleTemplatePin={() => setTemplatePin((v) => !v)}
+        templatePinCount={clearableTemplateAnns.length}
+        onClearTemplates={clearTemplates}
         calibrateMode={calibrateMode}
         onCalibrateMode={setCalibrateMode}
         fogEnabled={scene.fog.enabled}

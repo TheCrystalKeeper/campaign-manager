@@ -195,5 +195,88 @@ check(
   redactStateFor(artState, { role: "dm" }).items["item-chest"]!.name === "Bag of Holding",
 );
 
+// ---------------------------------------------------------------------------
+// 6. Concealed name/portrait: players get "???" labels and no art URLs; the DM
+//    view is untouched. Sheet/item icon URLs are withheld only when EVERY
+//    visible linking token is concealed.
+// ---------------------------------------------------------------------------
+const conNpc = createNpcSheetRecord("sheet-con", "Mind Flayer");
+conNpc.data.iconUrl = "/portraits/flayer.png";
+const conBase = normalizeGameState({
+  ...createInitialState("room-con"),
+  sheets: { "sheet-con": conNpc },
+  items: {
+    "item-orb": {
+      id: "item-orb", name: "Orb", description: "", iconUrl: "/tokens/orb.png",
+      iconCrop: { x: 0.5, y: 0.5, zoom: 1 }, folderId: null,
+    },
+  },
+} as unknown as GameState);
+conBase.tokens = [
+  {
+    id: "tok-con", sceneId: conBase.activeSceneId, x: 0, y: 0, label: "Mind Flayer",
+    color: "#c45c5c", kind: "enemy", sheetId: "sheet-con",
+    nameConcealed: true, portraitConcealed: true, imageUrl: "/portraits/flayer.png",
+  },
+  {
+    id: "tok-orb", sceneId: conBase.activeSceneId, x: 1, y: 1, label: "Orb",
+    color: "#8a7a5c", kind: "item", itemId: "item-orb", portraitConcealed: true,
+  },
+] as unknown as GameState["tokens"];
+conBase.combat = {
+  round: 1,
+  turnIndex: 0,
+  entries: [
+    { id: "ce-1", tokenId: "tok-con", sheetId: "sheet-con", name: "Mind Flayer", initiative: 12, dexScore: 10, hasRolled: true },
+  ],
+};
+const conState = normalizeGameState(conBase);
+const conPlayer = redactStateFor(conState, { role: "player", playerId: "p1" });
+const conTok = conPlayer.tokens.find((t) => t.id === "tok-con");
+check(
+  "concealed token: label ???, no image URL, flags kept for the ? glyph",
+  conTok?.label === "???" &&
+    conTok.imageUrl === null &&
+    conTok.nameConcealed === true &&
+    conTok.portraitConcealed === true,
+  JSON.stringify(conTok),
+);
+check(
+  "sheet portrait URL withheld when its only visible token is concealed",
+  !conPlayer.sheets["sheet-con"]!.data.iconUrl,
+  JSON.stringify(conPlayer.sheets["sheet-con"]!.data.iconUrl),
+);
+check(
+  "item stub icon withheld when its only visible token is concealed",
+  conPlayer.items["item-orb"]!.iconUrl === null,
+);
+check(
+  "combat entry for a name-concealed token masks to ???",
+  conPlayer.combat?.entries[0]?.name === "???",
+);
+const conDm = redactStateFor(conState, { role: "dm" });
+check(
+  "DM keeps real label, art, and combat name",
+  conDm.tokens.find((t) => t.id === "tok-con")?.label === "Mind Flayer" &&
+    conDm.sheets["sheet-con"]!.data.iconUrl === "/portraits/flayer.png" &&
+    conDm.combat?.entries[0]?.name === "Mind Flayer",
+);
+// A second, unconcealed token linking the same sheet makes the art public again.
+const conState2 = normalizeGameState({
+  ...conState,
+  tokens: [
+    ...conState.tokens,
+    {
+      id: "tok-con2", sceneId: conState.activeSceneId, x: 3, y: 3, label: "Also Flayer",
+      color: "#c45c5c", kind: "enemy", sheetId: "sheet-con",
+    },
+  ],
+} as unknown as GameState);
+const conPlayer2 = redactStateFor(conState2, { role: "player", playerId: "p1" });
+check(
+  "sheet portrait survives when ANY visible linking token is unconcealed",
+  conPlayer2.sheets["sheet-con"]!.data.iconUrl === "/portraits/flayer.png",
+);
+
 console.log(failures === 0 ? "\nALL CHECKS PASSED" : `\n${failures} CHECK(S) FAILED`);
 process.exit(failures === 0 ? 0 : 1);

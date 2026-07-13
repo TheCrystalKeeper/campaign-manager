@@ -349,6 +349,11 @@ export function ScenesPage({
                   })
                 }
                 onResetFog={() => editorSend({ type: "FOG_RESET", sceneId: shownScene.id })}
+                // Always-live (bypasses staging by design — it also moves the scene's
+                // TOKENS, which drafts can't hold). Disabled while a draft is dirty:
+                // applying pre-rotation staged geometry afterwards would desync it.
+                onRotate={() => historyEditorSend({ type: "ROTATE_SCENE", sceneId: shownScene.id })}
+                rotateDisabled={dirty}
               />
               <StageActors state={state} scene={shownScene} room={room} />
               <button

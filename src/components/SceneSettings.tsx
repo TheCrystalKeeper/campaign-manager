@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Image, X } from "lucide-react";
+import { Image, RotateCw, X } from "lucide-react";
 import type { Scene } from "../lib/types";
 import { BOARD_BACKDROP_PRESETS } from "../lib/types";
 import { gridSizeForMapHeight } from "../lib/sceneUtils";
@@ -13,6 +13,10 @@ type SceneSettingsProps = {
   /** Fog enable/invert — routed like a FOG_SET so staging can intercept it. */
   onSetFog: (patch: { enabled?: boolean; inverted?: boolean }) => void;
   onResetFog: () => void;
+  /** Rotate the whole scene 90° CW (map + geometry + tokens). Omitted = no button. */
+  onRotate?: () => void;
+  /** Disable rotate (e.g. while staged edits are pending — they hold pre-rotation coords). */
+  rotateDisabled?: boolean;
 };
 
 type NumberInputProps = {
@@ -20,6 +24,49 @@ type NumberInputProps = {
   min?: number;
   onCommit: (value: number) => void;
 };
+
+/// <summary>
+/// Text field that defers to blur / Enter before committing. A live-controlled input here would
+/// round-trip every keystroke through the server (UPDATE_SCENE → STATE echo) — fast typing races
+/// the echoes and characters get clobbered. Editing stays local; Escape cancels; external changes
+/// to `value` sync in while the field isn't focused. Bonus: one undo step per rename, not per key.
+/// </summary>
+function TextInput({ value, onCommit }: { value: string; onCommit: (value: string) => void }) {
+  const [text, setText] = useState(value);
+  const [editing, setEditing] = useState(false);
+  const cancelledRef = useRef(false);
+
+  useEffect(() => {
+    if (!editing) setText(value);
+  }, [value, editing]);
+
+  const commit = () => {
+    setEditing(false);
+    if (cancelledRef.current) {
+      cancelledRef.current = false;
+      setText(value); // Escape — discard the edit
+      return;
+    }
+    if (text !== value) onCommit(text);
+  };
+
+  return (
+    <input
+      value={text}
+      onFocus={() => setEditing(true)}
+      onChange={(e) => setText(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          e.currentTarget.blur();
+        } else if (e.key === "Escape") {
+          cancelledRef.current = true;
+          e.currentTarget.blur();
+        }
+      }}
+    />
+  );
+}
 
 /// <summary>
 /// Number field that defers to blur / Enter before applying, so the value can be edited freely
@@ -80,7 +127,7 @@ function NumberInput({ value, min, onCommit }: NumberInputProps) {
 /// scene, live) and the Scenes-page editor inspector (the SELECTED scene,
 /// draft-aware when Live updates is off).
 /// </summary>
-export function SceneSettings({ scene, roomId, onPatch, onSetFog, onResetFog }: SceneSettingsProps) {
+export function SceneSettings({ scene, roomId, onPatch, onSetFog, onResetFog, onRotate, rotateDisabled }: SceneSettingsProps) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -115,7 +162,7 @@ export function SceneSettings({ scene, roomId, onPatch, onSetFog, onResetFog }: 
     <>
       <div className="field">
         <label>Scene name</label>
-        <input value={scene.name} onChange={(e) => onPatch({ name: e.target.value })} />
+        <TextInput value={scene.name} onCommit={(name) => onPatch({ name })} />
       </div>
 
       <label className={`map-upload${busy ? " map-upload--busy" : ""}`}>
@@ -141,6 +188,23 @@ export function SceneSettings({ scene, roomId, onPatch, onSetFog, onResetFog }: 
         />
       </label>
       {error ? <span className="muted" style={{ color: "var(--danger-text)" }}>{error}</span> : null}
+
+      {onRotate && scene.mapUrl ? (
+        <div className="row" style={{ justifyContent: "space-between" }}>
+          <label style={{ margin: 0 }}>Rotate map 90°</label>
+          <button
+            disabled={rotateDisabled}
+            title={
+              rotateDisabled
+                ? "Apply or discard staged changes first"
+                : "Rotate the scene a quarter turn clockwise — walls, lights, fog, drawings and tokens turn with it"
+            }
+            onClick={onRotate}
+          >
+            <RotateCw size={13} strokeWidth={2.2} /> Rotate
+          </button>
+        </div>
+      ) : null}
 
       <div className="row" style={{ justifyContent: "space-between" }}>
         <label style={{ margin: 0 }}>Show grid</label>
