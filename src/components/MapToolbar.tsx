@@ -366,7 +366,10 @@ export function MapToolbar({
             key={tool.id}
             className={`map-tool-btn${activeToolId === tool.id ? " btn-active" : ""}`}
             title={`${tool.label} (${tool.hotkey.toUpperCase()})`}
-            onClick={() => onSelectTool(tool.id)}
+            // Clicking the already-active tool toggles back to Select (v).
+            onClick={() =>
+              onSelectTool(activeToolId === tool.id && tool.id !== "select" ? "select" : tool.id)
+            }
           >
             {tool.icon}
           </button>

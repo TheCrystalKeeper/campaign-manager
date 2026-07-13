@@ -1069,6 +1069,11 @@ function TokenNameLabel({
       // ones (a 4-cell giant's caption shouldn't be 4x a Medium creature's).
       fontSize={Math.min(20, Math.max(11, 10 + radius * 0.18))}
       fill="#e6e6e8"
+      // Soft dark halo so light names stay legible over bright map areas.
+      shadowColor="#000000"
+      shadowBlur={4}
+      shadowOpacity={0.8}
+      shadowOffsetY={1}
       align="center"
       width={radius * 4}
       offsetX={radius * 2}
