@@ -38,16 +38,31 @@ const ACCENT_SWATCH: Record<UiAccent, string> = {
   crimson: "#b83232",
 };
 
-/** A row of four accent "coins"; the active one wears a cream inner ring. */
+/**
+ * A row of accent "coins"; the active one wears a cream inner ring. When `onClear` is
+ * given (the DM's table-accent override), a leading dashed/transparent coin means "don't
+ * override the accent" and `value` may be null (each player keeps their own).
+ */
 function AccentSwatches({
   value,
   onPick,
+  onClear,
 }: {
-  value: UiAccent;
+  value: UiAccent | null;
   onPick: (accent: UiAccent) => void;
+  onClear?: () => void;
 }) {
   return (
     <div className="accent-swatches">
+      {onClear ? (
+        <button
+          className={`accent-swatch accent-swatch--clear${value === null ? " accent-swatch--active" : ""}`}
+          title="Don't override the accent — each player keeps their own"
+          aria-label="Don't override the accent"
+          aria-pressed={value === null}
+          onClick={onClear}
+        />
+      ) : null}
       {UI_ACCENTS.map((accent) => (
         <button
           key={accent}
@@ -227,23 +242,40 @@ export function SettingsPanel({ ctx }: { ctx: PanelContext }) {
           <div className="section-title">Table look (DM)</div>
           <span className="muted" style={{ fontSize: "0.75rem" }}>
             Set the theme and accent below, then turn the override on to apply it to every
-            player at once. Off (default) = each player picks their own look.
+            player at once. Pick “User” theme or the dashed accent to leave that one up to each
+            player — so you can override just the theme, just the accent, or both. Off
+            (default) = each player picks their own look entirely.
           </span>
           <div className="row" style={{ justifyContent: "space-between" }}>
             <label style={{ margin: 0 }}>Table theme</label>
-            <button
-              onClick={() =>
-                editLook({ ...stagedLook, theme: stagedLook.theme === "night" ? "day" : "night" })
-              }
-            >
-              {stagedLook.theme === "night" ? "Night" : "Day"}
-            </button>
+            <div className="row" style={{ gap: "0.25rem" }}>
+              <button
+                className={`btn-dashed${stagedLook.theme === null ? " btn-active" : ""}`}
+                title="Don't override the theme — each player keeps their own"
+                onClick={() => editLook({ ...stagedLook, theme: null })}
+              >
+                User
+              </button>
+              <button
+                className={stagedLook.theme === "day" ? "btn-active" : ""}
+                onClick={() => editLook({ ...stagedLook, theme: "day" })}
+              >
+                Day
+              </button>
+              <button
+                className={stagedLook.theme === "night" ? "btn-active" : ""}
+                onClick={() => editLook({ ...stagedLook, theme: "night" })}
+              >
+                Night
+              </button>
+            </div>
           </div>
           <div className="row" style={{ justifyContent: "space-between" }}>
             <label style={{ margin: 0 }}>Table accent</label>
             <AccentSwatches
               value={stagedLook.accent}
               onPick={(accent) => editLook({ ...stagedLook, accent })}
+              onClear={() => editLook({ ...stagedLook, accent: null })}
             />
           </div>
           <ToggleRow

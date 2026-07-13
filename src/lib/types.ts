@@ -1323,7 +1323,12 @@ export const UI_ACCENT_LABEL: Record<UiAccent, string> = {
   crimson: "Crimson & Garnet",
 };
 export type UiTheme = "day" | "night";
-export type UiThemeOverride = { theme: UiTheme; accent: UiAccent };
+/**
+ * DM table-look override. Each dimension is independent: a null theme or accent means
+ * "not overridden" — players keep their own for that one. So the DM can force just the
+ * theme, just the accent, both, or (null/null, or a null override) neither.
+ */
+export type UiThemeOverride = { theme: UiTheme | null; accent: UiAccent | null };
 
 export function normalizeUiOverride(value: unknown): UiThemeOverride | null {
   if (!value || typeof value !== "object") {
@@ -1331,8 +1336,8 @@ export function normalizeUiOverride(value: unknown): UiThemeOverride | null {
   }
   const candidate = value as Partial<UiThemeOverride>;
   return {
-    theme: candidate.theme === "night" ? "night" : "day",
-    accent: UI_ACCENTS.includes(candidate.accent as UiAccent) ? (candidate.accent as UiAccent) : "sky",
+    theme: candidate.theme === "night" || candidate.theme === "day" ? candidate.theme : null,
+    accent: UI_ACCENTS.includes(candidate.accent as UiAccent) ? (candidate.accent as UiAccent) : null,
   };
 }
 

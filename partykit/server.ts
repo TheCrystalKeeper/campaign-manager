@@ -2060,9 +2060,13 @@ export default class GameServer implements Party.Server {
         const changed = JSON.stringify(this.state.uiOverride) !== JSON.stringify(next);
         if (changed) {
           this.state.uiOverride = next;
+          // Each dimension is optional now — describe only the ones actually forced.
+          const parts: string[] = [];
+          if (next?.theme) parts.push(next.theme);
+          if (next?.accent) parts.push(`${next.accent} accent`);
           this.logEvent(
-            next
-              ? `The DM set the table's look: ${next.theme}, ${next.accent} accent.`
+            parts.length
+              ? `The DM set the table's look: ${parts.join(", ")}.`
               : "The DM released the table's look — pick your own in Settings.",
           );
           void this.broadcastState();

@@ -418,8 +418,9 @@ export default function App() {
   // toasts included. A DM room override (state.uiOverride) beats device prefs
   // while joined; device prefs are untouched underneath.
   const uiOverride = status === "joined" ? state?.uiOverride ?? null : null;
-  const effectiveNight = uiOverride ? uiOverride.theme === "night" : nightMode;
-  const effectiveAccent = uiOverride ? uiOverride.accent : accent;
+  // Per-dimension: a null theme/accent in the override falls back to this device's own pref.
+  const effectiveNight = uiOverride?.theme ? uiOverride.theme === "night" : nightMode;
+  const effectiveAccent = uiOverride?.accent ?? accent;
   useEffect(() => {
     const root = document.documentElement;
     if (effectiveNight) {

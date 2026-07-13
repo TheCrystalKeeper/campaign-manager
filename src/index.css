@@ -1583,10 +1583,11 @@ button.mod.roll-btn {
   display: flex;
   gap: 0.28rem;
   /* Sit right of the label; wrap onto a second line in a narrow panel rather
-     than pushing the row wider than the settings column. */
+     than pushing the row wider than the settings column. Wide enough to keep all
+     nine table-accent coins (the dashed "don't override" + 8 accents) on one line. */
   flex-wrap: wrap;
   justify-content: flex-end;
-  max-width: 13rem;
+  max-width: 14.5rem;
 }
 .accent-swatch {
   width: 1.3rem;
@@ -1603,6 +1604,37 @@ button.mod.roll-btn {
 }
 .accent-swatch--active {
   box-shadow: inset 0 0 0 2.5px rgba(246, 240, 223, 0.85), var(--shadow-ledge);
+}
+/* "Don't override" option (e.g. the User theme button): dashed outline echoing the
+   dashed "don't override" accent coin. Stays dashed when active (btn-active only recolors). */
+.btn-dashed {
+  border-style: dashed;
+}
+/* "Don't override the accent" coin: transparent with a dashed ring. */
+.accent-swatch--clear {
+  position: relative;
+  background-color: transparent;
+  border-style: dashed;
+  border-color: var(--text-muted);
+  box-shadow: none;
+}
+/* Selected: it's the "no accent" choice, so no color fill — instead the dashed ring goes
+   full-strength ink and a check appears, reading clearly as chosen on any background. */
+.accent-swatch--clear.accent-swatch--active {
+  border-color: var(--text);
+  box-shadow: none;
+}
+.accent-swatch--clear.accent-swatch--active::after {
+  content: "✓";
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.82rem;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--text);
 }
 
 /* --- Status / errors ------------------------------------------------------ */
