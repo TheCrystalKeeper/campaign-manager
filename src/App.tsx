@@ -52,6 +52,7 @@ const SNAP_KEY = "cm-map-snap";
 const TOASTS_KEY = "cm-log-toasts";
 const SPACE_CLICK_KEY = "cm-space-click";
 const TOKEN_PANEL_KEY = "cm-token-panel-on-click";
+const CLOSE_TOKEN_WITH_SHEET_KEY = "cm-close-token-with-sheet";
 const LIVE_DRAGS_KEY = "cm-live-drags";
 const HI_RES_KEY = "cm-hi-res";
 const NIGHT_KEY = "cm-night-mode";
@@ -159,6 +160,7 @@ export default function App() {
   const [toastsEnabled, setToastsEnabledState] = useState(() => readLocalFlag(TOASTS_KEY, true));
   const [spaceClick, setSpaceClickState] = useState(() => readLocalFlag(SPACE_CLICK_KEY, false));
   const [tokenPanelOnClick, setTokenPanelOnClickState] = useState(() => readLocalFlag(TOKEN_PANEL_KEY, true));
+  const [closeTokenWithSheet, setCloseTokenWithSheetState] = useState(() => readLocalFlag(CLOSE_TOKEN_WITH_SHEET_KEY, true));
   const [showLiveDrags, setShowLiveDragsState] = useState(() => readLocalFlag(LIVE_DRAGS_KEY, true));
   const [hiResRender, setHiResRenderState] = useState(() => readLocalFlag(HI_RES_KEY, true));
   const [nightMode, setNightModeState] = useState(() => readLocalFlag(NIGHT_KEY, false));
@@ -381,6 +383,14 @@ export default function App() {
     [roomId],
   );
 
+  const setCloseTokenWithSheet = useCallback(
+    (on: boolean) => {
+      if (roomId) writeCampaignFlag(roomId, "close-token-with-sheet", on);
+      setCloseTokenWithSheetState(on);
+    },
+    [roomId],
+  );
+
   const setShowLiveDrags = useCallback(
     (on: boolean) => {
       if (roomId) writeCampaignFlag(roomId, "live-drags", on);
@@ -471,6 +481,7 @@ export default function App() {
     setToastsEnabledState(readCampaignFlag(roomId, "toasts", true, TOASTS_KEY));
     setSpaceClickState(readCampaignFlag(roomId, "space-click", false, SPACE_CLICK_KEY));
     setTokenPanelOnClickState(readCampaignFlag(roomId, "token-panel", true, TOKEN_PANEL_KEY));
+    setCloseTokenWithSheetState(readCampaignFlag(roomId, "close-token-with-sheet", true, CLOSE_TOKEN_WITH_SHEET_KEY));
     setShowLiveDragsState(readCampaignFlag(roomId, "live-drags", true, LIVE_DRAGS_KEY));
     setHiResRenderState(readCampaignFlag(roomId, "hi-res", true, HI_RES_KEY));
   }, [roomId]);
@@ -558,6 +569,15 @@ export default function App() {
 
   const closeSheet = (id: string) => {
     setOpenSheetIds((current) => current.filter((sheetId) => sheetId !== id));
+    // QoL (opt-out in Settings): closing a character sheet also dismisses the left-hand Token
+    // editor popup — but only when it's showing the very token that sheet belongs to, so an
+    // unrelated token panel is left alone.
+    if (closeTokenWithSheet && isDm && selectedToken) {
+      const linkedSheetId = selectedToken.sheetId ?? selectedToken.ownerPlayerId ?? null;
+      if (linkedSheetId === id) {
+        setSelectedTokenId(null);
+      }
+    }
   };
 
   /** Open the Item Sheet window for a catalog item (DM-only). Each item gets its own window,
@@ -674,6 +694,8 @@ export default function App() {
     setSpaceClick,
     tokenPanelOnClick,
     setTokenPanelOnClick,
+    closeTokenWithSheet,
+    setCloseTokenWithSheet,
     showLiveDrags,
     setShowLiveDrags,
     hiResRender,

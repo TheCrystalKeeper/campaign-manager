@@ -319,6 +319,12 @@ export function SettingsPanel({ ctx }: { ctx: PanelContext }) {
             onToggle={ctx.setTokenPanelOnClick}
           />
           <ToggleRow
+            label="Close Token panel with sheet"
+            hint="When on, closing a character sheet also closes the left-hand Token editor panel for that same token. Off = the Token panel stays open. (This device only.)"
+            on={ctx.closeTokenWithSheet}
+            onToggle={ctx.setCloseTokenWithSheet}
+          />
+          <ToggleRow
             label="Reduce visual effects"
             hint="Turn off the fancy decorative effects (textured panels, notch frames, modal blur, crystal glow) for a lighter, faster render on slower machines. This device only — doesn't affect other players."
             on={fxLite}
