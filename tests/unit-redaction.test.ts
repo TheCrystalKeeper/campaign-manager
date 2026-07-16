@@ -278,5 +278,45 @@ check(
   conPlayer2.sheets["sheet-con"]!.data.iconUrl === "/portraits/flayer.png",
 );
 
+// ---------------------------------------------------------------------------
+// 7. "Show all health bars" flag: HP for a hidden NPC is normally stripped from
+//    players, but the DM's global toggle keeps it so the bar can draw. A per-token
+//    "bar" still reveals HP with the flag off; the DM always sees HP either way.
+// ---------------------------------------------------------------------------
+const hpNpc = createNpcSheetRecord("sheet-hp", "Ogre"); // all sections unrevealed → redacted
+hpNpc.data.hp = { current: 20, max: 30 };
+const hpRaw = createInitialState("room-hp");
+hpRaw.playerSlots = [{ id: "p1", name: "Vex" }];
+hpRaw.sheets["sheet-hp"] = hpNpc;
+hpRaw.tokens = [
+  { id: "tok-hp", sceneId: hpRaw.activeSceneId, x: 0, y: 0, label: "Ogre", color: "#c45c5c", kind: "enemy", sheetId: "sheet-hp", showHp: "none" },
+] as unknown as GameState["tokens"];
+
+const hpOff = normalizeGameState({ ...hpRaw, showAllTokenHp: false } as GameState);
+const hpOn = normalizeGameState({ ...hpRaw, showAllTokenHp: true } as GameState);
+check(
+  "flag off + token showHp none: hidden NPC HP stripped from players",
+  redactStateFor(hpOff, { role: "player", playerId: "p1" }).sheets["sheet-hp"]!.data.hp.max === 0,
+);
+const hpOnPV = redactStateFor(hpOn, { role: "player", playerId: "p1" }).sheets["sheet-hp"]!.data.hp;
+check(
+  "flag on: players receive the NPC's HP for every token",
+  hpOnPV.max === 30 && hpOnPV.current === 20,
+  JSON.stringify(hpOnPV),
+);
+const perToken = normalizeGameState({
+  ...hpRaw,
+  showAllTokenHp: false,
+  tokens: [{ ...(hpRaw.tokens[0] as object), showHp: "bar" }],
+} as unknown as GameState);
+check(
+  "flag off: a per-token 'bar' still reveals that token's HP",
+  redactStateFor(perToken, { role: "player", playerId: "p1" }).sheets["sheet-hp"]!.data.hp.max === 30,
+);
+check(
+  "DM always sees NPC HP regardless of the flag",
+  redactStateFor(hpOff, { role: "dm" }).sheets["sheet-hp"]!.data.hp.max === 30,
+);
+
 console.log(failures === 0 ? "\nALL CHECKS PASSED" : `\n${failures} CHECK(S) FAILED`);
 process.exit(failures === 0 ? 0 : 1);

@@ -203,6 +203,15 @@ function hpBarColor(ratio: number): string {
   return "#e5686b";
 }
 
+/** Token HP-bar thickness (px, unscaled). The gap below the token stays fixed; the values
+ *  text and name label sit below the bar, so both offsets are derived from this. */
+const HP_BAR_HEIGHT = 8;
+/** Gap between the token edge and the top of the HP bar. */
+const HP_BAR_TOP_GAP = 3;
+/** HP-bar width as a fraction of the token diameter — kept narrower than the token so it reads
+ *  as a floating gauge rather than underlining the whole footprint. Bar stays centered. */
+const HP_BAR_WIDTH_FRAC = 0.72;
+
 type MapCanvasProps = {
   state: GameState;
   sceneId: string;
@@ -804,6 +813,8 @@ const TokenNode = memo(function TokenNode({
   const dead = hp !== null && hp.max > 0 && hp.current <= 0;
   const showBar = hp !== null && hp.max > 0;
   const ratio = showBar ? Math.min(Math.max(hp.current / hp.max, 0), 1) : 0;
+  const hpBarWidth = radius * 2 * HP_BAR_WIDTH_FRAC;
+  const hpBarX = -hpBarWidth / 2;
   const badges = token.conditions
     .map((id) => CONDITION_EMOJI.get(id))
     .filter(Boolean) as string[];
@@ -1006,20 +1017,20 @@ const TokenNode = memo(function TokenNode({
       {showBar ? (
         <>
           <Rect
-            x={-radius}
-            y={radius + 3}
-            width={radius * 2}
-            height={4}
-            cornerRadius={2}
+            x={hpBarX}
+            y={radius + HP_BAR_TOP_GAP}
+            width={hpBarWidth}
+            height={HP_BAR_HEIGHT}
+            cornerRadius={HP_BAR_HEIGHT / 2}
             fill="rgba(0,0,0,0.6)"
             listening={false}
           />
           <Rect
-            x={-radius}
-            y={radius + 3}
-            width={radius * 2 * ratio}
-            height={4}
-            cornerRadius={2}
+            x={hpBarX}
+            y={radius + HP_BAR_TOP_GAP}
+            width={hpBarWidth * ratio}
+            height={HP_BAR_HEIGHT}
+            cornerRadius={HP_BAR_HEIGHT / 2}
             fill={hpBarColor(ratio)}
             listening={false}
           />
@@ -1031,7 +1042,7 @@ const TokenNode = memo(function TokenNode({
               align="center"
               width={radius * 4}
               offsetX={radius * 2}
-              y={radius + 8}
+              y={radius + HP_BAR_TOP_GAP + HP_BAR_HEIGHT + 1}
               listening={false}
             />
           ) : null}
@@ -1096,7 +1107,7 @@ function TokenNameLabel({
   showBar: boolean;
   showHpValues: boolean;
 }) {
-  const labelY = radius + (showBar ? 9 : 2);
+  const labelY = radius + (showBar ? HP_BAR_TOP_GAP + HP_BAR_HEIGHT + 2 : 2);
   return (
     <CrispText
       text={token.label}
@@ -2749,9 +2760,10 @@ export function MapCanvas({
                 ? linkedItem.iconCrop
                 : DEFAULT_ICON_CROP;
             const sheetHp = sheet?.data.hp;
-            // DM always sees bars; players only when the DM turned the display on.
-            // (Redaction keeps hp available for showHp tokens even on hidden sheets.)
-            const hp = sheetHp && (isDm || token.showHp !== "none") ? sheetHp : null;
+            // A bar shows when the token's own HP display is on, or the DM's "show all health
+            // bars" toggle is on — for the DM and players alike, so the DM sees exactly what the
+            // table sees. (Redaction keeps hp available to players for those same tokens.)
+            const hp = sheetHp && (token.showHp !== "none" || state.showAllTokenHp) ? sheetHp : null;
             const radius = tokenRadius(scene.gridSize, token.size ?? state.defaultTokenSize ?? 1);
             // A player controlling an NPC/enemy (not their own PC) → show their colour as a
             // ring so the "mind control" is visible; a real PC already uses the player's colour.
@@ -2852,7 +2864,7 @@ export function MapCanvas({
               const linkedSheetId = token.sheetId ?? token.ownerPlayerId;
               const sheet = linkedSheetId ? state.sheets[linkedSheetId] : undefined;
               const sheetHp = sheet?.data.hp;
-              const hp = sheetHp && (isDm || token.showHp !== "none") ? sheetHp : null;
+              const hp = sheetHp && (token.showHp !== "none" || state.showAllTokenHp) ? sheetHp : null;
               const showBar = hp !== null && hp.max > 0;
               const radius = tokenRadius(scene.gridSize, token.size ?? state.defaultTokenSize ?? 1);
               return (

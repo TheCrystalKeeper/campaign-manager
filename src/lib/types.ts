@@ -1287,6 +1287,12 @@ export type GameState = {
   /** Whether players may draw shift-drag dotted pointer arrows. On by default. */
   playersCanPoint: boolean;
   /**
+   * DM master switch: when on, every token shows its HP bar to all players, overriding the
+   * per-token default of hidden. Off by default (players see HP only for tokens the DM turned
+   * on individually in the Token panel). Only forces the bar — numeric values stay per-token.
+   */
+  showAllTokenHp: boolean;
+  /**
    * Whether new image uploads are downscaled + re-encoded to WebP on the client before they're
    * stored (portraits/tokens ≤1024px, maps ≤2560px). On by default: much smaller files — faster
    * to load/decode and far easier on the 10 GB storage budget. Only affects NEW uploads.
@@ -1483,6 +1489,7 @@ export type ClientMessage =
   | { type: "SET_PLAYERS_CAN_MOVE"; enabled: boolean }
   | { type: "SET_OPTIMIZE_UPLOADS"; enabled: boolean }
   | { type: "SET_PLAYERS_CAN_POINT"; enabled: boolean }
+  | { type: "SET_SHOW_ALL_TOKEN_HP"; enabled: boolean }
   /** Replace a scene's whole wall set — bulk ops only (clear all / paste). Granular edits below. */
   | { type: "SET_WALLS"; sceneId: string; walls: Wall[] }
   | { type: "ADD_WALL"; sceneId: string; wall: Wall }
@@ -2796,6 +2803,8 @@ export function normalizeGameState(state: GameState & LegacyGameStateFields): Ga
     // Default-allowed: only an explicit `false` turns these off (undefined ⇒ on).
     playersCanMove: state.playersCanMove !== false,
     playersCanPoint: state.playersCanPoint !== false,
+    // Off by default: only an explicit `true` turns it on (undefined ⇒ off).
+    showAllTokenHp: state.showAllTokenHp === true,
     optimizeUploads: state.optimizeUploads !== false,
     uiOverride: normalizeUiOverride(state.uiOverride),
     tokenShapeDefaults: normalizeTokenShapeDefaults(state.tokenShapeDefaults),
@@ -2852,6 +2861,7 @@ export function createInitialState(roomId: string): GameState {
     playersCanDraw: false,
     playersCanMove: true,
     playersCanPoint: true,
+    showAllTokenHp: false,
     optimizeUploads: true,
     uiOverride: null,
     tokenShapeDefaults: { ...DEFAULT_TOKEN_SHAPES },

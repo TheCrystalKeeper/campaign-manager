@@ -2054,6 +2054,15 @@ export default class GameServer implements Party.Server {
         }
         break;
       }
+      case "SET_SHOW_ALL_TOKEN_HP": {
+        const enabled = Boolean(parsed.enabled);
+        if (this.state.showAllTokenHp !== enabled) {
+          this.state.showAllTokenHp = enabled;
+          this.logEvent(`Health bars on all tokens ${enabled ? "shown" : "hidden"} by the DM.`);
+          void this.broadcastState();
+        }
+        break;
+      }
       case "SET_UI_OVERRIDE": {
         // DM-forced theme+accent for every client (null = players choose their own).
         const next = parsed.override === null ? null : normalizeUiOverride(parsed.override);

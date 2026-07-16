@@ -2548,6 +2548,9 @@ body.pointer-dragging * {
   max-width: min(58vw, 720px);
   flex-wrap: wrap;
   justify-content: center;
+  /* Top-align chips so every portrait sits on the same line; a missing HP bar just leaves
+     empty space below rather than dropping the icon (overrides .cluster--top-center's center). */
+  align-items: flex-start;
   /* Centered within the map area (viewport minus dock), so it shifts in step
      with the dock's collapse/expand animation. */
   left: calc((100vw - var(--dock-rail-w)) / 2);

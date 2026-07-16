@@ -108,9 +108,11 @@ export function redactStateFor(state: GameState, view: StateView): GameState {
           }
         : token,
     );
+  // When the DM has forced HP bars on for everyone, keep HP for every token-linked sheet;
+  // otherwise only for tokens whose HP display was individually turned on.
   const hpVisibleSheetIds = new Set(
     tokens
-      .filter((token) => token.showHp !== "none" && token.sheetId)
+      .filter((token) => (state.showAllTokenHp || token.showHp !== "none") && token.sheetId)
       .map((token) => token.sheetId as string),
   );
   // A sheet's portrait URL is withheld only when EVERY visible token linking it is

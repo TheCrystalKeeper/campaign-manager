@@ -524,6 +524,12 @@ export function SettingsPanel({ ctx }: { ctx: PanelContext }) {
             onToggle={(on) => room.send({ type: "SET_PLAYERS_CAN_DRAW", enabled: on })}
           />
           <ToggleRow
+            label="Show all health bars"
+            hint="Show every token's health bar to all players — not just tokens you've individually set to show HP in the Token panel. Off (default) = you control HP visibility per token. Numeric HP values stay per-token either way."
+            on={state.showAllTokenHp}
+            onToggle={(on) => room.send({ type: "SET_SHOW_ALL_TOKEN_HP", enabled: on })}
+          />
+          <ToggleRow
             label="Optimize uploads"
             hint="Shrink new image uploads and save them as WebP (portraits/tokens ≤1024px, maps ≤2560px). Much smaller files — faster to load and far easier on storage. Off = keep originals at full size. Applies to new uploads only."
             on={state.optimizeUploads !== false}
