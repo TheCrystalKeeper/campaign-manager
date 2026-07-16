@@ -833,7 +833,23 @@ export default function App() {
     return record.data.hp;
   };
 
-  // Avatar strip: connected players + NPCs with a token in the active scene.
+  // Avatar strip: PCs with a token in the active scene (or currently connected), plus
+  // NPCs with a token in the active scene — the tray mirrors who's on the current board.
+  const onlinePlayerById = new Map(
+    state.connectedPlayers.map((player) => [player.playerId, player] as const),
+  );
+  const pcChipSlotIds = state.playerSlots
+    .map((slot) => slot.id)
+    .filter(
+      (slotId) =>
+        onlinePlayerById.has(slotId) ||
+        state.tokens.some(
+          (token) =>
+            token.sceneId === state.activeSceneId &&
+            token.kind === "player" &&
+            token.ownerPlayerId === slotId,
+        ),
+    );
   const npcChipSheetIds = [
     ...new Set(
       state.tokens
@@ -893,24 +909,31 @@ export default function App() {
           plain
           className={`avatar-strip${dockOpen ? " avatar-strip--dock-open" : ""}`}
         >
-          {state.connectedPlayers.map((player) => {
-            const sheetData = state.sheets[player.playerId]?.data;
-            const hp = chipHp(player.playerId);
+          {pcChipSlotIds.map((slotId) => {
+            const record = state.sheets[slotId];
+            const online = onlinePlayerById.get(slotId);
+            const name =
+              online?.displayName ||
+              record?.data.characterName?.trim() ||
+              state.playerSlots.find((slot) => slot.id === slotId)?.name ||
+              "Character";
+            const hp = chipHp(slotId);
             return (
               <div
-                key={player.playerId}
-                className="player-chip"
-                title={`${player.displayName} — double-click for sheet`}
-                onDoubleClick={() => openSheet(player.playerId)}
+                key={slotId}
+                // Offline PCs (only their token is on the board) read dimmed vs. players at the table.
+                className={`player-chip${online ? "" : " player-chip--offline"}`}
+                title={`${name}${online ? "" : " (offline)"} — double-click for sheet`}
+                onDoubleClick={() => openSheet(slotId)}
               >
                 <div className="chip-portrait">
-                  <ChipAvatar src={sheetData?.iconUrl} crop={sheetData?.iconCrop} name={player.displayName} />
+                  <ChipAvatar src={record?.data.iconUrl} crop={record?.data.iconCrop} name={name} />
 
-                  {isDm ? (
+                  {isDm && online ? (
                     <button
                       className="kick"
-                      title={`Kick ${player.displayName}`}
-                      onClick={() => dm.kickPlayer(player.playerId)}
+                      title={`Kick ${name}`}
+                      onClick={() => dm.kickPlayer(slotId)}
                     >
                       <X size={11} strokeWidth={2.6} />
                     </button>
