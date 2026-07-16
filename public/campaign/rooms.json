@@ -4,6 +4,7 @@
       "roomId": "campaign1",
       "name": "Campaign 1",
       "iconUrl": null,
+      "description": "Test campaign\n\nSomething something\n\ntest testy testy test\n\njarona!",
       "createdAt": 0
     }
   ]

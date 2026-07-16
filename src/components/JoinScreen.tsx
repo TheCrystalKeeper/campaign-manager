@@ -1,9 +1,13 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Moon, Sun } from "lucide-react";
 import type { JoinParams } from "../hooks/useGameRoom";
 import { useRoomLobby } from "../hooks/useGameRoom";
-import { loadMergedCampaigns, registerCampaignRoom } from "../lib/campaignRegistry";
+import {
+  CAMPAIGN_DESCRIPTION_CAP,
+  loadMergedCampaigns,
+  registerCampaignRoom,
+} from "../lib/campaignRegistry";
 import {
   generateRoomId,
   loadRoomKey,
@@ -11,7 +15,7 @@ import {
   upsertSavedCampaign,
   type SavedCampaign,
 } from "../lib/savedCampaigns";
-import { uploadCampaignIcon } from "../lib/uploadAsset";
+import { uploadLibraryImage } from "../lib/uploadAsset";
 import type { Role } from "../lib/types";
 
 type JoinScreenProps = {
@@ -109,6 +113,15 @@ export function JoinScreen({ onJoin, nightMode, onToggleNight }: JoinScreenProps
                 </button>
               ))}
             </div>
+            {selectedCampaign ? (
+              <div className="campaign-description">
+                {selectedCampaign.description ? (
+                  selectedCampaign.description
+                ) : (
+                  <span className="muted">No description yet.</span>
+                )}
+              </div>
+            ) : null}
           </div>
 
           <div className="stack">
@@ -207,9 +220,17 @@ function CreateCampaignModal({
   onCreated: (roomId: string) => void;
 }) {
   const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
   const [iconFile, setIconFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const iconInputRef = useRef<HTMLInputElement>(null);
+  // Preview the chosen icon without re-creating the object URL every render (which would
+  // reload the <img> and leak URLs); revoke it when the file changes or the modal closes.
+  const iconPreviewUrl = useMemo(() => (iconFile ? URL.createObjectURL(iconFile) : null), [iconFile]);
+  useEffect(() => () => {
+    if (iconPreviewUrl) URL.revokeObjectURL(iconPreviewUrl);
+  }, [iconPreviewUrl]);
 
   const create = async () => {
     const trimmed = name.trim();
@@ -217,13 +238,15 @@ function CreateCampaignModal({
     setBusy(true);
     setError(null);
     const roomId = generateRoomId();
+    const trimmedDescription = description.trim() || null;
     try {
       let iconUrl: string | null = null;
       if (iconFile) {
-        iconUrl = (await uploadCampaignIcon(roomId, iconFile)).url;
+        // Store the icon as a normal room asset so it's manageable on the Assets page.
+        iconUrl = (await uploadLibraryImage(roomId, iconFile)).url;
       }
-      await registerCampaignRoom({ roomId, name: trimmed, iconUrl });
-      upsertSavedCampaign(roomId, { name: trimmed, iconUrl });
+      await registerCampaignRoom({ roomId, name: trimmed, iconUrl, description: trimmedDescription });
+      upsertSavedCampaign(roomId, { name: trimmed, iconUrl, description: trimmedDescription });
       onCreated(roomId);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not create the campaign.");
@@ -241,8 +264,39 @@ function CreateCampaignModal({
           <input value={name} onChange={(e) => setName(e.target.value)} placeholder="The Sunken Keep" />
         </div>
         <div className="field">
+          <label>Description (optional)</label>
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            rows={3}
+            maxLength={CAMPAIGN_DESCRIPTION_CAP}
+            placeholder="A short blurb players see when they pick this campaign."
+          />
+        </div>
+        <div className="field">
           <label>Icon (optional)</label>
-          <input type="file" accept="image/*" onChange={(e) => setIconFile(e.target.files?.[0] ?? null)} />
+          <div className="row" style={{ alignItems: "center", gap: "0.6rem" }}>
+            {iconFile ? (
+              <img className="campaign-icon-preview" src={iconPreviewUrl ?? undefined} alt="" />
+            ) : (
+              <span className="campaign-icon-preview campaign-icon-preview--empty" aria-hidden="true" />
+            )}
+            <button type="button" onClick={() => iconInputRef.current?.click()}>
+              {iconFile ? "Change image…" : "Choose image…"}
+            </button>
+            {iconFile ? (
+              <button type="button" onClick={() => setIconFile(null)}>
+                Remove
+              </button>
+            ) : null}
+            <input
+              ref={iconInputRef}
+              type="file"
+              accept="image/*"
+              style={{ display: "none" }}
+              onChange={(e) => setIconFile(e.target.files?.[0] ?? null)}
+            />
+          </div>
         </div>
         {error ? <span className="muted" style={{ color: "var(--danger-text)" }}>{error}</span> : null}
         <div className="row" style={{ justifyContent: "flex-end" }}>

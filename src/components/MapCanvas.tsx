@@ -603,6 +603,10 @@ const TokenNode = memo(function TokenNode({
   const rotatingRef = useRef(false);
   const [dragFacing, setDragFacing] = useState<number | null>(null);
   const [hovered, setHovered] = useState(false);
+  // True only while THIS client is actively lifting the token (drag). Flipped once at
+  // drag start/end (not per frame), it shrinks + fades the resting drop shadow so a lifted
+  // mini casts a smaller, fainter shadow than one sitting on the table.
+  const [dragging, setDragging] = useState(false);
   const canRotate = Boolean(onRotate);
   const facingDeg = dragFacing ?? token.facing ?? 0;
   const shape = token.shape ?? (shapeDefaults ?? DEFAULT_TOKEN_SHAPES)[token.kind];
@@ -743,6 +747,7 @@ const TokenNode = memo(function TokenNode({
     const group = groupRef.current;
     const lift = liftRef.current;
     if (!group || !lift) return;
+    setDragging(true);
     const state = liftStateRef.current!;
     if (reducedMotionNow()) {
       // A still affordance, no motion: pop to a small lifted pose and stop.
@@ -761,6 +766,7 @@ const TokenNode = memo(function TokenNode({
 
   /** Drag released: drop the token back down (the loop eases it and stops itself once settled). */
   const endLift = () => {
+    setDragging(false);
     const state = liftStateRef.current!;
     state.lifted = false;
     const lift = liftRef.current;
@@ -848,26 +854,6 @@ const TokenNode = memo(function TokenNode({
         endLift();
       }}
     >
-      {/* Resting drop shadow: a soft, faded shadow cast from a black copy of the token's own
-          silhouette — so it follows the shape (circle/square/diamond/…) and falls off gently
-          rather than showing a hard edge. The caster sits a touch inside the token so its solid
-          body stays hidden beneath the art; only the blurred, offset shadow spills out. */}
-      <Group listening={false}>
-        <TokenShapePrimitive
-          shape={shape}
-          radius={radius * 0.94}
-          fill="#000000"
-          stroke="#000000"
-          strokeWidth={0}
-          glow={{
-            shadowColor: "#000000",
-            shadowBlur: radius * 0.35,
-            shadowOffsetX: radius * 0.06,
-            shadowOffsetY: radius * 0.13,
-            shadowOpacity: 0.22,
-          }}
-        />
-      </Group>
       {/* Ground shadow: stays on the table (outside the lift group) and separates down-right from
           the token as it rises. A radial-gradient fill, not Konva shadowBlur (which would re-blur
           the whole token every frame). Hidden until a lift begins. */}
@@ -886,6 +872,35 @@ const TokenNode = memo(function TokenNode({
           rise offset) applies to the whole miniature without touching the outer group's
           Konva-drag-managed x/y. */}
       <Group ref={liftRef} name="token-lift">
+      {/* Resting drop shadow: a soft, faded halo cast from a stroke-only copy of the token's own
+          silhouette — follows the shape (circle/square/diamond/…) and falls off gently. Lives
+          INSIDE the lift group as the bottom-most child so it wobbles/rises glued beneath the
+          token and never gets uncovered as the mini tilts on drag. Stroke-only (NO fill) on
+          purpose: a filled disc would show through transparent cutout art as a hard black shape;
+          the thin caster ring hides under the token edge and only its blurred shadow spills out.
+          While the mini is lifted (dragging) the wrapper shrinks + fades it, so a placed token
+          casts a fuller shadow than one being carried. */}
+      <Group
+        listening={false}
+        opacity={dragging ? 0.5 : 1}
+        scaleX={dragging ? 0.7 : 1}
+        scaleY={dragging ? 0.7 : 1}
+      >
+        <TokenShapePrimitive
+          shape={shape}
+          radius={radius * 0.9}
+          stroke="#000000"
+          strokeWidth={radius * 0.13}
+          glow={{
+            shadowColor: "#000000",
+            shadowBlur: radius * 0.5,
+            shadowOffsetX: radius * 0.06,
+            shadowOffsetY: radius * 0.18,
+            shadowOpacity: 0.5,
+            shadowForStrokeEnabled: true,
+          }}
+        />
+      </Group>
       {isCurrentTurn ? (
         <Circle radius={radius + 4} stroke={CURRENT_TURN_COLOR} strokeWidth={2.5} listening={false} />
       ) : null}

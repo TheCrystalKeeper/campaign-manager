@@ -26,6 +26,7 @@ export async function upsertRegistryRoomInR2(
   bucket: R2Bucket,
   entry: Pick<CampaignRegistryEntry, "roomId" | "name"> & {
     iconUrl?: string | null;
+    description?: string | null;
   },
 ): Promise<CampaignRegistryEntry[]> {
   const rooms = await readRegistryFromR2(bucket);
@@ -33,6 +34,7 @@ export async function upsertRegistryRoomInR2(
     roomId: entry.roomId.trim(),
     name: entry.name.trim(),
     iconUrl: entry.iconUrl ?? null,
+    description: entry.description ?? null,
     createdAt: Date.now(),
   });
   await bucket.put(REGISTRY_KEY, serializeRegistryFile(next), {

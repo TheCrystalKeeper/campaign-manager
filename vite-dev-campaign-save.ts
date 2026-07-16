@@ -47,6 +47,7 @@ type CampaignRoomBody = {
   roomId?: string;
   name?: string;
   iconUrl?: string | null;
+  description?: string | null;
 };
 
 /// <summary>
@@ -494,6 +495,7 @@ export function devCampaignSavePlugin(): Plugin {
                 roomId,
                 name,
                 iconUrl: body.iconUrl ?? null,
+                description: body.description ?? null,
                 createdAt: Date.now(),
               });
               await writeRegistryToDisk(server.config.root, nextRooms);

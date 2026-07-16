@@ -5,12 +5,17 @@ export type CampaignRegistryEntry = {
   roomId: string;
   name: string;
   iconUrl?: string | null;
+  /** Short blurb shown on the join screen; DM-editable. Null when unset. */
+  description?: string | null;
   createdAt: number;
 };
 
 export type CampaignRegistryFile = {
   rooms: CampaignRegistryEntry[];
 };
+
+/** Max stored description length — long enough for a paragraph, capped so the registry stays small. */
+export const CAMPAIGN_DESCRIPTION_CAP = 1000;
 
 export const DEFAULT_CAMPAIGN_REGISTRY: CampaignRegistryEntry[] = [
   {
@@ -61,6 +66,12 @@ export function upsertRegistryEntry(
   if (!normalized) {
     return rooms;
   }
+  // Keep the original creation time on edits so updating a room's name/description/icon
+  // doesn't bump it to the top of the registry ordering.
+  const existing = rooms.find((room) => room.roomId === normalized.roomId);
+  if (existing) {
+    normalized.createdAt = existing.createdAt;
+  }
   const rest = rooms.filter((room) => room.roomId !== normalized.roomId);
   return [normalized, ...rest].sort((a, b) => b.createdAt - a.createdAt);
 }
@@ -80,6 +91,7 @@ export function mergeRegistryWithLocal(
         roomId: entry.roomId,
         name: entry.name,
         iconUrl: entry.iconUrl ?? saved?.iconUrl ?? null,
+        description: entry.description ?? saved?.description ?? null,
         lastJoinedAt: saved?.lastJoinedAt ?? entry.createdAt,
       } satisfies SavedCampaign;
     })
@@ -114,6 +126,7 @@ export async function fetchCampaignRegistry(): Promise<CampaignRegistryEntry[]> 
 export async function registerCampaignRoom(
   entry: Pick<CampaignRegistryEntry, "roomId" | "name"> & {
     iconUrl?: string | null;
+    description?: string | null;
   },
 ): Promise<CampaignRegistryEntry[]> {
   const response = await fetch(registryApiPath(), {
@@ -151,10 +164,15 @@ function normalizeRegistryEntry(value: unknown): CampaignRegistryEntry | null {
   if (!roomId || !name) {
     return null;
   }
+  const description =
+    typeof entry.description === "string" && entry.description.trim()
+      ? entry.description.trim().slice(0, CAMPAIGN_DESCRIPTION_CAP)
+      : null;
   return {
     roomId,
     name,
     iconUrl: entry.iconUrl ?? null,
+    description,
     createdAt: typeof entry.createdAt === "number" ? entry.createdAt : Date.now(),
   };
 }

@@ -16,6 +16,18 @@ import {
 } from "../lib/types";
 import type { CampaignManifest } from "../lib/campaignManifest";
 import { useVisualEffectsLite } from "../lib/visualEffects";
+import {
+  CAMPAIGN_DESCRIPTION_CAP,
+  fetchCampaignRegistry,
+  registerCampaignRoom,
+} from "../lib/campaignRegistry";
+import {
+  formatCampaignName,
+  loadSavedCampaigns,
+  upsertSavedCampaign,
+} from "../lib/savedCampaigns";
+import { useDebouncedCallback } from "../hooks/useDebouncedCallback";
+import { uploadLibraryImage } from "../lib/uploadAsset";
 
 const SHAPE_LABEL: Record<TokenShape, string> = {
   circle: "● Circle",
@@ -99,6 +111,205 @@ function ToggleRow({
         {on ? "On" : "Off"}
       </button>
     </div>
+  );
+}
+
+/** Device-remembered height (px) the DM last dragged the campaign-description editor to. */
+const CAMPAIGN_DESC_HEIGHT_KEY = "cm-campaign-desc-height";
+
+/// <summary>
+/// DM-only editor for the campaign's join-screen icon + blurb. Both live on the
+/// shared campaign registry (not the live room), so we seed name + icon + the
+/// current description from there — falling back to this browser's saved copy —
+/// and save edits back (description debounced, icon on pick/clear), always
+/// re-sending name + the other field so neither is wiped.
+/// </summary>
+function CampaignSection({ roomId }: { roomId: string }) {
+  const [description, setDescription] = useState("");
+  const [iconUrl, setIconUrl] = useState<string | null>(null);
+  const [status, setStatus] = useState<"loading" | "idle" | "saving" | "saved" | "error">(
+    "loading",
+  );
+  // The registry POST requires `name` and would drop any field we omit, so all three are
+  // mirrored into refs — a save (from any field) always re-sends the latest of each without
+  // re-rendering on every keystroke.
+  const nameRef = useRef("");
+  const descRef = useRef("");
+  const iconRef = useRef<string | null>(null);
+  const loadedRef = useRef(false);
+  const iconInputRef = useRef<HTMLInputElement>(null);
+  const descBoxRef = useRef<HTMLTextAreaElement>(null);
+
+  // Restore the height the DM last dragged the description box to, and persist future drags
+  // (a device preference; the box keeps whatever size it was left at across settings opens).
+  useEffect(() => {
+    const el = descBoxRef.current;
+    if (!el) return;
+    const saved = localStorage.getItem(CAMPAIGN_DESC_HEIGHT_KEY);
+    if (saved) el.style.height = saved;
+    const observer = new ResizeObserver(() => {
+      if (el.style.height) {
+        try {
+          localStorage.setItem(CAMPAIGN_DESC_HEIGHT_KEY, el.style.height);
+        } catch {
+          /* storage full / unavailable — height memory is best-effort */
+        }
+      }
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const seed = (name: string, icon: string | null, desc: string) => {
+      nameRef.current = name;
+      iconRef.current = icon;
+      descRef.current = desc;
+      setIconUrl(icon);
+      setDescription(desc);
+    };
+    const seedFromLocal = () => {
+      const saved = loadSavedCampaigns().find((c) => c.roomId === roomId);
+      seed(saved?.name || formatCampaignName(roomId), saved?.iconUrl ?? null, saved?.description ?? "");
+    };
+    void (async () => {
+      try {
+        const registry = await fetchCampaignRegistry();
+        if (cancelled) return;
+        const entry = registry.find((r) => r.roomId === roomId);
+        if (entry) {
+          seed(entry.name, entry.iconUrl ?? null, entry.description ?? "");
+        } else {
+          seedFromLocal();
+        }
+      } catch {
+        if (cancelled) return;
+        seedFromLocal();
+      } finally {
+        if (!cancelled) {
+          loadedRef.current = true;
+          setStatus("idle");
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [roomId]);
+
+  // Reads the current name/icon/description from refs so any field's save re-sends them all.
+  const save = async () => {
+    const name = nameRef.current.trim() || formatCampaignName(roomId);
+    const desc = descRef.current.trim() || null;
+    setStatus("saving");
+    try {
+      await registerCampaignRoom({ roomId, name, iconUrl: iconRef.current, description: desc });
+      upsertSavedCampaign(roomId, { name, iconUrl: iconRef.current, description: desc });
+      setStatus("saved");
+    } catch {
+      setStatus("error");
+    }
+  };
+  const { debounced } = useDebouncedCallback(() => void save(), 600);
+
+  const pickIcon = async (file: File) => {
+    setStatus("saving");
+    try {
+      // Stored as a normal room asset (tokens/{roomId}--asset-…) so it shows on the Assets
+      // page and can be truly deleted there. "Remove" below only unlinks it from the campaign.
+      const { url } = await uploadLibraryImage(roomId, file);
+      iconRef.current = url;
+      setIconUrl(url);
+      await save();
+    } catch {
+      setStatus("error");
+    }
+  };
+  const clearIcon = () => {
+    iconRef.current = null;
+    setIconUrl(null);
+    void save();
+  };
+
+  const busy = status === "loading" || status === "saving";
+  const statusLabel =
+    status === "loading"
+      ? "Loading…"
+      : status === "saving"
+        ? "Saving…"
+        : status === "saved"
+          ? "Saved ✓"
+          : status === "error"
+            ? "Couldn't save — check your connection."
+            : "";
+
+  return (
+    <>
+      <div className="section-title">Campaign</div>
+
+      <div className="field">
+        <label>Icon</label>
+        <div className="row" style={{ alignItems: "center", gap: "0.6rem" }}>
+          {iconUrl ? (
+            <img className="campaign-icon-preview" src={iconUrl} alt="" />
+          ) : (
+            <span className="campaign-icon-preview campaign-icon-preview--empty" aria-hidden="true" />
+          )}
+          <button disabled={busy} onClick={() => iconInputRef.current?.click()}>
+            {iconUrl ? "Change…" : "Upload…"}
+          </button>
+          {iconUrl ? (
+            <button disabled={busy} onClick={clearIcon}>
+              Remove
+            </button>
+          ) : null}
+          <input
+            ref={iconInputRef}
+            type="file"
+            accept="image/*"
+            style={{ display: "none" }}
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) void pickIcon(file);
+              e.target.value = "";
+            }}
+          />
+        </div>
+      </div>
+
+      <div className="field">
+        <label>Description</label>
+        <span className="muted" style={{ fontSize: "0.75rem" }}>
+          A short blurb shown on the join screen when someone picks this campaign. Everyone at the
+          table can read it.
+        </span>
+        <textarea
+          ref={descBoxRef}
+          value={description}
+          rows={4}
+          maxLength={CAMPAIGN_DESCRIPTION_CAP}
+          disabled={status === "loading"}
+          placeholder="What's this campaign about? Tone, premise, the party's current quest…"
+          onChange={(e) => {
+            setDescription(e.target.value);
+            descRef.current = e.target.value;
+            if (loadedRef.current) debounced();
+          }}
+        />
+      </div>
+      {statusLabel ? (
+        <span
+          className="muted"
+          style={{
+            fontSize: "0.7rem",
+            color: status === "error" ? "var(--danger)" : undefined,
+          }}
+        >
+          {statusLabel}
+        </span>
+      ) : null}
+    </>
   );
 }
 
@@ -330,6 +541,8 @@ export function SettingsPanel({ ctx }: { ctx: PanelContext }) {
             on={fxLite}
             onToggle={setFxLite}
           />
+
+          <CampaignSection roomId={state.roomId} />
 
           <div className="section-title">Default token shapes</div>
           {(

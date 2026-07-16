@@ -5,11 +5,14 @@ export type SavedCampaign = {
   name: string;
   lastJoinedAt: number;
   iconUrl?: string | null;
+  /** Join-screen blurb, mirrored from the shared registry. Null when unset. */
+  description?: string | null;
 };
 
 export type UpsertCampaignOptions = {
   name?: string;
   iconUrl?: string | null;
+  description?: string | null;
 };
 
 const CAMPAIGNS_KEY = "cm-saved-campaigns";
@@ -118,6 +121,10 @@ export function upsertSavedCampaign(
     lastJoinedAt: Date.now(),
     iconUrl:
       options.iconUrl !== undefined ? options.iconUrl : (existing?.iconUrl ?? null),
+    description:
+      options.description !== undefined
+        ? options.description
+        : (existing?.description ?? null),
   };
   const merged = [next, ...campaigns].sort((a, b) => b.lastJoinedAt - a.lastJoinedAt);
   saveSavedCampaigns(merged);

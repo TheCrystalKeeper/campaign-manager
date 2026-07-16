@@ -365,6 +365,12 @@ textarea {
   resize: vertical;
   min-height: 3.25rem;
 }
+/* When a textarea grows a scrollbar, the corner where the scrollbar meets the resize grip
+   defaults to a bright white box that clashes with the parchment and hides the normal grip.
+   Making that corner transparent lets the browser's usual resize grip show through unchanged. */
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
 label {
   display: block;
   font-size: 0.78rem;
@@ -933,6 +939,8 @@ textarea,
   border-radius: var(--r-wob-lg);
   box-shadow: var(--shadow-pop);
   padding: 1.1rem;
+  display: flex;
+  flex-direction: column;
 }
 .lobby-card h1 {
   color: var(--text);
@@ -960,6 +968,23 @@ textarea,
     grid-template-columns: 1fr;
   }
 }
+/* Two-column (desktop) lobby: cap the card at the viewport and bind the columns row to the
+   card's leftover height, so a long campaign description scrolls inside its own box instead
+   of pushing the whole card past the top/bottom of the screen. On mobile the card just grows
+   and the page scrolls. */
+@media (min-width: 641px) {
+  .lobby-card {
+    max-height: calc(100dvh - 2rem);
+  }
+  .lobby-columns {
+    flex: 1 1 auto;
+    min-height: 0;
+    grid-template-rows: minmax(0, 1fr);
+  }
+  .lobby-columns > .stack {
+    min-height: 0;
+  }
+}
 .campaign-list {
   display: flex;
   flex-direction: column;
@@ -982,6 +1007,39 @@ textarea,
   height: 2rem;
   border-radius: var(--radius);
   object-fit: cover;
+}
+/* Read-only blurb for the selected campaign, shown under the list on the join screen.
+   pre-wrap preserves the DM's line breaks; a max-height keeps long blurbs from pushing
+   the card taller than the viewport. */
+.campaign-description {
+  margin-top: 0.1rem;
+  padding: 0.45rem 0.55rem;
+  flex: 1 1 auto;
+  min-height: 3.25rem;
+  overflow-y: auto;
+  font-size: 0.82rem;
+  line-height: 1.4;
+  color: var(--text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  background-color: var(--surface-2);
+  border: 1.5px solid var(--border-subtle);
+  border-radius: var(--r-wob-sm);
+  box-shadow: var(--shadow-well);
+}
+/* Small square icon preview in the DM's Campaign settings (upload / change / remove). */
+.campaign-icon-preview {
+  width: 2.25rem;
+  height: 2.25rem;
+  flex: none;
+  border-radius: var(--r-wob-sm);
+  border: 1.5px solid var(--border-subtle);
+  object-fit: cover;
+}
+.campaign-icon-preview--empty {
+  display: inline-block;
+  background: var(--surface-2);
+  border-style: dashed;
 }
 .role-toggle {
   display: flex;

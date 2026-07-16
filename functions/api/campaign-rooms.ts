@@ -50,6 +50,7 @@ export const onRequestPost: PagesFunction = async (context) => {
       roomId?: string;
       name?: string;
       iconUrl?: string | null;
+      description?: string | null;
     };
     const roomId = body.roomId?.trim();
     const name = body.name?.trim();
@@ -64,6 +65,7 @@ export const onRequestPost: PagesFunction = async (context) => {
       roomId,
       name,
       iconUrl: body.iconUrl ?? null,
+      description: body.description ?? null,
     });
     return new Response(JSON.stringify({ rooms }), {
       status: 200,
