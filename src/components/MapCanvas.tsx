@@ -848,6 +848,26 @@ const TokenNode = memo(function TokenNode({
         endLift();
       }}
     >
+      {/* Resting drop shadow: a soft, faded shadow cast from a black copy of the token's own
+          silhouette — so it follows the shape (circle/square/diamond/…) and falls off gently
+          rather than showing a hard edge. The caster sits a touch inside the token so its solid
+          body stays hidden beneath the art; only the blurred, offset shadow spills out. */}
+      <Group listening={false}>
+        <TokenShapePrimitive
+          shape={shape}
+          radius={radius * 0.94}
+          fill="#000000"
+          stroke="#000000"
+          strokeWidth={0}
+          glow={{
+            shadowColor: "#000000",
+            shadowBlur: radius * 0.35,
+            shadowOffsetX: radius * 0.06,
+            shadowOffsetY: radius * 0.13,
+            shadowOpacity: 0.22,
+          }}
+        />
+      </Group>
       {/* Ground shadow: stays on the table (outside the lift group) and separates down-right from
           the token as it rises. A radial-gradient fill, not Konva shadowBlur (which would re-blur
           the whole token every frame). Hidden until a lift begins. */}

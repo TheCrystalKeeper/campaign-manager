@@ -178,7 +178,23 @@ export function SheetSidebar({
 
       <div className="vitals-badges">
         <StatBadge label="Init" value={isNpc ? formatModifier(value.initiative) : derivedBadge("init", "Initiative")} />
-        <StatBadge label="Walk" value={value.speed} />
+        <StatBadge
+          label="Walk"
+          value={
+            canEdit ? (
+              <NumberInput
+                className="stat-badge-input"
+                value={value.speed}
+                min={0}
+                allowNegative={false}
+                onCommit={(speed) => update({ speed })}
+                aria-label="Walking speed"
+              />
+            ) : (
+              value.speed
+            )
+          }
+        />
         <StatBadge label="Prof" value={isNpc ? formatModifier(value.proficiencyBonus) : derivedBadge("prof", "Proficiency bonus")} />
       </div>
 

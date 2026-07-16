@@ -1,10 +1,10 @@
-﻿{
-    "rooms":  [
-                  {
-                      "roomId":  "campaign1",
-                      "name":  "Campaign 1",
-                      "iconUrl":  null,
-                      "createdAt":  0
-                  }
-              ]
+{
+  "rooms": [
+    {
+      "roomId": "campaign1",
+      "name": "Campaign 1",
+      "iconUrl": null,
+      "createdAt": 0
+    }
+  ]
 }

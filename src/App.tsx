@@ -57,6 +57,10 @@ const HI_RES_KEY = "cm-hi-res";
 const NIGHT_KEY = "cm-night-mode";
 const ACCENT_KEY = "cm-ui-accent";
 
+/** Sentinel entry in the open-sheets list: the DM's "pick a character" placeholder window
+ *  (opened from the dock button before a specific sheet has been chosen). */
+const SHEET_PICKER = "__sheet_picker__";
+
 function readStoredAccent(): UiAccent {
   try {
     const raw = localStorage.getItem(ACCENT_KEY);
@@ -142,11 +146,12 @@ export default function App() {
   const [dockOpen, setDockOpen] = useState(true);
   const [dockTab, setDockTab] = useState<PanelId>("log");
   const [popped, setPopped] = useState<PanelId[]>([]);
-  const [sheetOpen, setSheetOpen] = useState(false);
+  // Character-sheet windows currently open (one FloatingWindow each). Ordered by open time;
+  // may include the SHEET_PICKER sentinel (the DM's "pick a character" placeholder).
+  const [openSheetIds, setOpenSheetIds] = useState<string[]>([]);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [viewSheetId, setViewSheetId] = useState<string | null>(null);
-  const [itemSheetOpen, setItemSheetOpen] = useState(false);
-  const [viewItemId, setViewItemId] = useState<string | null>(null);
+  // Item-sheet windows currently open (DM-only), one FloatingWindow each, ordered by open time.
+  const [openItemIds, setOpenItemIds] = useState<string[]>([]);
   const [secretRolls, setSecretRolls] = useState(false);
   const [trayOpen, setTrayOpen] = useState(true);
   const [page, setPage] = useState<PageId>("board");
@@ -331,11 +336,11 @@ export default function App() {
   const leave = () => {
     setSession(null);
     setPopped([]);
-    setSheetOpen(false);
+    setOpenSheetIds([]);
+    setOpenItemIds([]);
     setSettingsOpen(false);
     setSelectedTokenId(null);
     setSecretRolls(false);
-    setViewSheetId(null);
     setDockTab("log");
     setDockOpen(true);
     setPage("board");
@@ -543,14 +548,26 @@ export default function App() {
   const selectedToken = state.tokens.find((token) => token.id === selectedTokenId) ?? null;
 
   const openSheet = (sheetId: string) => {
-    setViewSheetId(sheetId);
-    setSheetOpen(true);
+    // Open a window for this sheet if one isn't already up (each stays open independently).
+    // Opening a real sheet also clears the DM's placeholder picker.
+    setOpenSheetIds((current) => {
+      const withoutPicker = current.filter((id) => id !== SHEET_PICKER);
+      return withoutPicker.includes(sheetId) ? withoutPicker : [...withoutPicker, sheetId];
+    });
   };
 
-  /** Open the Item Sheet window for a catalog item (DM-only). */
+  const closeSheet = (id: string) => {
+    setOpenSheetIds((current) => current.filter((sheetId) => sheetId !== id));
+  };
+
+  /** Open the Item Sheet window for a catalog item (DM-only). Each item gets its own window,
+   *  so several can be open at once; a second open of the same item is a no-op. */
   const openItemSheet = (itemId: string) => {
-    setViewItemId(itemId);
-    setItemSheetOpen(true);
+    setOpenItemIds((current) => (current.includes(itemId) ? current : [...current, itemId]));
+  };
+
+  const closeItemSheet = (itemId: string) => {
+    setOpenItemIds((current) => current.filter((id) => id !== itemId));
   };
 
   /** Single-click a token: just select it (the DM's Token panel shows). No sheet. */
@@ -633,9 +650,12 @@ export default function App() {
     room,
     dm,
     isDm,
-    viewSheetId,
+    // Per-sheet windows override this with their own id; the base context has no single "current"
+    // sheet. Other panels don't read it.
+    viewSheetId: null,
     openSheet,
-    viewItemId,
+    // Per-item windows override this with their own id; the base context has no single "current".
+    viewItemId: null,
     openItemSheet,
     updateSheet: (sheetId, sheet) => room.send({ type: "UPDATE_SHEET", sheetId, sheet }),
     // The DM's persistent Secret toggle applies to every roll, sheet-clicks included.
@@ -675,12 +695,17 @@ export default function App() {
   const itemSheetPanel = PANELS.find((panel) => panel.id === "itemSheet")!;
 
   const toggleSheet = () => {
-    if (sheetOpen) {
-      setSheetOpen(false);
-    } else {
-      setViewSheetId(isDm ? viewSheetId : room.yourPlayerId);
-      setSheetOpen(true);
-    }
+    // The dock button is a toggle: close every open sheet window if any are up, otherwise open
+    // this viewer's entry point — the player's own sheet, or the DM's "pick a character" picker.
+    setOpenSheetIds((current) => {
+      if (current.length > 0) {
+        return [];
+      }
+      if (isDm) {
+        return [SHEET_PICKER];
+      }
+      return room.yourPlayerId ? [room.yourPlayerId] : [];
+    });
   };
 
   // Rail action buttons: sheet and dice on top, settings at the bottom.
@@ -689,7 +714,7 @@ export default function App() {
       id: "sheet",
       icon: <IdCard size={17} strokeWidth={2.2} />,
       title: "Character sheet",
-      active: sheetOpen,
+      active: openSheetIds.length > 0,
       slot: "top",
       onClick: toggleSheet,
     },
@@ -921,22 +946,35 @@ export default function App() {
             })
           : null}
 
-        {onBoard && sheetOpen ? (
-          <FloatingWindow
-            key={`sheet:${layoutEpoch}`}
-            id="sheet"
-            roomId={session.roomId}
-            title={sheetPanel.title(panelContext)}
-            width={sheetPanel.width}
-            height={sheetPanel.height}
-            minWidth={sheetPanel.minWidth}
-            minHeight={sheetPanel.minHeight}
-            defaultPos={sheetPanel.defaultPos}
-            onClose={() => setSheetOpen(false)}
-          >
-            {sheetPanel.render(panelContext)}
-          </FloatingWindow>
-        ) : null}
+        {/* One floating window per open sheet — players and the DM can have several up at
+            once. Each has its own id (independent geometry + z-order); freshly-opened ones
+            cascade off the default position so they don't land exactly atop one another. */}
+        {onBoard
+          ? openSheetIds.map((entryId, index) => {
+              const sheetId = entryId === SHEET_PICKER ? null : entryId;
+              const sheetCtx: PanelContext = { ...panelContext, viewSheetId: sheetId };
+              const cascade = index * 32;
+              return (
+                <FloatingWindow
+                  key={`sheet:${entryId}:${layoutEpoch}`}
+                  id={sheetId ? `sheet:${sheetId}` : "sheet"}
+                  roomId={session.roomId}
+                  title={sheetPanel.title(sheetCtx)}
+                  width={sheetPanel.width}
+                  height={sheetPanel.height}
+                  minWidth={sheetPanel.minWidth}
+                  minHeight={sheetPanel.minHeight}
+                  defaultPos={(vw, vh) => {
+                    const base = sheetPanel.defaultPos(vw, vh);
+                    return { x: base.x + cascade, y: base.y + cascade };
+                  }}
+                  onClose={() => closeSheet(entryId)}
+                >
+                  {sheetPanel.render(sheetCtx)}
+                </FloatingWindow>
+              );
+            })
+          : null}
 
         {onBoard && settingsOpen ? (
           <FloatingWindow
@@ -954,21 +992,32 @@ export default function App() {
           </FloatingWindow>
         ) : null}
 
-        {onBoard && isDm && itemSheetOpen ? (
-          <FloatingWindow
-            key={`itemSheet:${layoutEpoch}`}
-            id="itemSheet"
-            roomId={session.roomId}
-            title={itemSheetPanel.title(panelContext)}
-            width={itemSheetPanel.width}
-            minWidth={itemSheetPanel.minWidth}
-            minHeight={itemSheetPanel.minHeight}
-            defaultPos={itemSheetPanel.defaultPos}
-            onClose={() => setItemSheetOpen(false)}
-          >
-            {itemSheetPanel.render(panelContext)}
-          </FloatingWindow>
-        ) : null}
+        {/* One floating window per open item sheet — the DM can inspect several at once.
+            Each has its own id (independent geometry + z-order) and cascades off the default. */}
+        {onBoard && isDm
+          ? openItemIds.map((itemId, index) => {
+              const itemCtx: PanelContext = { ...panelContext, viewItemId: itemId };
+              const cascade = index * 32;
+              return (
+                <FloatingWindow
+                  key={`itemSheet:${itemId}:${layoutEpoch}`}
+                  id={`itemSheet:${itemId}`}
+                  roomId={session.roomId}
+                  title={itemSheetPanel.title(itemCtx)}
+                  width={itemSheetPanel.width}
+                  minWidth={itemSheetPanel.minWidth}
+                  minHeight={itemSheetPanel.minHeight}
+                  defaultPos={(vw, vh) => {
+                    const base = itemSheetPanel.defaultPos(vw, vh);
+                    return { x: base.x + cascade, y: base.y + cascade };
+                  }}
+                  onClose={() => closeItemSheet(itemId)}
+                >
+                  {itemSheetPanel.render(itemCtx)}
+                </FloatingWindow>
+              );
+            })
+          : null}
 
         {onBoard && isDm && selectedToken && tokenPanelOnClick ? (
           <FloatingWindow
