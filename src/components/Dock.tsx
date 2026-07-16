@@ -22,7 +22,7 @@ type DockProps = {
   /** Tabs currently popped out into floating windows (shown dimmed in the rail). */
   popped: PanelId[];
   context: PanelContext;
-  /** Action buttons interleaved with the tabs (sheet on top, dice after, settings bottom). */
+  /** Action buttons interleaved with the tabs (sheet + dice on top, settings bottom). */
   actions?: DockAction[];
   onSelectTab: (id: PanelId) => void;
   onPopOut: (id: PanelId) => void;
@@ -51,8 +51,8 @@ function ActionButtons({ actions }: { actions: DockAction[] }) {
 /// window edge, with the active panel expanding to its left. The rail (and its
 /// collapse chevron) stays visible even when the panel is collapsed, so the
 /// sidebar can never be lost off-screen. Besides the panel tabs, the rail holds
-/// action buttons: sheet at the very top, dice tray after the tabs, and
-/// settings at the bottom just above the chevron.
+/// action buttons: sheet and dice tray at the very top, and settings at the
+/// bottom just above the chevron.
 /// </summary>
 export function Dock({
   panels,

@@ -683,7 +683,7 @@ export default function App() {
     }
   };
 
-  // Rail action buttons: sheet on top, dice after the tabs, settings at the bottom.
+  // Rail action buttons: sheet and dice on top, settings at the bottom.
   const dockActions: DockAction[] = [
     {
       id: "sheet",
@@ -698,7 +698,7 @@ export default function App() {
       icon: <Dices size={17} strokeWidth={2.2} />,
       title: "Dice tray",
       active: trayOpen,
-      slot: "after-tabs",
+      slot: "top",
       onClick: () => setTrayOpen((open) => !open),
     },
     {

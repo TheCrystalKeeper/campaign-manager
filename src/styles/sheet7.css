@@ -844,7 +844,7 @@
   min-width: 0;
 }
 .ability-block-label {
-  font-size: 0.62rem;
+  font-size: 0.78rem;
   color: var(--text-muted);
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -886,7 +886,9 @@
 }
 .skill-row {
   display: grid;
-  grid-template-columns: 1rem 1.6rem 1fr auto auto 1.6rem;
+  /* First track holds the prof dot; the extra width past the 0.85rem dot gives
+     it breathing room from the ability abbr that follows. */
+  grid-template-columns: 1.3rem 1.6rem 1fr auto auto 1.6rem;
   align-items: center;
   gap: 0.3rem;
   padding: 0.05rem 0;
@@ -927,7 +929,8 @@
 }
 .save-row {
   display: grid;
-  grid-template-columns: 1rem 1fr auto auto;
+  /* Wider first track (see .skill-row) sets the prof dot off from the save name. */
+  grid-template-columns: 1.3rem 1fr auto auto;
   align-items: center;
   gap: 0.3rem;
   font-size: 0.8rem;
