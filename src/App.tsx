@@ -53,6 +53,7 @@ const TOASTS_KEY = "cm-log-toasts";
 const SPACE_CLICK_KEY = "cm-space-click";
 const TOKEN_PANEL_KEY = "cm-token-panel-on-click";
 const CLOSE_TOKEN_WITH_SHEET_KEY = "cm-close-token-with-sheet";
+const CLOSE_SETTINGS_ON_CLICK_OFF_KEY = "cm-close-settings-on-click-off";
 const LIVE_DRAGS_KEY = "cm-live-drags";
 const HI_RES_KEY = "cm-hi-res";
 const NIGHT_KEY = "cm-night-mode";
@@ -161,6 +162,7 @@ export default function App() {
   const [spaceClick, setSpaceClickState] = useState(() => readLocalFlag(SPACE_CLICK_KEY, false));
   const [tokenPanelOnClick, setTokenPanelOnClickState] = useState(() => readLocalFlag(TOKEN_PANEL_KEY, true));
   const [closeTokenWithSheet, setCloseTokenWithSheetState] = useState(() => readLocalFlag(CLOSE_TOKEN_WITH_SHEET_KEY, true));
+  const [closeSettingsOnClickOff, setCloseSettingsOnClickOffState] = useState(() => readLocalFlag(CLOSE_SETTINGS_ON_CLICK_OFF_KEY, false));
   const [showLiveDrags, setShowLiveDragsState] = useState(() => readLocalFlag(LIVE_DRAGS_KEY, true));
   const [hiResRender, setHiResRenderState] = useState(() => readLocalFlag(HI_RES_KEY, true));
   const [nightMode, setNightModeState] = useState(() => readLocalFlag(NIGHT_KEY, false));
@@ -335,6 +337,49 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isDm, onBoard, historyUndo, historyRedo]);
 
+  // 'S' toggles the Settings window (board only; ignored while typing or with a modifier held).
+  useEffect(() => {
+    if (!onBoard) {
+      return;
+    }
+    const onKey = (event: KeyboardEvent) => {
+      if (
+        event.key.toLowerCase() !== "s" ||
+        event.ctrlKey ||
+        event.metaKey ||
+        event.altKey ||
+        isTypingTarget(event.target)
+      ) {
+        return;
+      }
+      event.preventDefault();
+      setSettingsOpen((open) => !open);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onBoard]);
+
+  // Opt-in: a pointer-down anywhere outside the open Settings window (except its dock toggle)
+  // closes it — click-off-to-dismiss. Off by default; the ⚙ toggle stays available.
+  useEffect(() => {
+    if (!onBoard || !settingsOpen || !closeSettingsOnClickOff) {
+      return;
+    }
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (
+        !target ||
+        target.closest('[data-window-id="settings"]') ||
+        target.closest('[data-dock-action="settings"]')
+      ) {
+        return;
+      }
+      setSettingsOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointerDown, true);
+    return () => document.removeEventListener("pointerdown", onPointerDown, true);
+  }, [onBoard, settingsOpen, closeSettingsOnClickOff]);
+
   const leave = () => {
     setSession(null);
     setPopped([]);
@@ -387,6 +432,14 @@ export default function App() {
     (on: boolean) => {
       if (roomId) writeCampaignFlag(roomId, "close-token-with-sheet", on);
       setCloseTokenWithSheetState(on);
+    },
+    [roomId],
+  );
+
+  const setCloseSettingsOnClickOff = useCallback(
+    (on: boolean) => {
+      if (roomId) writeCampaignFlag(roomId, "close-settings-on-click-off", on);
+      setCloseSettingsOnClickOffState(on);
     },
     [roomId],
   );
@@ -482,6 +535,7 @@ export default function App() {
     setSpaceClickState(readCampaignFlag(roomId, "space-click", false, SPACE_CLICK_KEY));
     setTokenPanelOnClickState(readCampaignFlag(roomId, "token-panel", true, TOKEN_PANEL_KEY));
     setCloseTokenWithSheetState(readCampaignFlag(roomId, "close-token-with-sheet", true, CLOSE_TOKEN_WITH_SHEET_KEY));
+    setCloseSettingsOnClickOffState(readCampaignFlag(roomId, "close-settings-on-click-off", false, CLOSE_SETTINGS_ON_CLICK_OFF_KEY));
     setShowLiveDragsState(readCampaignFlag(roomId, "live-drags", true, LIVE_DRAGS_KEY));
     setHiResRenderState(readCampaignFlag(roomId, "hi-res", true, HI_RES_KEY));
   }, [roomId]);
@@ -696,6 +750,8 @@ export default function App() {
     setTokenPanelOnClick,
     closeTokenWithSheet,
     setCloseTokenWithSheet,
+    closeSettingsOnClickOff,
+    setCloseSettingsOnClickOff,
     showLiveDrags,
     setShowLiveDrags,
     hiResRender,

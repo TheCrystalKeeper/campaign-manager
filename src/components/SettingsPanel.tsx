@@ -422,6 +422,12 @@ export function SettingsPanel({ ctx }: { ctx: PanelContext }) {
         onToggle={ctx.setSpaceClick}
       />
       <ToggleRow
+        label="Click-off closes Settings"
+        hint="When Settings is open, clicking anywhere outside it (like the board) closes it. Off (default) = it stays open until you close it. Tip: press S to open/close Settings."
+        on={ctx.closeSettingsOnClickOff}
+        onToggle={ctx.setCloseSettingsOnClickOff}
+      />
+      <ToggleRow
         label="Hi-res board rendering"
         hint="Renders the board at 2× resolution for crisper text and token art — most visible on standard (non-retina) displays. Higher GPU cost; turn off if the map feels sluggish."
         on={ctx.hiResRender}

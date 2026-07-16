@@ -78,6 +78,9 @@ export type PanelContext = {
   /** DM per-client: closing a character sheet also closes the linked token's Token editor panel. */
   closeTokenWithSheet: boolean;
   setCloseTokenWithSheet: (on: boolean) => void;
+  /** Per-client: clicking outside the open Settings window closes it (off by default). */
+  closeSettingsOnClickOff: boolean;
+  setCloseSettingsOnClickOff: (on: boolean) => void;
   /** Per-client: mirror other players' tokens sliding live while they drag (receiver-side). */
   showLiveDrags: boolean;
   setShowLiveDrags: (on: boolean) => void;

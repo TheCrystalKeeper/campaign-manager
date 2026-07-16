@@ -35,6 +35,7 @@ function ActionButtons({ actions }: { actions: DockAction[] }) {
       {actions.map((action) => (
         <button
           key={action.id}
+          data-dock-action={action.id}
           className={`dock-tab${action.active ? " dock-tab--active" : ""}`}
           title={action.title}
           onClick={action.onClick}

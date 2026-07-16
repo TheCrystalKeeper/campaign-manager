@@ -374,6 +374,7 @@ export function FloatingWindow({
   return (
     <div
       ref={rootRef}
+      data-window-id={id}
       className={`window${maximized ? " window--maximized" : ""}`}
       style={style}
       onPointerDownCapture={() => setZ(bringToFront(id))}
