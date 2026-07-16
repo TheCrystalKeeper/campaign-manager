@@ -149,12 +149,14 @@ export const PANELS: PanelDef[] = [
     // has a lot of content).
     defaultPos: (vw, vh) => ({ x: Math.max(16, Math.round((vw - 800) / 2)), y: Math.max(16, Math.round((vh - 860) / 2 - 60)) }),
     // Min width measured so the Main page shows TWO columns (container query flips at a
-    // .sheet7 inline-size of 680px ≈ a 690px window) AND every skill name fits on ONE line
-    // (the last skill stops wrapping at ~750px). 760 keeps a small safety margin; the
-    // default opens a touch wider so both columns breathe.
+    // .sheet7 inline-size of 680px ≈ a 690px window) AND every skill name fits on ONE line.
+    // The widest skill ("Animal Handling") needs a ~758px window to fit; 760 sat right on
+    // that edge and still truncated to "Animal Handl…" on displays whose font renders a
+    // hair wider. 790 gives ~15px of track clearance so cross-machine font variance never
+    // re-truncates it, while staying just under the default so both columns still breathe.
     width: 800,
     height: 860,
-    minWidth: 760,
+    minWidth: 790,
     minHeight: 480,
     render: (ctx) => {
       const sheetId = resolveSheetId(ctx);

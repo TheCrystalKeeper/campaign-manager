@@ -901,6 +901,11 @@
 }
 .skill-name {
   min-width: 0;
+  /* Keep every skill on a single line (see .save-name); truncate rather than
+     wrap "Animal Handling" onto two lines when the panel is dragged narrow. */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .skill-mod-input {
   width: 2.4rem;
