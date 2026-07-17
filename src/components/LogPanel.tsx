@@ -192,11 +192,19 @@ export function LogPanel({ log, isDm, yourPlayerId, playerSlots, onSendChat, she
             );
           }
           if (entry.kind === "chat") {
+            // A whisper addressed to the viewer reads "(whisper to You)" and glows gold
+            // (--primary-strong) instead of the viewer's accent, so incoming whispers stand out.
+            const whisperedToYou = !!entry.whisperTo && entry.whisperTo === yourPlayerId;
             const whisper = entry.whisperTo
-              ? ` (whisper to ${slotName(entry.whisperTo)})`
+              ? ` (whisper to ${whisperedToYou ? "You" : slotName(entry.whisperTo)})`
               : "";
             return (
-              <div className={`log-chat${entry.whisperTo ? " log-whisper" : ""}`} key={entry.id}>
+              <div
+                className={`log-chat${entry.whisperTo ? " log-whisper" : ""}${
+                  whisperedToYou ? " log-whisper--to-you" : ""
+                }`}
+                key={entry.id}
+              >
                 <b>{entry.fromId === yourPlayerId ? "You" : entry.from}</b>
                 <span className="muted">{whisper}</span>: {entry.text}
               </div>

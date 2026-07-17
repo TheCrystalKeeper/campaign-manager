@@ -114,14 +114,19 @@ export function LogToasts({
           );
         }
         if (entry.kind === "chat") {
+          // Mirror LogPanel: a whisper addressed to the viewer says "(whisper to You)" and
+          // glows gold (--primary-strong) rather than the viewer's accent.
+          const whisperedToYou = !!entry.whisperTo && entry.whisperTo === yourPlayerId;
           return (
             <div
-              className={`log-toast${entry.whisperTo ? " log-toast--whisper" : ""}`}
+              className={`log-toast${entry.whisperTo ? " log-toast--whisper" : ""}${
+                whisperedToYou ? " log-toast--whisper-to-you" : ""
+              }`}
               key={entry.id}
             >
               <b>{entry.fromId === yourPlayerId ? "You" : entry.from}</b>
               {entry.whisperTo ? (
-                <span className="muted"> (whisper to {slotName(entry.whisperTo)})</span>
+                <span className="muted"> (whisper to {whisperedToYou ? "You" : slotName(entry.whisperTo)})</span>
               ) : null}
               : {entry.text}
             </div>

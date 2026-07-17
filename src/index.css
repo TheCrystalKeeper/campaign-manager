@@ -1437,6 +1437,11 @@ textarea,
 .log-whisper {
   color: var(--accent);
 }
+/* A whisper addressed to you glows gold (the theme's fixed --primary-strong),
+   not your chosen accent, so incoming whispers are unmistakable. */
+.log-whisper.log-whisper--to-you {
+  color: var(--primary-strong);
+}
 .chip-btn {
   font-size: 0.75rem;
   padding: 0.2rem 0.6rem;
@@ -2245,6 +2250,9 @@ button.mod.roll-btn {
 }
 .log-toast--whisper {
   color: var(--accent);
+}
+.log-toast--whisper.log-toast--whisper-to-you {
+  color: var(--primary-strong);
 }
 @keyframes toast-in {
   from {
