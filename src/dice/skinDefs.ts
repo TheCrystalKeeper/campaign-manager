@@ -25,13 +25,42 @@ export interface NumberStyle {
   shadow: string;
 }
 
-/** The dice tray well surface — pure CSS (index.css), listed here for the picker. */
-export type TraySurfaceId = "wood" | "felt" | "leather";
-export const TRAY_SURFACE_IDS: readonly TraySurfaceId[] = ["wood", "felt", "leather"];
+/** The dice tray well surface — pure CSS (index.css), listed here for the picker.
+ *  "default" is the app's own paper/ink surface (follows day/night theme). */
+export type TraySurfaceId =
+  | "default"
+  | "wood"
+  | "ebony"
+  | "felt"
+  | "felt-red"
+  | "felt-purple"
+  | "felt-blue"
+  | "leather"
+  | "leather-light"
+  | "hide";
+export const TRAY_SURFACE_IDS: readonly TraySurfaceId[] = [
+  "default",
+  "wood",
+  "ebony",
+  "leather",
+  "leather-light",
+  "hide",
+  "felt",
+  "felt-red",
+  "felt-purple",
+  "felt-blue",
+];
 export const TRAY_SURFACE_LABELS: Record<TraySurfaceId, string> = {
+  default: "Default (matches theme)",
   wood: "Wood",
-  felt: "Felt",
-  leather: "Leather",
+  ebony: "Black Wood",
+  felt: "Green Felt",
+  "felt-red": "Red Felt",
+  "felt-purple": "Purple Felt",
+  "felt-blue": "Blue Felt",
+  leather: "Dark Leather",
+  "leather-light": "Light Leather",
+  hide: "Animal Hide",
 };
 
 export interface DiceSkinDef {
@@ -80,29 +109,48 @@ export const DICE_SKINS: Record<DiceSkinId, DiceSkinDef> = {
     envMapIntensity: 0.25,
     numbers: CLASSIC_NUMBERS,
   },
+  white: {
+    label: "White",
+    // Standard casino-style white die with black numbers. No color map — the subtle
+    // surface life comes from the frost roughness map (sheen variation) and a faint
+    // normal relief, so it isn't a perfectly smooth plastic white.
+    maps: {
+      normal: "/textures/dice/bronze-normal.jpg",
+      roughness: "/textures/dice/glass-frost-rough.jpg",
+    },
+    color: "#f0eee7",
+    metalness: 0.0,
+    roughness: 0.55,
+    envMapIntensity: 0.4,
+    normalScale: 0.3,
+    numbers: { fill: "#1c1c1e", highlight: "rgba(255, 255, 255, 0.55)", shadow: "rgba(0, 0, 0, 0.35)" },
+    percentileTint: "#a9bede",
+  },
   marble: {
     label: "Marble",
     maps: { color: "/textures/dice/marble-color.jpg" },
-    color: "#b9bac3",
+    color: "rgb(185, 195, 192)",
     metalness: 0.0,
     roughness: 0.18,
     envMapIntensity: 0.6,
-    numbers: { fill: "#2b2b33", highlight: "rgba(255, 255, 255, 0.75)", shadow: "rgba(0, 0, 0, 0.4)" },
+    numbers: { fill: "rgb(190, 151, 51)", highlight: "rgba(255, 255, 255, 0.75)", shadow: "rgba(0, 0, 0, 0.4)" },
     percentileTint: "#93a7cf",
   },
   wood: {
-    label: "Wood",
-    maps: { color: "/textures/dice/wood-color.jpg", normal: "/textures/dice/wood-normal.jpg" },
-    color: "#6b5136",
+    label: "Ebony Wood",
+    maps: { color: "/textures/dice/ebony-color.jpg", normal: "/textures/dice/ebony-normal.jpg" },
+    color: "#463327",
     metalness: 0.0,
-    roughness: 0.6,
-    envMapIntensity: 0.35,
-    normalScale: 0.6,
-    numbers: { fill: "#f0e3c8", highlight: "rgba(255, 226, 170, 0.5)", shadow: "rgba(30, 16, 6, 0.7)" },
+    // Matte, barely reflective, with deep grain relief — reads as raw dark wood
+    // instead of lacquered veneer.
+    roughness: 0.85,
+    envMapIntensity: 0.15,
+    normalScale: 1.5,
+    numbers: { fill: "#e3b84f", highlight: "rgba(255, 232, 165, 0.6)", shadow: "rgba(0, 0, 0, 0.65)" },
     percentileTint: "#8fa3c8",
   },
   glass: {
-    label: "Glass",
+    label: "Prismatic Frosted Glass",
     // Prismatic frosted glass: a milky body with soft pastel rainbow washes (the color
     // map is generated in-repo — see scratch script note in SOURCES.txt), matte frost
     // from the roughness map, and iridescence for the angle-dependent rainbow sheen.
@@ -154,8 +202,8 @@ export const COIN_SKINS: Record<CoinSkinId, DiceSkinDef> = {
     maps: { normal: "/textures/dice/bronze-normal.jpg", roughness: "/textures/dice/metal-scratch-rough.jpg" },
     color: "#d9b64a",
     metalness: 0.95,
-    roughness: 0.55,
-    envMapIntensity: 0.7,
+    roughness: 0.35,
+    envMapIntensity: 1.1,
     normalScale: 0.5,
     numbers: { fill: "#4a3a1a", highlight: "rgba(255, 236, 180, 0.6)", shadow: "rgba(30, 20, 5, 0.5)" },
   },
@@ -164,8 +212,8 @@ export const COIN_SKINS: Record<CoinSkinId, DiceSkinDef> = {
     maps: { normal: "/textures/dice/bronze-normal.jpg", roughness: "/textures/dice/metal-scratch-rough.jpg" },
     color: "#c9ced6",
     metalness: 0.95,
-    roughness: 0.55,
-    envMapIntensity: 0.7,
+    roughness: 0.35,
+    envMapIntensity: 1.1,
     normalScale: 0.5,
     numbers: { fill: "#3a3f4a", highlight: "rgba(255, 255, 255, 0.65)", shadow: "rgba(10, 14, 20, 0.5)" },
   },
@@ -174,10 +222,21 @@ export const COIN_SKINS: Record<CoinSkinId, DiceSkinDef> = {
     maps: { normal: "/textures/dice/bronze-normal.jpg", roughness: "/textures/dice/metal-scratch-rough.jpg" },
     color: "#b0714a",
     metalness: 0.95,
-    roughness: 0.55,
-    envMapIntensity: 0.7,
+    roughness: 0.35,
+    envMapIntensity: 1.1,
     normalScale: 0.5,
     numbers: { fill: "#3f2418", highlight: "rgba(255, 210, 170, 0.6)", shadow: "rgba(25, 10, 4, 0.55)" },
+  },
+  oxidized: {
+    label: "Oxidized Copper",
+    maps: { normal: "/textures/dice/bronze-normal.jpg", roughness: "/textures/dice/metal-scratch-rough.jpg" },
+    // Verdigris patina: green-teal tint, duller metal (patina isn't reflective).
+    color: "#79a58f",
+    metalness: 0.55,
+    roughness: 0.7,
+    envMapIntensity: 0.7,
+    normalScale: 0.5,
+    numbers: { fill: "#22392f", highlight: "rgba(205, 240, 222, 0.5)", shadow: "rgba(8, 22, 16, 0.6)" },
   },
 };
 
@@ -191,7 +250,7 @@ export interface DiceSkinPrefs {
   tray?: TraySurfaceId;
 }
 
-export const DEFAULT_SKIN_PREFS: DiceSkinPrefs = { all: "classic", tray: "wood" };
+export const DEFAULT_SKIN_PREFS: DiceSkinPrefs = { all: "classic", tray: "default" };
 
 /** Die sizes that can carry a per-die skin override, in tray order. */
 export const SKINNABLE_SIDES = [4, 6, 8, 10, 12, 20, 100] as const;

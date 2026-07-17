@@ -98,6 +98,47 @@ export function preloadAllSkinTextures(): void {
 }
 
 /* ---------------------------------------------------------------------------------
+ * Coin face art: grayscale heads/tails decal textures (cropped from the Septim atlas
+ * at build time) that the coin finish tints. Applied to the cap decals so the engine
+ * can still swap the landing face to the server-picked result.
+ * ------------------------------------------------------------------------------- */
+
+const COIN_ART_PATHS: Record<string, string> = {
+  H: "/textures/dice/coin-heads-color.png",
+  T: "/textures/dice/coin-tails-color.png",
+};
+
+/// <summary>
+/// Puts the heads/tails art for `label` ("H"/"T") on a coin cap decal material — now if
+/// the texture is cached, or when its load completes. The material starts (or goes)
+/// invisible until the art is on it, so a bare tint-colored square never flashes.
+/// Safe to call again with a different label (relabeling the landing face): a stale
+/// pending load won't overwrite a newer label.
+/// </summary>
+export function applyCoinArt(
+  material: THREE.MeshBasicMaterial | THREE.MeshStandardMaterial,
+  label: string,
+): void {
+  const path = COIN_ART_PATHS[label];
+  if (!path) {
+    return;
+  }
+  material.userData.coinArtLabel = label;
+  const entry = getSkinTexture(path, true);
+  if (!entry.loaded) {
+    material.opacity = 0;
+  }
+  assignWhenLoaded(entry, (texture) => {
+    if (material.userData.coinArtLabel !== label) {
+      return; // relabeled while this texture was still downloading
+    }
+    material.map = texture;
+    material.opacity = 1;
+    material.needsUpdate = true;
+  });
+}
+
+/* ---------------------------------------------------------------------------------
  * Coin face: a procedural minted-rim ring multiplied into the metal tint. Generated
  * once per coin finish and cached; the coin's planar cap UVs map it continuously.
  * ------------------------------------------------------------------------------- */

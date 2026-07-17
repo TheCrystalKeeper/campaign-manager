@@ -2827,6 +2827,20 @@ body.pointer-dragging * {
   touch-action: none;
   user-select: none;
 }
+/* Default: the app's own paper/ink surface (day) or chalk/stone (night) — built purely
+   from theme tokens so it tracks day/night mode and the accent automatically. A soft
+   ink vignette gives the inset-well read without leaving the UI's visual language. */
+.dice-tray-well--default {
+  /* A step darker AND slightly richer than the tray body so the well reads as a
+     recessed inset without going muddy: same hue as the theme surface, lower
+     lightness, boosted chroma. (color-mix line = fallback for older browsers.) */
+  background-color: color-mix(in srgb, var(--surface-solid) 84%, var(--border));
+  background-color: oklch(from var(--surface-solid) calc(l - 0.04) calc(c * 2.2) h);
+  background-image:
+    radial-gradient(ellipse at 50% 32%, transparent 45%, color-mix(in srgb, var(--border) 20%, transparent) 100%),
+    var(--paper-layers);
+  background-size: 100% 100%, var(--paper-sizes);
+}
 /* Polished dark wood: photo grain under a dark varnish tint, edge vignette for the
    inset read, and one soft gloss streak (under the dice canvas, like a lacquer coat). */
 .dice-tray-well--wood {
@@ -2837,10 +2851,29 @@ body.pointer-dragging * {
     url("/textures/tray-wood.jpg") center / cover no-repeat #241309;
   box-shadow: inset 0 3px 12px rgba(0, 0, 0, 0.65), inset 0 1px 0 rgba(255, 244, 214, 0.07);
 }
-/* Classic green felt (the original look). */
+/* Black wood: near-black painted planks with grain showing through; gloss + vignette. */
+.dice-tray-well--ebony {
+  background:
+    linear-gradient(160deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.02) 30%, rgba(255, 255, 255, 0) 46%),
+    radial-gradient(ellipse at 50% 30%, rgba(0, 0, 0, 0) 45%, rgba(0, 0, 0, 0.4) 100%),
+    url("/textures/tray-ebony.jpg") center / cover no-repeat #141210;
+}
+/* Classic green felt (the original look) + red/purple/blue recolors. */
 .dice-tray-well--felt {
   background:
     radial-gradient(ellipse at 50% 35%, rgba(56, 84, 63, 0.85), rgba(21, 34, 26, 0.95) 78%);
+}
+.dice-tray-well--felt-red {
+  background:
+    radial-gradient(ellipse at 50% 35%, rgba(105, 44, 44, 0.85), rgba(43, 15, 15, 0.95) 78%);
+}
+.dice-tray-well--felt-purple {
+  background:
+    radial-gradient(ellipse at 50% 35%, rgba(82, 52, 100, 0.85), rgba(32, 18, 42, 0.95) 78%);
+}
+.dice-tray-well--felt-blue {
+  background:
+    radial-gradient(ellipse at 50% 35%, rgba(46, 64, 100, 0.85), rgba(16, 24, 42, 0.95) 78%);
 }
 /* Dark leather: pebbled photo grain, deeper vignette, no gloss. */
 .dice-tray-well--leather {
@@ -2848,6 +2881,25 @@ body.pointer-dragging * {
     radial-gradient(ellipse at 50% 30%, rgba(0, 0, 0, 0) 38%, rgba(0, 0, 0, 0.5) 100%),
     linear-gradient(rgba(20, 10, 6, 0.3), rgba(14, 7, 4, 0.42)),
     url("/textures/tray-leather.jpg") center / cover no-repeat #241309;
+}
+/* Light saddle/cognac leather: gentler tint and vignette so it stays light. */
+.dice-tray-well--leather-light {
+  background:
+    radial-gradient(ellipse at 50% 30%, rgba(0, 0, 0, 0) 45%, rgba(0, 0, 0, 0.32) 100%),
+    linear-gradient(rgba(40, 22, 12, 0.12), rgba(35, 18, 10, 0.2)),
+    url("/textures/tray-leather-light.jpg") center / cover no-repeat #8a4f33;
+}
+/* Animal hide / rawhide: pale mottled skin with freckles (generated in-repo), the
+   app's paper-grain tiled on top for the fibrous read, and a warm soft vignette. */
+.dice-tray-well--hide {
+  background-color: #e2d1b7;
+  background-image:
+    radial-gradient(ellipse at 50% 30%, rgba(0, 0, 0, 0) 48%, rgba(74, 50, 28, 0.3) 100%),
+    url("/textures/paper-grain.png"),
+    url("/textures/tray-hide.jpg");
+  background-size: 100% 100%, auto, cover;
+  background-position: center;
+  background-repeat: no-repeat, repeat, no-repeat;
 }
 .die-btn {
   position: relative;
@@ -2946,6 +2998,7 @@ body.pointer-dragging * {
 .skin-targets {
   display: flex;
   flex-wrap: wrap;
+  justify-content: center;
   gap: 0.25rem;
 }
 .skin-target {
@@ -2969,6 +3022,7 @@ body.pointer-dragging * {
 .skin-swatches {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 0.35rem;
 }
 .skin-swatch {
@@ -3001,11 +3055,14 @@ body.pointer-dragging * {
 .skin-swatch--classic {
   background-color: #7b2d3a;
 }
+.skin-swatch--white {
+  background-image: radial-gradient(circle at 35% 35%, #ffffff, #efede6 60%, #d6d3ca);
+}
 .skin-swatch--marble {
   background-image: url("/textures/dice/marble-color.jpg");
 }
 .skin-swatch--wood {
-  background-image: url("/textures/dice/wood-color.jpg");
+  background-image: url("/textures/dice/ebony-color.jpg");
 }
 .skin-swatch--glass {
   background-image: linear-gradient(135deg, rgba(240, 248, 255, 0.95), rgba(168, 196, 232, 0.55) 55%, rgba(214, 189, 232, 0.7));
@@ -3024,15 +3081,43 @@ body.pointer-dragging * {
 .skin-swatch--coin-copper {
   background-image: radial-gradient(circle at 35% 35%, #d9a179, #b0714a 55%, #6f4225);
 }
+.skin-swatch--coin-oxidized {
+  background-image: radial-gradient(circle at 35% 35%, #a3cdb8, #79a58f 55%, #45695a);
+}
 /* Tray surfaces. */
+.skin-swatch--tray-default {
+  /* Dotted outline = "the app's own look"; the fill is the live theme surface. */
+  border-style: dotted;
+  background-color: var(--surface-solid);
+  background-image: var(--paper-layers);
+  background-size: var(--paper-sizes);
+}
 .skin-swatch--tray-wood {
   background-image: linear-gradient(rgba(26, 15, 8, 0.3), rgba(20, 11, 6, 0.4)), url("/textures/tray-wood.jpg");
 }
 .skin-swatch--tray-felt {
   background-image: radial-gradient(circle at 40% 35%, rgba(56, 84, 63, 1), rgba(21, 34, 26, 1) 80%);
 }
+.skin-swatch--tray-felt-red {
+  background-image: radial-gradient(circle at 40% 35%, rgba(105, 44, 44, 1), rgba(43, 15, 15, 1) 80%);
+}
+.skin-swatch--tray-felt-purple {
+  background-image: radial-gradient(circle at 40% 35%, rgba(82, 52, 100, 1), rgba(32, 18, 42, 1) 80%);
+}
+.skin-swatch--tray-felt-blue {
+  background-image: radial-gradient(circle at 40% 35%, rgba(46, 64, 100, 1), rgba(16, 24, 42, 1) 80%);
+}
 .skin-swatch--tray-leather {
   background-image: linear-gradient(rgba(20, 10, 6, 0.25), rgba(14, 7, 4, 0.35)), url("/textures/tray-leather.jpg");
+}
+.skin-swatch--tray-leather-light {
+  background-image: url("/textures/tray-leather-light.jpg");
+}
+.skin-swatch--tray-hide {
+  background-image: url("/textures/tray-hide.jpg");
+}
+.skin-swatch--tray-ebony {
+  background-image: url("/textures/tray-ebony.jpg");
 }
 
 /* --- Crystal: gem-cut arcane accent (Quill & Ember) --------------------------

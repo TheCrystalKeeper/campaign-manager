@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { ConvexGeometry } from "three/examples/jsm/geometries/ConvexGeometry.js";
 import type { DieKind } from "../lib/dice3d";
-import { createSkinMaterial, skinDef, type NumberStyle } from "./skins";
+import { applyCoinArt, createSkinMaterial, skinDef, type NumberStyle } from "./skins";
 
 /// <summary>
 /// Procedural dice geometry: builds the convex body mesh, per-face metadata used to
@@ -639,6 +639,16 @@ export function buildDieMesh(die: DieGeometry, options: DiceMaterialOptions = {}
       }
     });
     group.userData.d4VertexDecals = decalsByVertex;
+  } else if (die.kind === "coin") {
+    // The coin's caps carry real heads/tails art instead of glyphs, tinted to the
+    // finish. Still decals, so relabelDieFace can put the server's result face-up.
+    const finish = skinDef(options.skin, true);
+    for (const face of die.faces) {
+      const decal = makeCoinArtDecal(die, face, face.label, finish);
+      group.add(decal);
+      decals.push(decal);
+    }
+    group.userData.coinArt = true;
   } else if (die.kind !== "custom") {
     // Custom crystal dice render blank — the number is revealed (faded in) after they land.
     for (const face of die.faces) {
@@ -689,6 +699,34 @@ function makeD4VertexDecal(die: DieGeometry, face: DieFace, vertex: D4VertexInfo
   return decal;
 }
 
+/// <summary>
+/// Builds a coin cap decal carrying the heads/tails art ("H"/"T"), tinted to the coin
+/// finish. Sized to span the cap face (the art circle sits just inside the body's rim).
+/// Unlike the number decals this one is LIT metal — the art covers nearly the whole
+/// cap, so the decal itself must carry the metallic glint or the coin reads matte.
+/// </summary>
+function makeCoinArtDecal(
+  die: DieGeometry,
+  face: DieFace,
+  label: string,
+  finish: { color: string; metalness: number; roughness: number; envMapIntensity: number },
+): THREE.Mesh {
+  const decalSize = die.radius * 1.9;
+  const material = new THREE.MeshStandardMaterial({
+    color: finish.color,
+    metalness: finish.metalness,
+    roughness: finish.roughness,
+    envMapIntensity: finish.envMapIntensity,
+    transparent: true,
+    depthWrite: false,
+  });
+  applyCoinArt(material, label);
+  const decal = new THREE.Mesh(new THREE.PlaneGeometry(decalSize, decalSize), material);
+  decal.position.copy(face.centroid).addScaledVector(face.normal, die.radius * 0.012);
+  decal.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), face.normal);
+  return decal;
+}
+
 /// <summary>Builds a number plane sized and oriented to a die face.</summary>
 function makeFaceDecal(die: DieGeometry, face: DieFace, label: string, style: NumberStyle): THREE.Mesh {
   // Scale the decal to the face: use the nearest vertex distance as an in-radius proxy.
@@ -734,8 +772,13 @@ export function relabelDieFace(group: THREE.Group, faceIndex: number, label: str
   if (!decal) {
     return;
   }
-  const style = group.userData.numberStyle as NumberStyle | undefined;
   const material = decal.material as THREE.MeshBasicMaterial;
+  if (group.userData.coinArt) {
+    applyCoinArt(material, label);
+    material.needsUpdate = true;
+    return;
+  }
+  const style = group.userData.numberStyle as NumberStyle | undefined;
   material.map = numberTexture(label, style);
   material.needsUpdate = true;
 }

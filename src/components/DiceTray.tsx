@@ -356,7 +356,7 @@ export function DiceTray({
     >
       {controller.enabled ? (
         <div
-          className={`dice-tray-well dice-tray-well--${previewSurface ?? controller.skinPrefs.tray ?? "wood"}`}
+          className={`dice-tray-well dice-tray-well--${previewSurface ?? controller.skinPrefs.tray ?? "default"}`}
           ref={controller.trayMountRef}
           onPointerDown={(event) => {
             if (event.button !== 0) return;
@@ -573,10 +573,10 @@ function SkinPicker({
   };
 
   const targets: Array<[SkinTarget, string]> = [
-    ["all", "All"],
-    ...SKINNABLE_SIDES.map((sides) => [sides, `d${sides}`] as [SkinTarget, string]),
+    ["all", "All Dice"],
     ["coin", "Coin"],
     ["tray", "Tray"],
+    ...SKINNABLE_SIDES.map((sides) => [sides, `d${sides}`] as [SkinTarget, string]),
   ];
 
   const perDieOverride = typeof skinTarget === "number" ? prefs.perDie?.[skinTarget] : undefined;

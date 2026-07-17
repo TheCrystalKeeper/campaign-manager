@@ -2,12 +2,20 @@ Dice/tray texture sources (all CC0, no attribution required):
 
 - tray-wood.jpg            Poly Haven "dark_wood" (diffuse, 1K)
 - tray-leather.jpg         ambientCG Leather030 (Color, 1K)
-- wood-color/normal.jpg    ambientCG Wood062 (Color / NormalGL, 1K)
+- tray-leather-light.jpg   ambientCG Leather037 (Color, 1K)
+- tray-hide.jpg            generated in-repo (rawhide mottling, drawn at 128px and
+                           bicubic-upscaled to 1024px; no external source)
+- tray-ebony.jpg           Poly Haven "black_painted_planks" (diffuse, 1K)
+- ebony-color/normal.jpg   ambientCG Wood051 (Color / NormalGL, 1K)
 - marble-color.jpg         ambientCG Marble012 (Color, 1K)
 - bronze-color/normal/rough.jpg  ambientCG Metal008 (Color / NormalGL / Roughness, 1K)
 - metal-scratch-rough.jpg  ambientCG Scratches004 (Color, inverted, 1K)
 - glass-frost-rough.jpg    ambientCG SurfaceImperfections003 (Color, inverted, 1K)
 - glass-prism-color.jpg    generated in-repo (soft pastel radial washes on milky white,
                            drawn at 96px and bicubic-upscaled to 512px; no external source)
+- coin_skyrim_septim.jpg + coin-heads-color.png / coin-tails-color.png
+                           Skyrim Septim coin art (© Bethesda Softworks), user-supplied;
+                           crops are grayscale + alpha-masked. Personal use only — do NOT
+                           redistribute this app publicly with these files.
 
 All downscaled to 512px (dice) / 1024px (tray) JPEG.

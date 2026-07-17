@@ -19,12 +19,12 @@ export type StandardDieKind = Exclude<DieKind, "custom">;
  * clients render the roller's dice the same way. Unknown values normalize to undefined
  * (= classic look) so mixed client/server versions stay compatible.
  */
-export type DiceSkinId = "classic" | "marble" | "wood" | "glass" | "bronze";
-export const DICE_SKIN_IDS: readonly DiceSkinId[] = ["classic", "marble", "wood", "glass", "bronze"];
+export type DiceSkinId = "classic" | "white" | "marble" | "wood" | "glass" | "bronze";
+export const DICE_SKIN_IDS: readonly DiceSkinId[] = ["classic", "white", "marble", "wood", "glass", "bronze"];
 
 /** Cosmetic coin finishes (the coin is skinned separately from the dice). */
-export type CoinSkinId = "gold" | "silver" | "copper";
-export const COIN_SKIN_IDS: readonly CoinSkinId[] = ["gold", "silver", "copper"];
+export type CoinSkinId = "gold" | "silver" | "copper" | "oxidized";
+export const COIN_SKIN_IDS: readonly CoinSkinId[] = ["gold", "silver", "copper", "oxidized"];
 
 const DICE_SKIN_SET = new Set<string>(DICE_SKIN_IDS);
 const COIN_SKIN_SET = new Set<string>(COIN_SKIN_IDS);
