@@ -127,7 +127,7 @@ export function AssetsPage({
     // sync would just re-fill it. Then clear any token/scene that references the URL directly.
     for (const record of Object.values(state.sheets)) {
       if (record.data.iconUrl === asset.url) {
-        dm.updateSheet(record.id, { ...record.data, iconUrl: null });
+        dm.updateSheet(record.id, { iconUrl: null });
       }
     }
     for (const item of Object.values(state.items)) {

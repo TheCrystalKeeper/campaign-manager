@@ -74,7 +74,7 @@ export function TokenEditor({ token, state, dm, openSheet, openItemSheet, onClos
     linkedSheet?.data.iconUrl
       ? {
           crop: linkedSheet.data.iconCrop,
-          apply: (iconCrop) => dm.updateSheet(linkedSheetId!, { ...linkedSheet.data, iconCrop }),
+          apply: (iconCrop) => dm.updateSheet(linkedSheetId!, { iconCrop }),
         }
       : linkedItem?.iconUrl
         ? { crop: linkedItem.iconCrop, apply: (iconCrop) => dm.updateItem({ ...linkedItem, iconCrop }) }
@@ -130,7 +130,7 @@ export function TokenEditor({ token, state, dm, openSheet, openItemSheet, onClos
   // library reuse. A new picture resets the crop so the old focal point/zoom doesn't carry.
   const applyImageUrl = (url: string) => {
     if (linkedSheetId && linkedSheet) {
-      dm.updateSheet(linkedSheetId, { ...linkedSheet.data, iconUrl: url, iconCrop: { ...DEFAULT_ICON_CROP } });
+      dm.updateSheet(linkedSheetId, { iconUrl: url, iconCrop: { ...DEFAULT_ICON_CROP } });
     } else if (linkedItem) {
       dm.updateItem({ ...linkedItem, iconUrl: url, iconCrop: { ...DEFAULT_ICON_CROP } });
     } else {
@@ -161,7 +161,7 @@ export function TokenEditor({ token, state, dm, openSheet, openItemSheet, onClos
   const clearImage = () => {
     if (linkedSheetId && linkedSheet) {
       // Clear the shared portrait; also drop any legacy token image so it can't reappear.
-      dm.updateSheet(linkedSheetId, { ...linkedSheet.data, iconUrl: null });
+      dm.updateSheet(linkedSheetId, { iconUrl: null });
       if (token.imageUrl) dm.updateToken({ ...token, imageUrl: null });
     } else if (linkedItem) {
       dm.updateItem({ ...linkedItem, iconUrl: null });
@@ -407,9 +407,7 @@ export function TokenEditor({ token, state, dm, openSheet, openItemSheet, onClos
                   hp={state.sheets[token.sheetId]!.data.hp}
                   canEdit
                   onAdjust={(delta) => dm.adjustHp(token.sheetId!, delta)}
-                  onSetHp={(hp) =>
-                    dm.updateSheet(token.sheetId!, { ...state.sheets[token.sheetId!]!.data, hp })
-                  }
+                  onSetHp={(hp) => dm.updateSheet(token.sheetId!, { hp })}
                 />
               </div>
             ) : null}

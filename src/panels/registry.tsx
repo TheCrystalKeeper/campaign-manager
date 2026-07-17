@@ -20,6 +20,7 @@ import { LogPanel } from "../components/LogPanel";
 import { NotesPanel } from "../components/NotesPanel";
 import { PartyPanel } from "../components/PartyPanel";
 import { HandoutsPanel } from "../components/HandoutsPanel";
+import { InventoryPanel } from "../components/InventoryPanel";
 import { ScenePanel } from "../components/ScenePanel";
 import { SettingsPanel } from "../components/SettingsPanel";
 import type { WindowPos } from "../components/FloatingWindow";
@@ -34,6 +35,7 @@ export type PanelId =
   | "itemSheet"
   | "log"
   | "initiative"
+  | "inventory"
   | "scenes"
   | "actors"
   | "items"
@@ -57,7 +59,7 @@ export type PanelContext = {
   /** Opens a floating handout viewer window (players re-view, DM previews). */
   openHandout: (handoutId: string) => void;
   /** Sends UPDATE_SHEET — the server authorizes (DM: any sheet, player: own only). */
-  updateSheet: (sheetId: string, sheet: CharacterSheet) => void;
+  updateSheet: (sheetId: string, sheet: Partial<CharacterSheet>) => void;
   /** Rolls dice with the DM's secret toggle already applied. */
   rollDice: (expression: string, options?: Omit<RollOptions, "private">) => void;
   /** Rolls a structured sheet check (server resolves the parts), secret toggle applied. */
@@ -284,6 +286,26 @@ export const PANELS: PanelDef[] = [
         openSheet={ctx.openSheet}
       />
     ),
+  },
+  {
+    id: "inventory",
+    label: "Inventory",
+    icon: <Backpack size={17} strokeWidth={2.2} />,
+    dockable: true,
+    // Player-only: the DM reaches any character's inventory through the sheet window,
+    // and the Backpack glyph stays unambiguous per role (the DM's is the Items catalog).
+    roles: ["player"],
+    title: (ctx) => {
+      const record = ctx.room.yourPlayerId ? ctx.state.sheets[ctx.room.yourPlayerId] : null;
+      const name = record?.data.characterName;
+      return name ? `Inventory — ${name}` : "Inventory";
+    },
+    defaultPos: (vw) => ({ x: Math.max(16, vw - 560), y: 90 }),
+    width: 480,
+    height: 620,
+    minWidth: 320,
+    minHeight: 320,
+    render: (ctx) => <InventoryPanel ctx={ctx} />,
   },
   {
     id: "scenes",

@@ -209,15 +209,12 @@
   place-items: center;
   width: 3.8rem;
   height: 3.8rem;
-  margin-top: -1.9rem;
+  /* Only the badge's top point overlaps the portrait — mostly below it so the
+     picture stays visible and the number reads clean. */
+  margin-top: -1.1rem;
   clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
   background: var(--surface-2);
   border: 1px solid var(--border);
-}
-.ac-shield-icon {
-  position: absolute;
-  opacity: 0.25;
-  font-size: 1.6rem;
 }
 .ac-shield-value {
   position: relative;
@@ -395,18 +392,21 @@
 .sheet-name,
 .sheet-name-input {
   font-family: var(--font-display);
-  font-size: 1.15rem;
+  font-size: 1.6rem;
   color: var(--text);
   background: none;
   border: none;
   width: 100%;
-  padding: 0;
+  /* The global input well-shadow still draws the box, so give the text some air. */
+  padding: 0.1rem 0.4rem;
 }
 .sheet-subtitle {
   font-size: 0.75rem;
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.05em;
+  /* Track the name's horizontal padding so the two lines stay left-aligned. */
+  padding: 0 0.4rem;
 }
 .sheet-meta {
   font-size: 0.7rem;
@@ -744,7 +744,8 @@
 .inv-name-input {
   background: none;
   border: none;
-  padding: 0;
+  /* The global input well-shadow still draws the box, so give the text some air. */
+  padding: 0.1rem 0.4rem;
   font-weight: 600;
 }
 .inv-name-text {
@@ -776,8 +777,12 @@
   gap: 0.15rem;
 }
 .qty-step {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 1.1rem;
   height: 1.1rem;
+  padding: 0; /* the global button padding shoves the glyph off-center in a fixed box */
   line-height: 1;
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -791,8 +796,12 @@
 .attune-toggle,
 .prepared-toggle,
 .effect-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 1.4rem;
   height: 1.4rem;
+  padding: 0; /* the global button padding shoves the glyph off-center in a fixed box */
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius);
   background: none;
@@ -995,6 +1004,13 @@
 }
 
 /* --- Inventory -------------------------------------------------------------- */
+/* Docked Inventory panel wrapper: its own container context so the narrow-width
+   @container rules below fire at dock width (320px) in both the dock and pop-out.
+   No overflow here — the dock panel body and window body already scroll. */
+.inventory-panel {
+  container-type: inline-size;
+  padding: 0.5rem;
+}
 .encumbrance {
   display: flex;
   flex-direction: column;
@@ -1306,6 +1322,28 @@
   }
   .bio-details {
     grid-template-columns: repeat(2, 1fr);
+  }
+}
+/* Dock-width inventory (.inventory-panel container, ~304px content box): the fixed
+   3rem currency inputs overflow five-across, and weapon rows (two roll buttons +
+   equip/attune + expand/remove) need tighter tracks so the name keeps room. */
+@container (max-width: 360px) {
+  .inventory-page .currency-row {
+    gap: 0.2rem;
+  }
+  .inventory-page .currency-cell input {
+    width: 100%;
+    min-width: 0;
+  }
+  .inventory-page .inv-cell {
+    min-width: 2rem;
+  }
+  .inventory-page .rt-cells {
+    gap: 0.25rem;
+  }
+  .inventory-page .rt-row {
+    padding: 0.2rem 0.25rem;
+    gap: 0.3rem;
   }
 }
 

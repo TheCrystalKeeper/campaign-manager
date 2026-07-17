@@ -56,7 +56,6 @@ export function ItemsPanel({ state, dm, openItemSheet, dropItemAt }: ItemsPanelP
       return;
     }
     dm.updateSheet(record.id, {
-      ...record.data,
       inventory: [...record.data.inventory, inventoryRowFromItem(item)],
     });
   };

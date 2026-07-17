@@ -7,7 +7,7 @@ type CharacterSheetPanelProps = {
   canEdit: boolean;
   isDm: boolean;
   roomId: string;
-  onChange: (sheet: CharacterSheet) => void;
+  onChange: (sheet: Partial<CharacterSheet>) => void;
   /** DM-only: flips a section's player visibility (NPC sheets). */
   onToggleReveal?: (section: SheetSectionId, revealed: boolean) => void;
   /**

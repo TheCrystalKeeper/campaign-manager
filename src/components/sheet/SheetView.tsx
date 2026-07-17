@@ -1,8 +1,7 @@
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { CharacterSheet, CheckSpec, SheetRecord, SheetSectionId } from "../../lib/types";
-import { computeDerived } from "../../lib/rules5e";
-import { useSheetDraft } from "./useSheetDraft";
+import { useSheetEdit } from "./useSheetEdit";
 import { parseSheetImport, sheetExportPayload, downloadJson, transferFilename } from "../../lib/sheetTransfer";
 import { SheetSidebar } from "./SheetSidebar";
 import { SheetHeader, type RevealControl, type SheetTransferControl } from "./SheetHeader";
@@ -35,7 +34,7 @@ export type SheetViewProps = {
   canEdit: boolean;
   isDm: boolean;
   roomId: string;
-  onChange: (sheet: CharacterSheet) => void;
+  onChange: (sheet: Partial<CharacterSheet>) => void;
   onToggleReveal?: (section: SheetSectionId, revealed: boolean) => void;
   onRollCheck?: (check: CheckSpec, adv?: Adv) => void;
   /** Rest with real effects (Tier 3); short rests may spend hit dice. */
@@ -63,12 +62,15 @@ export function SheetView({
   conditions,
   actions,
 }: SheetViewProps) {
-  const { value, update, uploading, handlePortrait, overSoftCap } = useSheetDraft(
-    record,
+  const { sheet, uploading, handlePortrait, overSoftCap } = useSheetEdit(record, {
     canEdit,
+    isDm,
     roomId,
     onChange,
-  );
+    onRollCheck,
+    conditions,
+    actions,
+  });
 
   const kind = record?.kind ?? "pc";
   const pages = useMemo(() => SHEET_PAGES.filter((p) => (kind === "npc" ? p.id !== "main" : true)), [kind]);
@@ -97,7 +99,7 @@ export function SheetView({
   // Keep the active page valid if the kind changes (PC↔NPC) under us.
   const activePage = pages.some((p) => p.id === active) ? active : pages[0]?.id ?? "features";
 
-  if (!record) {
+  if (!record || !sheet) {
     return (
       <div className="panel-body">
         <span className="muted">This sheet no longer exists.</span>
@@ -105,36 +107,7 @@ export function SheetView({
     );
   }
 
-  const hiddenFor = (section: SheetSectionId) =>
-    !isDm && record.kind === "npc" && !record.revealed[section];
-
-  // Rules engine: derived totals for display (PC formulas + overrides; NPC passthrough).
-  // Cheap pure math — recompute on every draft change so totals track edits live.
-  const derived = computeDerived(value, record.kind);
-  const setOverride = (key: string, next: number | null) => {
-    const overrides = { ...value.overrides };
-    // Typing the formula's own value back in means "return to auto".
-    if (next === null || next === derived.base[key]) {
-      delete overrides[key];
-    } else {
-      overrides[key] = next;
-    }
-    update({ overrides });
-  };
-
-  const sheet: SheetEdit = {
-    value,
-    kind: record.kind,
-    canEdit,
-    isDm,
-    derived,
-    setOverride,
-    update,
-    hiddenFor,
-    onRollCheck,
-    conditions,
-    actions,
-  };
+  const { value, update, hiddenFor } = sheet;
 
   const revealControlFor = (sections: SheetSectionId[]): RevealControl => {
     if (!isDm || record.kind !== "npc" || !onToggleReveal) return null;

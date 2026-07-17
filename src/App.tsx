@@ -1145,6 +1145,7 @@ export default function App() {
                   roomId={session.roomId}
                   title={panel.title(panelContext)}
                   width={panel.width}
+                  height={panel.height}
                   minWidth={panel.minWidth}
                   minHeight={panel.minHeight}
                   defaultPos={panel.defaultPos}

@@ -531,7 +531,7 @@ export function useDmActions(room: GameRoom) {
       updatePlayerSlot: (slot: PlayerSlot) => send({ type: "UPDATE_PLAYER_SLOT", slot }),
       removePlayerSlot: (slotId: string) => send({ type: "REMOVE_PLAYER_SLOT", slotId }),
       kickPlayer: (playerId: string) => send({ type: "KICK_PLAYER", playerId }),
-      updateSheet: (sheetId: string, sheet: CharacterSheet) =>
+      updateSheet: (sheetId: string, sheet: Partial<CharacterSheet>) =>
         send({ type: "UPDATE_SHEET", sheetId, sheet }),
       adjustHp: (sheetId: string, delta: number) => send({ type: "ADJUST_HP", sheetId, delta }),
       createSheet: (sheetId: string, name: string) =>

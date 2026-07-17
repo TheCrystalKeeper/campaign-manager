@@ -1418,7 +1418,8 @@ export type ClientMessage =
   | { type: "UPDATE_TOKEN"; token: Token }
   | { type: "REMOVE_TOKEN"; tokenId: string }
   | { type: "SET_TOKEN_CONDITIONS"; tokenId: string; conditions: string[] }
-  | { type: "UPDATE_SHEET"; sheetId: string; sheet: CharacterSheet }
+  /** Partial patch: the server merges over the stored sheet, so editors send only touched fields. */
+  | { type: "UPDATE_SHEET"; sheetId: string; sheet: Partial<CharacterSheet> }
   | { type: "CREATE_SHEET"; sheetId: string; name: string }
   | { type: "DUPLICATE_SHEET"; sheetId: string; newSheetId: string }
   | { type: "DELETE_SHEET"; sheetId: string }

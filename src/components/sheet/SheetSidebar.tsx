@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Crop, Eye, EyeOff, Image, Shield } from "lucide-react";
+import { Crop, Eye, EyeOff, Image } from "lucide-react";
 import { DEFAULT_ICON_CROP, DEFAULT_SHEET_TEMPLATE, PORTRAIT_ASPECT, formatModifier } from "../../lib/types";
 import { CroppableImage } from "../CroppableImage";
 import { ImageCropModal } from "../ImageCropModal";
@@ -168,7 +168,6 @@ export function SheetSidebar({
       ) : null}
 
       <div className="ac-shield" title="Armor Class">
-        <span className="ac-shield-icon"><Shield size={15} strokeWidth={2.2} /></span>
         {canEdit ? (
           <NumberInput className="ac-shield-value" value={value.ac} onCommit={(ac) => update({ ac })} aria-label="AC" />
         ) : (
