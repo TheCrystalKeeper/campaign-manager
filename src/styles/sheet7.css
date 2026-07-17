@@ -685,6 +685,24 @@
   padding: 0.2rem 0.4rem;
   background: var(--surface-inset);
   border-radius: var(--radius);
+  cursor: pointer;
+  user-select: none;
+}
+.rt-group-head:hover {
+  background: color-mix(in srgb, var(--surface-inset) 85%, var(--text-muted));
+}
+.rt-group-head:focus-visible {
+  outline: 1px solid var(--border-strong, var(--border));
+  outline-offset: 1px;
+}
+.rt-group-chevron {
+  flex-shrink: 0;
+  width: 1rem;
+  font-size: 0.95rem;
+  line-height: 1;
+  color: var(--text);
+  opacity: 0.85;
+  text-align: center;
 }
 .rt-group-title {
   flex: 1;
@@ -693,6 +711,13 @@
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--text-muted);
+}
+.rt-group-count {
+  flex-shrink: 0;
+  font-size: 0.65rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+  opacity: 0.75;
 }
 .rt-group-cols {
   display: flex;
@@ -704,6 +729,7 @@
 .rt-add {
   font-size: 0.9rem;
   padding: 0 0.3rem;
+  cursor: pointer;
 }
 .rt-row {
   display: flex;
