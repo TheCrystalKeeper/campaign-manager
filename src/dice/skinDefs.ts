@@ -38,8 +38,13 @@ export interface DiceSkinDef {
   label: string;
   /** Image maps under /textures/dice/. Absent maps mean a flat-color body. */
   maps?: { color?: string; normal?: string; roughness?: string };
-  /** Body color before the color map loads; also the flat body color for map-less skins. */
+  /** Body color before the color map loads; also the flat body color for map-less skins.
+   *  NOTE: once a color map loads it replaces this — use `mapTint` to darken/tint a
+   *  mapped skin. */
   color: string;
+  /** Multiply tint applied over the color map (default white = map as-is). The knob for
+   *  brightening/darkening a skin that uses a color texture. */
+  mapTint?: string;
   metalness: number;
   roughness: number;
   /** Explicit so scene.environment never silently changes a skin's brightness. */
@@ -98,21 +103,26 @@ export const DICE_SKINS: Record<DiceSkinId, DiceSkinDef> = {
   },
   glass: {
     label: "Glass",
-    maps: { roughness: "/textures/dice/glass-frost-rough.jpg" },
-    color: "#dfe9f2",
-    metalness: 0.0,
-    roughness: 0.45,
-    envMapIntensity: 1.5,
-    physical: {
-      // Opaque frosted glass: the glassy read comes from iridescence + clearcoat +
-      // the strong env map, not from see-through transparency.
-      opacity: 1,
-      iridescence: 1.0,
-      iridescenceIOR: 1.35,
-      clearcoat: 0.7,
-      clearcoatRoughness: 0.25,
+    // Prismatic frosted glass: a milky body with soft pastel rainbow washes (the color
+    // map is generated in-repo — see scratch script note in SOURCES.txt), matte frost
+    // from the roughness map, and iridescence for the angle-dependent rainbow sheen.
+    maps: {
+      color: "/textures/dice/glass-prismatic-frosted.png",
+      roughness: "/textures/dice/glass-frost-rough.jpg",
     },
-    numbers: { fill: "#ffffff", highlight: "rgba(255, 255, 255, 0.6)", shadow: "rgba(40, 70, 110, 0.55)" },
+    color: "#c9cedb",
+    mapTint: "rgba(184, 191, 204, 1)",
+    metalness: 0.0,
+    roughness: 0.8,
+    envMapIntensity: 0.5,
+    physical: {
+      opacity: 0.98,
+      iridescence: 0.8,
+      iridescenceIOR: 1.35,
+      clearcoat: 0.4,
+      clearcoatRoughness: 0.35,
+    },
+    numbers: { fill: "rgb(46, 113, 212)", highlight: "rgba(200, 220, 255, 0.7)", shadow: "rgba(120, 110, 170, 0.5)" },
     percentileTint: "#a8c4e8",
   },
   bronze: {
@@ -130,7 +140,7 @@ export const DICE_SKINS: Record<DiceSkinId, DiceSkinDef> = {
     roughness: 0.85,
     envMapIntensity: 0.65,
     normalScale: 0.8,
-    numbers: { fill: "rgb(14, 6, 1)", highlight: "rgba(255, 214, 150, 0.55)", shadow: "rgba(20, 12, 4, 0.75)" },
+    numbers: { fill: "rgba(14, 6, 1, 0.28)", highlight: "rgba(255, 214, 150, 0.55)", shadow: "rgba(20, 12, 4, 0.75)" },
     percentileTint: "#9fb0d6",
   },
 };

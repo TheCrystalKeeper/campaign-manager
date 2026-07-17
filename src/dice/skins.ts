@@ -173,11 +173,13 @@ export function createSkinMaterial(
 ): THREE.MeshStandardMaterial {
   const def = skinDef(skin, opts.coin ?? false);
 
-  // Classic keeps its dedicated percentile blue; textured skins tint the whole map.
+  // Classic keeps its dedicated percentile blue; textured skins tint the whole map
+  // (the skin's mapTint brightness dial × the percentile pair tint).
   const isClassic = !opts.coin && (skin === undefined || skin === "classic");
-  const tint = new THREE.Color(
-    opts.percentile && def.percentileTint ? def.percentileTint : "#ffffff",
-  );
+  const tint = new THREE.Color(def.mapTint ?? "#ffffff");
+  if (opts.percentile && def.percentileTint) {
+    tint.multiply(new THREE.Color(def.percentileTint));
+  }
   const baseColor = isClassic
     ? new THREE.Color(opts.percentile ? "#2d4a7b" : def.color)
     : new THREE.Color(def.color).multiply(tint);
