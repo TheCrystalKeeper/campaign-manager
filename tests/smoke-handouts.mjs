@@ -149,6 +149,29 @@ try {
     lastState(kit).log.some((e) => e.kind === "event" && /shared/i.test(e.text ?? "")),
   );
 
+  // --- revoke: narrowing visibleTo pulls it back out of the de-selected player -------
+  // (Client-side, losing the handout from state also closes their open popup.)
+  dm.send({
+    type: "UPDATE_HANDOUT",
+    handout: {
+      id: "h-letter", name: "Sealed letter", imageUrl: "/tokens/letter.webp",
+      visibleTo: [vexId], createdAt: 1,
+    },
+  });
+  await kit.next(
+    (m) => m.type === "STATE" && m.state.handouts.length === 0 &&
+      m.state.log.some((e) => /shared/i.test(e.text ?? "")),
+  );
+  await vex.next(
+    (m) => m.type === "STATE" &&
+      m.state.handouts.some((h) => h.id === "h-letter" && Array.isArray(h.visibleTo)),
+  );
+  check(
+    "revoking a player removes the handout from their frames only",
+    lastState(kit).handouts.length === 0 && lastState(vex).handouts.length === 1,
+    `kit=${handoutIds(lastState(kit))} vex=${handoutIds(lastState(vex))}`,
+  );
+
   // --- authz: handout messages stay DM-gated ----------------------------------------
   vex.send({
     type: "ADD_HANDOUT",

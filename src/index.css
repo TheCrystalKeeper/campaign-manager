@@ -3735,28 +3735,29 @@ body.pointer-dragging * {
   color: var(--accent);
 }
 
-/* Floating viewer: image fit to the window; click toggles natural-size scroll. */
+/* Floating viewer: scroll-zoom + drag-pan camera over an absolutely-positioned image.
+   The background is the themed inset well — parchment by day, carved stone by night. */
 .handout-viewer {
+  position: relative;
   width: 100%;
   height: 100%;
   min-height: 180px;
-  display: grid;
-  place-items: center;
-  overflow: auto;
-  background: var(--map-bg);
-  cursor: zoom-in;
+  overflow: hidden;
+  background: var(--surface-2);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+.handout-viewer--dragging {
+  cursor: grabbing;
 }
 .handout-viewer img {
-  max-width: 100%;
-  max-height: 100%;
-  object-fit: contain;
-  border-radius: 2px;
-}
-.handout-viewer--zoomed {
-  place-items: start;
-  cursor: zoom-out;
-}
-.handout-viewer--zoomed img {
+  position: absolute;
+  top: 0;
+  left: 0;
   max-width: none;
   max-height: none;
+  transform-origin: 0 0;
+  will-change: transform;
+  pointer-events: none;
 }

@@ -332,25 +332,36 @@ const handoutState = normalizeGameState({
   handouts: [
     { id: "h-all", name: "Town notice", imageUrl: "/tokens/a.webp", visibleTo: "all", createdAt: 1 },
     { id: "h-p1", name: "Secret letter", imageUrl: "/tokens/b.webp", visibleTo: ["p1"], createdAt: 2 },
-    { id: "h-dm", name: "Unshared map", imageUrl: "/tokens/c.webp", visibleTo: [], createdAt: 3 },
+    { id: "h-both", name: "Shared clue", imageUrl: "/tokens/d.webp", visibleTo: ["p1", "p2"], createdAt: 3 },
+    { id: "h-dm", name: "Unshared map", imageUrl: "/tokens/c.webp", visibleTo: [], createdAt: 4 },
   ],
 } as unknown as GameState);
 const p1Handouts = redactStateFor(handoutState, { role: "player", playerId: "p1" }).handouts;
 const p2Handouts = redactStateFor(handoutState, { role: "player", playerId: "p2" }).handouts;
 check(
-  "player p1 receives 'all' + own grant, never the unshared handout",
-  p1Handouts.length === 2 &&
+  "player p1 receives 'all' + own grants, never the unshared handout",
+  p1Handouts.length === 3 &&
     p1Handouts.some((h) => h.id === "h-all") &&
-    p1Handouts.some((h) => h.id === "h-p1"),
+    p1Handouts.some((h) => h.id === "h-p1") &&
+    p1Handouts.some((h) => h.id === "h-both"),
   JSON.stringify(p1Handouts.map((h) => h.id)),
 );
 check(
-  "player p2 receives only the 'all' handout (no leak of p1's letter)",
-  p2Handouts.length === 1 && p2Handouts[0]!.id === "h-all",
+  "player p2 never receives p1's letter",
+  p2Handouts.length === 2 && !p2Handouts.some((h) => h.id === "h-p1"),
   JSON.stringify(p2Handouts.map((h) => h.id)),
 );
+check(
+  "subset grant lists collapse to the viewer (co-recipients stay secret)",
+  p1Handouts.every((h) => h.visibleTo === "all" || (h.visibleTo.length === 1 && h.visibleTo[0] === "p1")),
+  JSON.stringify(p1Handouts.map((h) => h.visibleTo)),
+);
 check("lobby stub carries no handouts", redactStateFor(handoutState, null).handouts.length === 0);
-check("DM keeps the full handout library", redactStateFor(handoutState, { role: "dm" }).handouts.length === 3);
+check("DM keeps the full handout library (untouched grant lists)", (() => {
+  const dmHandouts = redactStateFor(handoutState, { role: "dm" }).handouts;
+  return dmHandouts.length === 4 &&
+    JSON.stringify(dmHandouts.find((h) => h.id === "h-both")?.visibleTo) === JSON.stringify(["p1", "p2"]);
+})());
 const legacyState = { ...createInitialState("room-l") } as GameState & { handouts?: unknown };
 delete legacyState.handouts;
 check(

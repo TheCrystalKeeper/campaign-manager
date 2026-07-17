@@ -228,10 +228,14 @@ export function redactStateFor(state: GameState, view: StateView): GameState {
       }
     : null;
   // Handouts: players receive only the ones granted to them ("all" or their slot id).
-  // The unshared rest must not ride the frame — the panel gallery IS the permission surface.
-  const handouts = state.handouts.filter(
-    (handout) => handout.visibleTo === "all" || handout.visibleTo.includes(view.playerId),
-  );
+  // The unshared rest must not ride the frame — the panel gallery IS the permission
+  // surface. A subset grant list collapses to just the viewer: who ELSE was shown a
+  // secret letter is itself a secret (same reasoning as whisper targets).
+  const handouts = state.handouts
+    .filter((handout) => handout.visibleTo === "all" || handout.visibleTo.includes(view.playerId))
+    .map((handout) =>
+      handout.visibleTo === "all" ? handout : { ...handout, visibleTo: [view.playerId] },
+    );
   // Directories are DM-side tools; sheets carry item-name copies for players.
   return { ...state, scenes, tokens, sheets, log, dmNotes: "", combat, folders: [], items, handouts };
 }

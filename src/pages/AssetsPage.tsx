@@ -15,11 +15,12 @@ import type { PanelContext } from "../panels/registry";
 
 // Section order shown on the page. "unused" collects every unreferenced image; "maps"
 // includes scene backdrops (which physically live in the token folder). See assetSection.
-const SECTIONS = ["maps", "tokens", "portraits", "icons", "unused"] as const;
+const SECTIONS = ["maps", "tokens", "portraits", "handouts", "icons", "unused"] as const;
 const KIND_LABEL: Record<string, string> = {
   tokens: "Tokens",
   portraits: "Portraits",
   maps: "Maps",
+  handouts: "Handouts",
   icons: "Icons",
   unused: "Unused",
 };
@@ -31,6 +32,7 @@ const USAGE_LABEL: Record<string, string> = {
   backdrop: "Backdrop",
   item: "Item",
   "campaign-icon": "Campaign icon",
+  handout: "Handout",
 };
 
 /// <summary>
@@ -144,6 +146,11 @@ export function AssetsPage({
       if (scene.boardBgImageUrl === asset.url) patch.boardBgImageUrl = null;
       if (Object.keys(patch).length > 0) {
         dm.updateScene({ ...scene, ...patch });
+      }
+    }
+    for (const handout of state.handouts) {
+      if (handout.imageUrl === asset.url) {
+        dm.updateHandout({ ...handout, imageUrl: null });
       }
     }
     // Unlink the campaign icon from the shared registry (preserving name + description) so the

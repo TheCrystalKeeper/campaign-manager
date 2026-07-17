@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Eye, ImagePlus, Images, Trash2 } from "lucide-react";
 import type { GameState, Handout } from "../lib/types";
 import type { useDmActions } from "../hooks/useGameRoom";
@@ -287,12 +287,97 @@ function DmHandoutRow({
 }
 
 /// <summary>
-/// Floating-window content: the image fit to the window, click to toggle natural-size
-/// (scrollable) zoom. The name/url may come from state OR from the transient push
-/// payload (a HANDOUT_SHOW frame can beat the STATE frame that grants visibility).
+/// Floating-window content: scroll to zoom (anchored at the cursor), left-drag to pan,
+/// double-click to re-fit. Opens fitted + centered; window resizes keep it fitted until
+/// the user takes over the camera. The name/url may come from state OR from the transient
+/// push payload (a HANDOUT_SHOW frame can beat the STATE frame that grants visibility).
+/// The img is never re-rasterized, so animated GIFs keep playing at any zoom.
 /// </summary>
 export function HandoutViewer({ name, imageUrl }: { name: string; imageUrl: string | null }) {
-  const [zoomed, setZoomed] = useState(false);
+  const boxRef = useRef<HTMLDivElement>(null);
+  const imgRef = useRef<HTMLImageElement>(null);
+  /** Camera: the scaled image's top-left offset inside the box + zoom. null until first fit. */
+  const [view, setView] = useState<{ x: number; y: number; scale: number } | null>(null);
+  const viewRef = useRef(view);
+  viewRef.current = view;
+  /** Once the user zooms/pans, container resizes stop re-fitting over their framing. */
+  const interactedRef = useRef(false);
+  const dragRef = useRef<{
+    pointerId: number;
+    startX: number;
+    startY: number;
+    baseX: number;
+    baseY: number;
+  } | null>(null);
+  const [dragging, setDragging] = useState(false);
+
+  const fit = useCallback(() => {
+    const box = boxRef.current;
+    const img = imgRef.current;
+    if (!box || !img || !img.naturalWidth || box.clientWidth === 0) {
+      return;
+    }
+    // Never upscale small images on fit — natural size centered reads better.
+    const scale = Math.min(
+      box.clientWidth / img.naturalWidth,
+      box.clientHeight / img.naturalHeight,
+      1,
+    );
+    setView({
+      scale,
+      x: Math.round((box.clientWidth - img.naturalWidth * scale) / 2),
+      y: Math.round((box.clientHeight - img.naturalHeight * scale) / 2),
+    });
+  }, []);
+
+  // Keep the image fitted through window resizes until the user frames it themselves.
+  useEffect(() => {
+    const box = boxRef.current;
+    if (!box) {
+      return;
+    }
+    const observer = new ResizeObserver(() => {
+      if (!interactedRef.current) {
+        fit();
+      }
+    });
+    observer.observe(box);
+    return () => observer.disconnect();
+  }, [fit]);
+
+  // Wheel zoom, cursor-anchored. Native non-passive listener: wheel must preventDefault
+  // (no scrolling behind the window), which React's delegated handler can't guarantee.
+  useEffect(() => {
+    const box = boxRef.current;
+    if (!box) {
+      return;
+    }
+    const onWheel = (event: WheelEvent) => {
+      const current = viewRef.current;
+      if (!current) {
+        return;
+      }
+      event.preventDefault();
+      interactedRef.current = true;
+      const factor = event.deltaY < 0 ? 1.1 : 1 / 1.1;
+      const scale = Math.min(Math.max(current.scale * factor, 0.05), 12);
+      if (scale === current.scale) {
+        return;
+      }
+      // Keep the image point under the cursor stationary through the zoom.
+      const rect = box.getBoundingClientRect();
+      const cursorX = event.clientX - rect.left;
+      const cursorY = event.clientY - rect.top;
+      setView({
+        scale,
+        x: cursorX - (cursorX - current.x) * (scale / current.scale),
+        y: cursorY - (cursorY - current.y) * (scale / current.scale),
+      });
+    };
+    box.addEventListener("wheel", onWheel, { passive: false });
+    return () => box.removeEventListener("wheel", onWheel);
+  }, []);
+
   if (!imageUrl) {
     return (
       <div className="panel-body">
@@ -300,13 +385,65 @@ export function HandoutViewer({ name, imageUrl }: { name: string; imageUrl: stri
       </div>
     );
   }
+
+  const endDrag = (pointerId: number) => {
+    if (dragRef.current?.pointerId === pointerId) {
+      dragRef.current = null;
+      setDragging(false);
+    }
+  };
+
   return (
     <div
-      className={`handout-viewer${zoomed ? " handout-viewer--zoomed" : ""}`}
-      title={zoomed ? "Click to fit the window" : "Click to zoom"}
-      onClick={() => setZoomed((current) => !current)}
+      ref={boxRef}
+      className={`handout-viewer${dragging ? " handout-viewer--dragging" : ""}`}
+      title="Scroll to zoom · drag to pan · double-click to fit"
+      onPointerDown={(event) => {
+        if (event.button !== 0 || !viewRef.current) {
+          return;
+        }
+        event.currentTarget.setPointerCapture(event.pointerId);
+        dragRef.current = {
+          pointerId: event.pointerId,
+          startX: event.clientX,
+          startY: event.clientY,
+          baseX: viewRef.current.x,
+          baseY: viewRef.current.y,
+        };
+        setDragging(true);
+      }}
+      onPointerMove={(event) => {
+        const drag = dragRef.current;
+        const current = viewRef.current;
+        if (!drag || drag.pointerId !== event.pointerId || !current) {
+          return;
+        }
+        interactedRef.current = true;
+        setView({
+          scale: current.scale,
+          x: drag.baseX + (event.clientX - drag.startX),
+          y: drag.baseY + (event.clientY - drag.startY),
+        });
+      }}
+      onPointerUp={(event) => endDrag(event.pointerId)}
+      onPointerCancel={(event) => endDrag(event.pointerId)}
+      onDoubleClick={() => {
+        interactedRef.current = false;
+        fit();
+      }}
     >
-      <img src={imageUrl} alt={name} draggable={false} />
+      <img
+        ref={imgRef}
+        src={imageUrl}
+        alt={name}
+        draggable={false}
+        onLoad={fit}
+        style={
+          view
+            ? { transform: `translate(${view.x}px, ${view.y}px) scale(${view.scale})` }
+            : { visibility: "hidden" }
+        }
+      />
     </div>
   );
 }

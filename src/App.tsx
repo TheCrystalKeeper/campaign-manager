@@ -270,13 +270,21 @@ export default function App() {
     setDiceSecret(isDm && secretRolls);
   }, [isDm, secretRolls, setDiceSecret]);
 
-  // Prune viewer ids that no longer resolve to anything this client may see (visibility
-  // revoked before any push reached us) — otherwise a later re-grant would surprise-pop
-  // a window nobody asked for. Bail out unchanged so STATE frames don't churn renders.
+  // Close viewers whose handout this client may no longer see. The push payload only
+  // bridges the gap until the granting STATE frame lands (SHOW always grants first, and
+  // frames are FIFO, so the next STATE after a push carries the handout) — once state
+  // confirms it, drop the payload so state is authoritative: the DM un-ticking a player
+  // (or deleting the handout) then closes that player's open popup on the very next
+  // frame. Bail out unchanged so ordinary STATE frames don't churn renders.
   const roomState = room.state;
   useEffect(() => {
     if (!roomState) {
       return;
+    }
+    for (const id of [...handoutPushRef.current.keys()]) {
+      if (roomState.handouts.some((handout) => handout.id === id)) {
+        handoutPushRef.current.delete(id);
+      }
     }
     setOpenHandoutIds((current) => {
       const next = current.filter(

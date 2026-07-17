@@ -2,17 +2,17 @@ import type { GameState } from "./types";
 
 /** One place a stored asset URL is referenced in the campaign. */
 export type AssetUsage = {
-  kind: "token" | "sheet" | "scene" | "backdrop" | "item" | "campaign-icon";
+  kind: "token" | "sheet" | "scene" | "backdrop" | "item" | "campaign-icon" | "handout";
   id: string;
   label: string;
 };
 
 /**
  * Finds everywhere a stored-asset URL is used across the campaign (Phase 7 Assets page):
- * token images, sheet portraits, scene maps + backdrops, item icons, and the campaign icon.
- * Pure — the DM's "in use by N places" delete warning scans this so an in-use image isn't
- * dropped by accident. The campaign icon lives on the shared registry (not game state), so
- * its current URL is passed in.
+ * token images, sheet portraits, scene maps + backdrops, item icons, handouts, and the
+ * campaign icon. Pure — the DM's "in use by N places" delete warning scans this so an
+ * in-use image isn't dropped by accident. The campaign icon lives on the shared registry
+ * (not game state), so its current URL is passed in.
  */
 export function findAssetUsage(
   state: GameState,
@@ -49,6 +49,11 @@ export function findAssetUsage(
       usage.push({ kind: "item", id: item.id, label: item.name || "Item" });
     }
   }
+  for (const handout of state.handouts) {
+    if (handout.imageUrl === url) {
+      usage.push({ kind: "handout", id: handout.id, label: handout.name || "Handout" });
+    }
+  }
   if (campaignIconUrl && campaignIconUrl === url) {
     usage.push({ kind: "campaign-icon", id: state.roomId, label: "Campaign icon" });
   }
@@ -58,12 +63,15 @@ export function findAssetUsage(
 /**
  * Which Assets-page section an image belongs in, usage-first: an unreferenced image goes
  * to "unused" regardless of its folder; the campaign icon goes to "icons"; a map file OR any
- * image used as a scene backdrop goes to "maps"; otherwise its stored folder kind
- * (tokens/portraits). Pure, so the grouping is unit-testable independent of the R2 listing.
+ * image used as a scene backdrop goes to "maps"; an image whose ONLY use is handouts goes
+ * to "handouts" (they physically live in the token folder); otherwise its stored folder
+ * kind (tokens/portraits). Pure, so the grouping is unit-testable independent of the R2
+ * listing.
  */
 export function assetSection(assetKind: string, usage: AssetUsage[]): string {
   if (usage.length === 0) return "unused";
   if (usage.some((u) => u.kind === "campaign-icon")) return "icons";
   if (assetKind === "maps" || usage.some((u) => u.kind === "backdrop")) return "maps";
+  if (usage.every((u) => u.kind === "handout")) return "handouts";
   return assetKind;
 }
