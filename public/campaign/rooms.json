@@ -3,7 +3,7 @@
     {
       "roomId": "campaign1",
       "name": "Campaign 1",
-      "iconUrl": null,
+      "iconUrl": "/tokens/campaign1--asset-aca0cc0d.webp",
       "description": "Test campaign\n\nSomething something\n\ntest testy testy test\n\njarona!",
       "createdAt": 0
     }

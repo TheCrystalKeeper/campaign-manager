@@ -8,16 +8,19 @@ import {
   type AssetInfo,
 } from "../lib/uploadAsset";
 import { assetSection, findAssetUsage, type AssetUsage } from "../lib/assetUsage";
+import { fetchCampaignRegistry, registerCampaignRoom } from "../lib/campaignRegistry";
+import { upsertSavedCampaign } from "../lib/savedCampaigns";
 import type { Scene } from "../lib/types";
 import type { PanelContext } from "../panels/registry";
 
 // Section order shown on the page. "unused" collects every unreferenced image; "maps"
 // includes scene backdrops (which physically live in the token folder). See assetSection.
-const SECTIONS = ["maps", "tokens", "portraits", "unused"] as const;
+const SECTIONS = ["maps", "tokens", "portraits", "icons", "unused"] as const;
 const KIND_LABEL: Record<string, string> = {
   tokens: "Tokens",
   portraits: "Portraits",
   maps: "Maps",
+  icons: "Icons",
   unused: "Unused",
 };
 // How each usage reads in the delete warning (findAssetUsage kinds → a human word).
@@ -27,6 +30,7 @@ const USAGE_LABEL: Record<string, string> = {
   scene: "Map",
   backdrop: "Backdrop",
   item: "Item",
+  "campaign-icon": "Campaign icon",
 };
 
 /// <summary>
@@ -54,18 +58,38 @@ export function AssetsPage({
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // The campaign's registry entry (name/icon/description) — the icon is an uploaded asset, so
+  // it counts as "in use" here, and deleting it must unlink it from the campaign.
+  const [campaignEntry, setCampaignEntry] = useState<{
+    name: string;
+    iconUrl: string | null;
+    description: string | null;
+  } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      const { assets: list, unconfigured: unconf } = await listAssets(roomId);
+      const [{ assets: list, unconfigured: unconf }, registry] = await Promise.all([
+        listAssets(roomId),
+        fetchCampaignRegistry().catch(() => null),
+      ]);
       setAssets(list);
       setUnconfigured(unconf);
+      if (registry) {
+        const entry = registry.find((r) => r.roomId === roomId);
+        setCampaignEntry(
+          entry
+            ? { name: entry.name, iconUrl: entry.iconUrl ?? null, description: entry.description ?? null }
+            : null,
+        );
+      }
     } finally {
       setLoading(false);
     }
   }, [roomId]);
+
+  const campaignIconUrl = campaignEntry?.iconUrl ?? null;
 
   // Load once when the page becomes visible.
   useEffect(() => {
@@ -88,7 +112,7 @@ export function AssetsPage({
   };
 
   const handleDelete = async (asset: AssetInfo) => {
-    const usage = findAssetUsage(state, asset.url);
+    const usage = findAssetUsage(state, asset.url, campaignIconUrl);
     if (usage.length > 0) {
       const where = usage.map((u) => `${USAGE_LABEL[u.kind] ?? u.kind}: ${u.label}`).join(", ");
       if (!window.confirm(`This image is used in ${usage.length} place(s):\n${where}\n\nDelete it everywhere? It will be removed from those and this can't be undone.`)) {
@@ -122,6 +146,22 @@ export function AssetsPage({
         dm.updateScene({ ...scene, ...patch });
       }
     }
+    // Unlink the campaign icon from the shared registry (preserving name + description) so the
+    // campaign doesn't point at a file we're about to delete.
+    if (campaignEntry && campaignEntry.iconUrl === asset.url) {
+      try {
+        await registerCampaignRoom({
+          roomId,
+          name: campaignEntry.name,
+          iconUrl: null,
+          description: campaignEntry.description,
+        });
+        upsertSavedCampaign(roomId, { iconUrl: null });
+        setCampaignEntry({ ...campaignEntry, iconUrl: null });
+      } catch {
+        /* best-effort unlink; the file delete still proceeds below */
+      }
+    }
     try {
       await deleteAsset(roomId, asset.key);
       setAssets((cur) => cur.filter((a) => a.key !== asset.key));
@@ -135,10 +175,10 @@ export function AssetsPage({
   const usageByUrl = useMemo(() => {
     const map = new Map<string, AssetUsage[]>();
     for (const asset of assets) {
-      if (!map.has(asset.url)) map.set(asset.url, findAssetUsage(state, asset.url));
+      if (!map.has(asset.url)) map.set(asset.url, findAssetUsage(state, asset.url, campaignIconUrl));
     }
     return map;
-  }, [assets, state]);
+  }, [assets, state, campaignIconUrl]);
   const inSection = (kind: string) =>
     assets.filter((a) => assetSection(a.kind, usageByUrl.get(a.url) ?? []) === kind);
 

@@ -371,6 +371,27 @@ textarea {
 ::-webkit-scrollbar-corner {
   background: transparent;
 }
+/* The document's custom ::-webkit-scrollbar styling opts out of color-scheme-aware native
+   resizer rendering, so under night mode the textarea's resize grip renders as a bright white
+   block. Redraw it as a subtle chalk grip. (Day keeps the native grip, which reads fine on
+   parchment.) */
+[data-theme="night"] textarea::-webkit-resizer {
+  background-color: transparent;
+  /* Fixed-size grip anchored to the corner, so it looks identical whether or not a scrollbar
+     is present (the native resizer box changes size with the scrollbar, which would otherwise
+     rescale a percentage-based gradient). */
+  background-image: linear-gradient(
+    135deg,
+    transparent 0 30%,
+    var(--text-faint) 30% 44%,
+    transparent 44% 62%,
+    var(--text-faint) 62% 76%,
+    transparent 76%
+  );
+  background-size: 11px 11px;
+  background-position: bottom right;
+  background-repeat: no-repeat;
+}
 label {
   display: block;
   font-size: 0.78rem;
@@ -1017,8 +1038,8 @@ textarea,
   flex: 1 1 auto;
   min-height: 3.25rem;
   overflow-y: auto;
-  font-size: 0.82rem;
-  line-height: 1.4;
+  font-size: 0.95rem;
+  line-height: 1.5;
   color: var(--text);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
