@@ -439,6 +439,28 @@ export function SettingsPanel({ ctx }: { ctx: PanelContext }) {
         on={ctx.showLiveDrags}
         onToggle={ctx.setShowLiveDrags}
       />
+      <ToggleRow
+        label="Optimize uploads"
+        hint="Shrink new image uploads and save them as WebP (portraits/tokens ≤1024px, maps ≤2560px). Much smaller files — faster to load and far easier on storage. Off = keep originals at full size. Applies to this device's new uploads only."
+        on={ctx.optimizeUploads}
+        onToggle={ctx.setOptimizeUploads}
+      />
+      {isDm ? (
+        <>
+          <ToggleRow
+            label="Open Token panel on click"
+            hint="When on, single-clicking a token opens its Token editor panel. Off = clicking only selects the token; double-click still opens its sheet. (This device only.)"
+            on={ctx.tokenPanelOnClick}
+            onToggle={ctx.setTokenPanelOnClick}
+          />
+          <ToggleRow
+            label="Close Token panel with sheet"
+            hint="When on, closing a character sheet also closes the left-hand Token editor panel for that same token. Off = the Token panel stays open. (This device only.)"
+            on={ctx.closeTokenWithSheet}
+            onToggle={ctx.setCloseTokenWithSheet}
+          />
+        </>
+      ) : null}
       <div className="row" style={{ justifyContent: "space-between" }}>
         <label style={{ margin: 0 }} title="Windows and the dice tray return to their default spots">
           UI layout
@@ -528,24 +550,6 @@ export function SettingsPanel({ ctx }: { ctx: PanelContext }) {
             hint="Show every token's health bar to all players — not just tokens you've individually set to show HP in the Token panel. Off (default) = you control HP visibility per token. Numeric HP values stay per-token either way."
             on={state.showAllTokenHp}
             onToggle={(on) => room.send({ type: "SET_SHOW_ALL_TOKEN_HP", enabled: on })}
-          />
-          <ToggleRow
-            label="Optimize uploads"
-            hint="Shrink new image uploads and save them as WebP (portraits/tokens ≤1024px, maps ≤2560px). Much smaller files — faster to load and far easier on storage. Off = keep originals at full size. Applies to new uploads only."
-            on={state.optimizeUploads !== false}
-            onToggle={(on) => room.send({ type: "SET_OPTIMIZE_UPLOADS", enabled: on })}
-          />
-          <ToggleRow
-            label="Open Token panel on click"
-            hint="When on, single-clicking a token opens its Token editor panel. Off = clicking only selects the token; double-click still opens its sheet. (This device only.)"
-            on={ctx.tokenPanelOnClick}
-            onToggle={ctx.setTokenPanelOnClick}
-          />
-          <ToggleRow
-            label="Close Token panel with sheet"
-            hint="When on, closing a character sheet also closes the left-hand Token editor panel for that same token. Off = the Token panel stays open. (This device only.)"
-            on={ctx.closeTokenWithSheet}
-            onToggle={ctx.setCloseTokenWithSheet}
           />
           <ToggleRow
             label="Reduce visual effects"

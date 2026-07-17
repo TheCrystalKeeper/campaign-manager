@@ -31,7 +31,7 @@ import {
 } from "./lib/campaignStore";
 import { useSpaceClick } from "./lib/useSpaceClick";
 import { fitViewportToScene, prefetchImage } from "./lib/sceneUtils";
-import { setOptimizeUploads } from "./lib/uploadAsset";
+import { setOptimizeUploads as applyOptimizeUploads } from "./lib/uploadAsset";
 import { LoadingScreen } from "./components/LoadingScreen";
 import {
   DEFAULT_ICON_CROP,
@@ -54,6 +54,7 @@ const SPACE_CLICK_KEY = "cm-space-click";
 const TOKEN_PANEL_KEY = "cm-token-panel-on-click";
 const CLOSE_TOKEN_WITH_SHEET_KEY = "cm-close-token-with-sheet";
 const CLOSE_SETTINGS_ON_CLICK_OFF_KEY = "cm-close-settings-on-click-off";
+const OPTIMIZE_UPLOADS_KEY = "cm-optimize-uploads";
 const LIVE_DRAGS_KEY = "cm-live-drags";
 const HI_RES_KEY = "cm-hi-res";
 const NIGHT_KEY = "cm-night-mode";
@@ -163,6 +164,7 @@ export default function App() {
   const [tokenPanelOnClick, setTokenPanelOnClickState] = useState(() => readLocalFlag(TOKEN_PANEL_KEY, true));
   const [closeTokenWithSheet, setCloseTokenWithSheetState] = useState(() => readLocalFlag(CLOSE_TOKEN_WITH_SHEET_KEY, true));
   const [closeSettingsOnClickOff, setCloseSettingsOnClickOffState] = useState(() => readLocalFlag(CLOSE_SETTINGS_ON_CLICK_OFF_KEY, false));
+  const [optimizeUploads, setOptimizeUploadsState] = useState(() => readLocalFlag(OPTIMIZE_UPLOADS_KEY, true));
   const [showLiveDrags, setShowLiveDragsState] = useState(() => readLocalFlag(LIVE_DRAGS_KEY, true));
   const [hiResRender, setHiResRenderState] = useState(() => readLocalFlag(HI_RES_KEY, true));
   const [nightMode, setNightModeState] = useState(() => readLocalFlag(NIGHT_KEY, false));
@@ -444,6 +446,14 @@ export default function App() {
     [roomId],
   );
 
+  const setOptimizeUploads = useCallback(
+    (on: boolean) => {
+      if (roomId) writeCampaignFlag(roomId, "optimize-uploads", on);
+      setOptimizeUploadsState(on);
+    },
+    [roomId],
+  );
+
   const setShowLiveDrags = useCallback(
     (on: boolean) => {
       if (roomId) writeCampaignFlag(roomId, "live-drags", on);
@@ -536,6 +546,7 @@ export default function App() {
     setTokenPanelOnClickState(readCampaignFlag(roomId, "token-panel", true, TOKEN_PANEL_KEY));
     setCloseTokenWithSheetState(readCampaignFlag(roomId, "close-token-with-sheet", true, CLOSE_TOKEN_WITH_SHEET_KEY));
     setCloseSettingsOnClickOffState(readCampaignFlag(roomId, "close-settings-on-click-off", false, CLOSE_SETTINGS_ON_CLICK_OFF_KEY));
+    setOptimizeUploadsState(readCampaignFlag(roomId, "optimize-uploads", true, OPTIMIZE_UPLOADS_KEY));
     setShowLiveDragsState(readCampaignFlag(roomId, "live-drags", true, LIVE_DRAGS_KEY));
     setHiResRenderState(readCampaignFlag(roomId, "hi-res", true, HI_RES_KEY));
   }, [roomId]);
@@ -557,11 +568,11 @@ export default function App() {
   }, [roomId, dockOpen, dockTab, popped, trayOpen, page, settingsOpen]);
 
 
-  // Keep the client-side upload optimizer in sync with the DM's synced setting, so every client
-  // (DM and players) compresses new uploads the same way. Default on when state is absent.
+  // Keep the client-side upload optimizer in sync with this device's own setting (per-device,
+  // not a DM override) so each user compresses their own uploads to taste.
   useEffect(() => {
-    setOptimizeUploads(state?.optimizeUploads !== false);
-  }, [state?.optimizeUploads]);
+    applyOptimizeUploads(optimizeUploads);
+  }, [optimizeUploads]);
 
   // Asset warming (Phase 2): the decode-once shared cache lets us proactively warm likely-next
   // assets so scene switches and portraits never decode cold. Active-scene assets + party
@@ -752,6 +763,8 @@ export default function App() {
     setCloseTokenWithSheet,
     closeSettingsOnClickOff,
     setCloseSettingsOnClickOff,
+    optimizeUploads,
+    setOptimizeUploads,
     showLiveDrags,
     setShowLiveDrags,
     hiResRender,

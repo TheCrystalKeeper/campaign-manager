@@ -81,6 +81,9 @@ export type PanelContext = {
   /** Per-client: clicking outside the open Settings window closes it (off by default). */
   closeSettingsOnClickOff: boolean;
   setCloseSettingsOnClickOff: (on: boolean) => void;
+  /** Per-client: shrink + re-encode this device's own image uploads (WebP). */
+  optimizeUploads: boolean;
+  setOptimizeUploads: (on: boolean) => void;
   /** Per-client: mirror other players' tokens sliding live while they drag (receiver-side). */
   showLiveDrags: boolean;
   setShowLiveDrags: (on: boolean) => void;
