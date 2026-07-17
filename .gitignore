@@ -52,3 +52,7 @@ ehthumbs.db
 # Uploaded portraits (keep folder via .gitkeep)
 public/portraits/*
 !public/portraits/.gitkeep
+
+# Dev-uploaded tokens and campaign icons (already-tracked files stay tracked)
+public/tokens/*
+public/campaign-icons/*
