@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { ConvexGeometry } from "three/examples/jsm/geometries/ConvexGeometry.js";
 import type { DieKind } from "../lib/dice3d";
+import { createSkinMaterial, skinDef, type NumberStyle } from "./skins";
 
 /// <summary>
 /// Procedural dice geometry: builds the convex body mesh, per-face metadata used to
@@ -379,6 +380,52 @@ function normalizeScale(
 }
 
 /// <summary>
+/// Generates planar per-face UVs for a (non-indexed) die body so image-texture skins can
+/// wrap it. The (u,v) basis is derived purely from each triangle's face normal, so every
+/// coplanar triangle of a logical face projects into the same continuous patch — critical
+/// for the coin caps (triangle fans) and the d10/d12 multi-triangle kites/pentagons.
+/// Positions are normalized to radius 1, so uv = (p·u, p·v) * scale + 0.5 stays in [0,1]
+/// (textures use RepeatWrapping regardless). Different faces get different bases, which
+/// naturally samples different patches of the texture — exactly what organic materials
+/// (marble/wood/stone) want.
+/// </summary>
+export function generateFaceUVs(geometry: THREE.BufferGeometry, scale = 0.5): void {
+  const pos = geometry.getAttribute("position") as THREE.BufferAttribute;
+  const uvs = new Float32Array(pos.count * 2);
+
+  const a = new THREE.Vector3();
+  const b = new THREE.Vector3();
+  const c = new THREE.Vector3();
+  const n = new THREE.Vector3();
+  const u = new THREE.Vector3();
+  const v = new THREE.Vector3();
+  const helper = new THREE.Vector3();
+  const p = new THREE.Vector3();
+
+  for (let i = 0; i < pos.count; i += 3) {
+    a.fromBufferAttribute(pos, i);
+    b.fromBufferAttribute(pos, i + 1);
+    c.fromBufferAttribute(pos, i + 2);
+    n.crossVectors(b.clone().sub(a), c.clone().sub(a)).normalize();
+
+    helper.set(0, 1, 0);
+    if (Math.abs(n.y) > 0.99) {
+      helper.set(1, 0, 0);
+    }
+    u.crossVectors(helper, n).normalize();
+    v.crossVectors(n, u);
+
+    for (let k = 0; k < 3; k += 1) {
+      p.fromBufferAttribute(pos, i + k);
+      uvs[(i + k) * 2] = p.dot(u) * scale + 0.5;
+      uvs[(i + k) * 2 + 1] = p.dot(v) * scale + 0.5;
+    }
+  }
+
+  geometry.setAttribute("uv", new THREE.BufferAttribute(uvs, 2));
+}
+
+/// <summary>
 /// Assigns values 1..N to faces. Platonic dice get the standard "opposite faces sum to
 /// N+1" arrangement where possible; otherwise faces are numbered in a stable order.
 /// </summary>
@@ -464,6 +511,7 @@ export function buildDieGeometry(kind: DieKind, percentile = false): DieGeometry
 
   const radius = normalizeScale(points, faceData, geometry);
   geometry.computeVertexNormals();
+  generateFaceUVs(geometry);
 
   const sides = kind === "d10" ? 10 : faceData.length;
   // d4 faces are built directly (not via assignFaceValues) so `faces[i]` stays aligned with
@@ -487,11 +535,14 @@ export function buildDieGeometry(kind: DieKind, percentile = false): DieGeometry
 const textureCache = new Map<string, THREE.CanvasTexture>();
 
 /// <summary>
-/// Renders a die-face label to a transparent canvas texture, cached by label + color.
-/// 6 and 9 are underlined to disambiguate orientation.
+/// Renders a die-face label to a transparent canvas texture, cached by label + style.
+/// The glyph gets an engraved/inset look: a dark recess pass shifted up, a lit lower-lip
+/// pass shifted down, then the glyph body on top. 6 and 9 are underlined to
+/// disambiguate orientation.
 /// </summary>
-export function numberTexture(label: string, color = "#f5f3ec"): THREE.CanvasTexture {
-  const key = `${label}|${color}`;
+export function numberTexture(label: string, style?: NumberStyle): THREE.CanvasTexture {
+  const s = style ?? skinDef(undefined, false).numbers;
+  const key = `${label}|${s.fill}|${s.highlight}|${s.shadow}`;
   const cached = textureCache.get(key);
   if (cached) {
     return cached;
@@ -503,15 +554,20 @@ export function numberTexture(label: string, color = "#f5f3ec"): THREE.CanvasTex
   canvas.height = size;
   const ctx = canvas.getContext("2d")!;
   ctx.clearRect(0, 0, size, size);
-  ctx.fillStyle = color;
   ctx.font = `bold ${label.length > 1 ? 58 : 78}px "Trebuchet MS", system-ui, sans-serif`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillText(label, size / 2, size / 2 + 4);
 
-  if (label === "6" || label === "9") {
-    ctx.fillRect(size / 2 - 22, size / 2 + 34, 44, 6);
-  }
+  const drawGlyph = (color: string, dy: number) => {
+    ctx.fillStyle = color;
+    ctx.fillText(label, size / 2, size / 2 + 4 + dy);
+    if (label === "6" || label === "9") {
+      ctx.fillRect(size / 2 - 22, size / 2 + 34 + dy, 44, 6);
+    }
+  };
+  drawGlyph(s.shadow, -2);
+  drawGlyph(s.highlight, 2);
+  drawGlyph(s.fill, 0);
 
   const texture = new THREE.CanvasTexture(canvas);
   texture.anisotropy = 4;
@@ -521,38 +577,37 @@ export function numberTexture(label: string, color = "#f5f3ec"): THREE.CanvasTex
 }
 
 export interface DiceMaterialOptions {
-  /** Body color. */
-  color?: THREE.ColorRepresentation;
-  /** Number/pip color. */
-  numberColor?: string;
-  metalness?: number;
-  roughness?: number;
+  /** Cosmetic skin id — a DiceSkinId for dice, a CoinSkinId for the coin. */
+  skin?: string;
+  /** True for the "tens" d10 of a d100 pair (tinted so the pair stays readable). */
+  percentile?: boolean;
+  /** True for the coin (worn minted metal finishes instead of dice skins). */
+  coin?: boolean;
+  /** Number/pip styling; defaults to the resolved skin's engraved style. */
+  numberStyle?: NumberStyle;
 }
 
 /// <summary>
-/// Creates the body material. This is the single swap point for future textured dice
-/// "skins" — replace the material here and geometry/physics/networking are unaffected.
+/// Creates the body material. This is the single swap point for dice "skins" — the
+/// actual registry/material work lives in skins.ts; geometry/physics/networking are
+/// unaffected by the look.
 /// </summary>
 export function createDiceMaterial(options: DiceMaterialOptions = {}): THREE.MeshStandardMaterial {
-  return new THREE.MeshStandardMaterial({
-    color: options.color ?? "#7b2d3a",
-    metalness: options.metalness ?? 0.15,
-    roughness: options.roughness ?? 0.45,
-    flatShading: true,
+  return createSkinMaterial(options.skin, {
+    percentile: options.percentile,
+    coin: options.coin,
   });
 }
 
 /// <summary>
 /// The per-kind body/label styling passed to buildDieMesh. Single source of truth so the
-/// engine (thrown dice) and the tray (idle dice) render identically. The coin is metallic
-/// gold with a dark engraved H/T; the percentile tens-d10 is blue; everything else is the
-/// default dark red.
+/// engine (thrown dice) and the tray (idle dice) render identically. `skin` is the
+/// roller's cosmetic choice (spec.skin / tray prefs); absent means classic dice or the
+/// gold coin.
 /// </summary>
-export function dieMaterialOptions(kind: DieKind, percentile: boolean): DiceMaterialOptions {
-  if (kind === "coin") {
-    return { color: "#d4af37", metalness: 0.85, roughness: 0.3, numberColor: "#4a3a1a" };
-  }
-  return { color: percentile ? "#2d4a7b" : "#7b2d3a" };
+export function dieMaterialOptions(kind: DieKind, percentile: boolean, skin?: string): DiceMaterialOptions {
+  const coin = kind === "coin";
+  return { skin, percentile, coin, numberStyle: skinDef(skin, coin).numbers };
 }
 
 /// <summary>
@@ -568,7 +623,7 @@ export function buildDieMesh(die: DieGeometry, options: DiceMaterialOptions = {}
   body.userData.sharedGeometry = true;
   group.add(body);
 
-  const numberColor = options.numberColor ?? "#f5f3ec";
+  const numberStyle = options.numberStyle ?? skinDef(options.skin, options.coin ?? false).numbers;
   const decals: THREE.Mesh[] = [];
 
   if (die.kind === "d4" && die.d4) {
@@ -577,7 +632,7 @@ export function buildDieMesh(die: DieGeometry, options: DiceMaterialOptions = {}
     die.d4.faceVertices.forEach((vertexIdxs, faceIndex) => {
       const face = die.faces[faceIndex];
       for (const vi of vertexIdxs) {
-        const decal = makeD4VertexDecal(die, face, die.d4!.vertices[vi], numberColor);
+        const decal = makeD4VertexDecal(die, face, die.d4!.vertices[vi], numberStyle);
         group.add(decal);
         decals.push(decal);
         decalsByVertex[vi].push(decal);
@@ -587,7 +642,7 @@ export function buildDieMesh(die: DieGeometry, options: DiceMaterialOptions = {}
   } else if (die.kind !== "custom") {
     // Custom crystal dice render blank — the number is revealed (faded in) after they land.
     for (const face of die.faces) {
-      const decal = makeFaceDecal(die, face, face.label, numberColor);
+      const decal = makeFaceDecal(die, face, face.label, numberStyle);
       group.add(decal);
       decals.push(decal);
     }
@@ -596,7 +651,7 @@ export function buildDieMesh(die: DieGeometry, options: DiceMaterialOptions = {}
   // Expose the number decals so a thrown die's landing face/vertex can be relabeled to the
   // server's value before it is shown (faces via `relabelDieFace`, d4 via `relabelD4Vertex`).
   group.userData.decals = decals;
-  group.userData.numberColor = numberColor;
+  group.userData.numberStyle = numberStyle;
 
   return group;
 }
@@ -607,7 +662,7 @@ export function buildDieMesh(die: DieGeometry, options: DiceMaterialOptions = {}
 /// vertex-numbering layout, where the number near the topmost corner reads upright on all 3
 /// surrounding faces.
 /// </summary>
-function makeD4VertexDecal(die: DieGeometry, face: DieFace, vertex: D4VertexInfo, color: string): THREE.Mesh {
+function makeD4VertexDecal(die: DieGeometry, face: DieFace, vertex: D4VertexInfo, style: NumberStyle): THREE.Mesh {
   // The vertex lies in the face's plane, so centroid->vertex is already an in-plane
   // direction: use it directly as the local "outward" basis vector (u). v completes a
   // right-handed (u, v, normal) frame matching the decal plane's (X, Y, Z) axes.
@@ -620,7 +675,7 @@ function makeD4VertexDecal(die: DieGeometry, face: DieFace, vertex: D4VertexInfo
   const decalSize = die.radius * 0.6;
   const decal = new THREE.Mesh(
     new THREE.PlaneGeometry(decalSize, decalSize),
-    new THREE.MeshBasicMaterial({ map: numberTexture(vertex.label, color), transparent: true, depthWrite: false }),
+    new THREE.MeshBasicMaterial({ map: numberTexture(vertex.label, style), transparent: true, depthWrite: false }),
   );
   decal.position
     .copy(face.centroid)
@@ -635,7 +690,7 @@ function makeD4VertexDecal(die: DieGeometry, face: DieFace, vertex: D4VertexInfo
 }
 
 /// <summary>Builds a number plane sized and oriented to a die face.</summary>
-function makeFaceDecal(die: DieGeometry, face: DieFace, label: string, color: string): THREE.Mesh {
+function makeFaceDecal(die: DieGeometry, face: DieFace, label: string, style: NumberStyle): THREE.Mesh {
   // Scale the decal to the face: use the nearest vertex distance as an in-radius proxy.
   let nearest = Infinity;
   const posAttr = die.geometry.getAttribute("position") as THREE.BufferAttribute;
@@ -651,7 +706,7 @@ function makeFaceDecal(die: DieGeometry, face: DieFace, label: string, color: st
   const decalSize = Math.min(nearest * 1.25, die.radius * 1.1);
   const decal = new THREE.Mesh(
     new THREE.PlaneGeometry(decalSize, decalSize),
-    new THREE.MeshBasicMaterial({ map: numberTexture(label, color), transparent: true, depthWrite: false }),
+    new THREE.MeshBasicMaterial({ map: numberTexture(label, style), transparent: true, depthWrite: false }),
   );
   decal.position.copy(face.centroid).addScaledVector(face.normal, die.radius * 0.012);
   decal.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), face.normal);
@@ -679,9 +734,9 @@ export function relabelDieFace(group: THREE.Group, faceIndex: number, label: str
   if (!decal) {
     return;
   }
-  const color = (group.userData.numberColor as string | undefined) ?? "#f5f3ec";
+  const style = group.userData.numberStyle as NumberStyle | undefined;
   const material = decal.material as THREE.MeshBasicMaterial;
-  material.map = numberTexture(label, color);
+  material.map = numberTexture(label, style);
   material.needsUpdate = true;
 }
 
@@ -696,10 +751,10 @@ export function relabelD4Vertex(group: THREE.Group, vertexIndex: number, label: 
   if (!decals) {
     return;
   }
-  const color = (group.userData.numberColor as string | undefined) ?? "#f5f3ec";
+  const style = group.userData.numberStyle as NumberStyle | undefined;
   decals.forEach((decal) => {
     const material = decal.material as THREE.MeshBasicMaterial;
-    material.map = numberTexture(label, color);
+    material.map = numberTexture(label, style);
     material.needsUpdate = true;
   });
 }
@@ -718,8 +773,8 @@ export function addRevealDecal(
   if (!face) {
     return null;
   }
-  const color = (group.userData.numberColor as string | undefined) ?? "#f5f3ec";
-  const decal = makeFaceDecal(die, face, label, color);
+  const style = (group.userData.numberStyle as NumberStyle | undefined) ?? skinDef(undefined, false).numbers;
+  const decal = makeFaceDecal(die, face, label, style);
   (decal.material as THREE.MeshBasicMaterial).opacity = 0;
   group.add(decal);
   return decal;

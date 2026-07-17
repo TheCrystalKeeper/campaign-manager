@@ -2812,20 +2812,42 @@ body.pointer-dragging * {
   align-items: center;
   gap: 0.25rem;
 }
-/* The felt well the physical dice rest in — a dark table inset framed in ink.
+/* The well the physical dice rest in — a dark table inset framed in ink.
    Positioning context for the tray scene's canvas — the canvas is absolute so
-   its buffer size never widens the tray. */
+   its buffer size never widens the tray. The surface (wood/felt/leather) is a
+   user pref applied via modifier class from the skin picker. */
 .dice-tray-well {
   position: relative;
   height: 92px;
   border-radius: var(--r-wob-sm);
-  background:
-    radial-gradient(ellipse at 50% 35%, rgba(56, 84, 63, 0.85), rgba(21, 34, 26, 0.95) 78%);
+  background-color: #241309;
   border: 2px solid var(--border);
   box-shadow: inset 0 3px 12px rgba(0, 0, 0, 0.65);
   overflow: hidden;
   touch-action: none;
   user-select: none;
+}
+/* Polished dark wood: photo grain under a dark varnish tint, edge vignette for the
+   inset read, and one soft gloss streak (under the dice canvas, like a lacquer coat). */
+.dice-tray-well--wood {
+  background:
+    linear-gradient(160deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.02) 30%, rgba(255, 255, 255, 0) 46%),
+    radial-gradient(ellipse at 50% 30%, rgba(0, 0, 0, 0) 42%, rgba(0, 0, 0, 0.42) 100%),
+    linear-gradient(rgba(26, 15, 8, 0.38), rgba(20, 11, 6, 0.5)),
+    url("/textures/tray-wood.jpg") center / cover no-repeat #241309;
+  box-shadow: inset 0 3px 12px rgba(0, 0, 0, 0.65), inset 0 1px 0 rgba(255, 244, 214, 0.07);
+}
+/* Classic green felt (the original look). */
+.dice-tray-well--felt {
+  background:
+    radial-gradient(ellipse at 50% 35%, rgba(56, 84, 63, 0.85), rgba(21, 34, 26, 0.95) 78%);
+}
+/* Dark leather: pebbled photo grain, deeper vignette, no gloss. */
+.dice-tray-well--leather {
+  background:
+    radial-gradient(ellipse at 50% 30%, rgba(0, 0, 0, 0) 38%, rgba(0, 0, 0, 0.5) 100%),
+    linear-gradient(rgba(20, 10, 6, 0.3), rgba(14, 7, 4, 0.42)),
+    url("/textures/tray-leather.jpg") center / cover no-repeat #241309;
 }
 .die-btn {
   position: relative;
@@ -2897,6 +2919,120 @@ body.pointer-dragging * {
 }
 .dice-fairness-note strong {
   color: var(--primary-strong);
+}
+
+/* --- Dice skin picker --------------------------------------------------------
+   A compact popover above the tray (same paper/ink surface as the fairness note):
+   a row of target chips (All / d4..d100 / Coin / Tray) and a row of look swatches.
+   Hovering a swatch live-previews it on the real tray dice / well surface. */
+.dice-skins-note {
+  position: absolute;
+  left: 0.4rem;
+  right: 0.4rem;
+  bottom: calc(100% + 8px);
+  padding: 0.5rem 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  background-color: var(--surface-solid);
+  background-image: var(--paper-layers);
+  background-size: var(--paper-sizes);
+  border: 2px solid var(--border);
+  border-radius: var(--r-wob-sm);
+  box-shadow: var(--shadow-panel);
+  cursor: default;
+  pointer-events: auto;
+}
+.skin-targets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+.skin-target {
+  position: relative;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  padding: 0.18rem 0.4rem;
+}
+/* Gold corner dot: this die size has its own skin override. */
+.skin-target--set::after {
+  content: "";
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--primary);
+  border: 1.5px solid var(--border);
+}
+.skin-swatches {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.skin-swatch {
+  width: 1.7rem;
+  height: 1.7rem;
+  padding: 0;
+  border-radius: 999px;
+  border: 2px solid var(--border);
+  background-color: #777;
+  background-size: cover;
+  background-position: center;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  transition: transform var(--dur-1) var(--ease-out), box-shadow var(--dur-1) var(--ease-out);
+}
+.skin-swatch:hover {
+  transform: translateY(-1px) scale(1.08);
+}
+.skin-swatch--active {
+  box-shadow: 0 0 0 2px var(--primary), 0 0 8px color-mix(in srgb, var(--primary) 45%, transparent);
+}
+.skin-swatch--inherit {
+  border-style: dashed;
+  background: transparent;
+}
+/* Dice skins. */
+.skin-swatch--classic {
+  background-color: #7b2d3a;
+}
+.skin-swatch--marble {
+  background-image: url("/textures/dice/marble-color.jpg");
+}
+.skin-swatch--wood {
+  background-image: url("/textures/dice/wood-color.jpg");
+}
+.skin-swatch--glass {
+  background-image: linear-gradient(135deg, rgba(240, 248, 255, 0.95), rgba(168, 196, 232, 0.55) 55%, rgba(214, 189, 232, 0.7));
+  background-color: #8ea8c4;
+}
+.skin-swatch--bronze {
+  background-image: url("/textures/dice/bronze-color.jpg");
+}
+/* Coin finishes. */
+.skin-swatch--coin-gold {
+  background-image: radial-gradient(circle at 35% 35%, #ecd487, #d9b64a 55%, #987627);
+}
+.skin-swatch--coin-silver {
+  background-image: radial-gradient(circle at 35% 35%, #eef1f6, #c9ced6 55%, #878e9b);
+}
+.skin-swatch--coin-copper {
+  background-image: radial-gradient(circle at 35% 35%, #d9a179, #b0714a 55%, #6f4225);
+}
+/* Tray surfaces. */
+.skin-swatch--tray-wood {
+  background-image: linear-gradient(rgba(26, 15, 8, 0.3), rgba(20, 11, 6, 0.4)), url("/textures/tray-wood.jpg");
+}
+.skin-swatch--tray-felt {
+  background-image: radial-gradient(circle at 40% 35%, rgba(56, 84, 63, 1), rgba(21, 34, 26, 1) 80%);
+}
+.skin-swatch--tray-leather {
+  background-image: linear-gradient(rgba(20, 10, 6, 0.25), rgba(14, 7, 4, 0.35)), url("/textures/tray-leather.jpg");
 }
 
 /* --- Crystal: gem-cut arcane accent (Quill & Ember) --------------------------

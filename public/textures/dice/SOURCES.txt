@@ -1,0 +1,11 @@
+Dice/tray texture sources (all CC0, no attribution required):
+
+- tray-wood.jpg            Poly Haven "dark_wood" (diffuse, 1K)
+- tray-leather.jpg         ambientCG Leather030 (Color, 1K)
+- wood-color/normal.jpg    ambientCG Wood062 (Color / NormalGL, 1K)
+- marble-color.jpg         ambientCG Marble012 (Color, 1K)
+- bronze-color/normal/rough.jpg  ambientCG Metal008 (Color / NormalGL / Roughness, 1K)
+- metal-scratch-rough.jpg  ambientCG Scratches004 (Color, inverted, 1K)
+- glass-frost-rough.jpg    ambientCG SurfaceImperfections003 (Color, inverted, 1K)
+
+All downscaled to 512px (dice) / 1024px (tray) JPEG.

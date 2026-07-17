@@ -14,6 +14,21 @@ export type DieKind = "coin" | "d4" | "d6" | "d8" | "d10" | "d12" | "d20" | "cus
 
 export type StandardDieKind = Exclude<DieKind, "custom">;
 
+/**
+ * Cosmetic dice skins. Purely visual — a spec's `skin` travels with the throw so other
+ * clients render the roller's dice the same way. Unknown values normalize to undefined
+ * (= classic look) so mixed client/server versions stay compatible.
+ */
+export type DiceSkinId = "classic" | "marble" | "wood" | "glass" | "bronze";
+export const DICE_SKIN_IDS: readonly DiceSkinId[] = ["classic", "marble", "wood", "glass", "bronze"];
+
+/** Cosmetic coin finishes (the coin is skinned separately from the dice). */
+export type CoinSkinId = "gold" | "silver" | "copper";
+export const COIN_SKIN_IDS: readonly CoinSkinId[] = ["gold", "silver", "copper"];
+
+const DICE_SKIN_SET = new Set<string>(DICE_SKIN_IDS);
+const COIN_SKIN_SET = new Set<string>(COIN_SKIN_IDS);
+
 export type Vec3 = [number, number, number];
 export type Quat = [number, number, number, number];
 
@@ -32,6 +47,11 @@ export interface DieSpec {
   percentile: boolean;
   /** Side count for a "custom" die (ignored for standard kinds). */
   sides?: number;
+  /**
+   * Cosmetic skin chosen by the roller — a DiceSkinId on dice, a CoinSkinId on coins.
+   * Absent/unknown renders as the classic look (dice) or gold (coin).
+   */
+  skin?: string;
 }
 
 /** Max dice in one throw (matches the server-side cap). */
@@ -182,6 +202,14 @@ export function sanitizeThrow(
       const sides = spec.sides ?? 0;
       if (!Number.isFinite(sides) || sides < 2 || sides > 1000) {
         return null;
+      }
+    }
+    // Skins are cosmetic: normalize instead of rejecting so payloads from older or newer
+    // clients (no skin / a skin this build doesn't know) still validate.
+    if (spec.skin !== undefined) {
+      const valid = spec.kind === "coin" ? COIN_SKIN_SET : DICE_SKIN_SET;
+      if (typeof spec.skin !== "string" || !valid.has(spec.skin)) {
+        delete spec.skin;
       }
     }
   }

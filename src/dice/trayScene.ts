@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import {
   buildDieGeometry,
   buildDieMesh,
@@ -6,6 +7,12 @@ import {
   type DieGeometry,
   type DieKind,
 } from "./geometry";
+import {
+  DEFAULT_SKIN_PREFS,
+  onSkinTextureLoaded,
+  resolveSkinForSides,
+  type DiceSkinPrefs,
+} from "./skins";
 import type { Quat } from "../lib/dice3d";
 
 /// <summary>
@@ -92,9 +99,13 @@ export class DiceTrayScene {
   private counts = new Map<number, number>();
   private rafId: number | null = null;
   private disposed = false;
+  private skinPrefs: DiceSkinPrefs;
+  private envMap: THREE.Texture | null = null;
+  private unsubscribeSkinTextures: (() => void) | null = null;
 
-  constructor(container: HTMLElement) {
+  constructor(container: HTMLElement, skinPrefs: DiceSkinPrefs = DEFAULT_SKIN_PREFS) {
     this.container = container;
+    this.skinPrefs = skinPrefs;
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
     this.renderer.setClearColor(0x000000, 0);
@@ -115,6 +126,13 @@ export class DiceTrayScene {
     key.position.set(30, 80, 20);
     this.scene.add(key);
 
+    // Neutral studio environment for metal/glass skins (own GL context, own PMREM).
+    const pmrem = new THREE.PMREMGenerator(this.renderer);
+    this.envMap = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    this.scene.environment = this.envMap;
+    pmrem.dispose();
+    this.unsubscribeSkinTextures = onSkinTextureLoaded(() => this.requestRender());
+
     for (const sides of TRAY_SIDES) {
       this.dice.set(sides, [this.buildTrayDie(sides)]);
     }
@@ -132,9 +150,10 @@ export class DiceTrayScene {
     dy: number,
     scale: number,
     seed: number,
+    skin?: string,
   ): TrayDiePart {
     const geom = buildDieGeometry(kind, percentile);
-    const group = buildDieMesh(geom, dieMaterialOptions(kind, percentile));
+    const group = buildDieMesh(geom, dieMaterialOptions(kind, percentile, skin));
     group.scale.setScalar((TRAY_DIE_PX / 2) * scale);
     group.quaternion.copy(restQuaternion(geom, seed));
 
@@ -158,21 +177,45 @@ export class DiceTrayScene {
   }
 
   private buildTrayDie(sides: number): TrayDie {
+    const skin = resolveSkinForSides(this.skinPrefs, sides);
     let parts: TrayDiePart[];
     if (sides === 100) {
       // The real percentile pair, tens first to match decomposeDie(100)'s spec order.
       parts = [
-        this.buildPart("d10", true, -15, -9, PAIR_SCALE, sides),
-        this.buildPart("d10", false, 15, 10, PAIR_SCALE, sides + 3),
+        this.buildPart("d10", true, -15, -9, PAIR_SCALE, sides, skin),
+        this.buildPart("d10", false, 15, 10, PAIR_SCALE, sides + 3, skin),
       ];
     } else if (sides === 2) {
-      parts = [this.buildPart("coin", false, 0, 0, 1, sides)];
+      parts = [this.buildPart("coin", false, 0, 0, 1, sides, skin)];
     } else if (sides === 4 || sides === 6 || sides === 8 || sides === 10 || sides === 12 || sides === 20) {
-      parts = [this.buildPart(`d${sides}` as DieKind, false, 0, 0, 1, sides)];
+      parts = [this.buildPart(`d${sides}` as DieKind, false, 0, 0, 1, sides, skin)];
     } else {
       parts = [this.buildPart("custom", false, 0, 0, 1, sides)];
     }
     return { sides, parts, x: 0, y: 0, lifted: false };
+  }
+
+  /// <summary>
+  /// Applies new skin prefs by rebuilding every slot die (materials AND decal number
+  /// colors change per skin, so rebuilding beats swapping materials in place). Geometry
+  /// is cached per kind, so this is <10 ms — cheap enough that the picker's hover
+  /// preview calls it directly. Re-runs the current selection to restore duplicate
+  /// counts and glow.
+  /// </summary>
+  setSkinPrefs(prefs: DiceSkinPrefs) {
+    this.skinPrefs = prefs;
+    for (const instances of this.dice.values()) {
+      for (const die of instances.splice(0)) {
+        die.parts.forEach((part) => {
+          this.scene.remove(part.group);
+          disposeDie(part.group);
+        });
+      }
+    }
+    for (const sides of TRAY_SIDES) {
+      this.dice.get(sides)!.push(this.buildTrayDie(sides));
+    }
+    this.setSelection(Object.fromEntries(this.counts));
   }
 
   /// <summary>Sizes the camera to the container (1 world unit = 1 CSS px) and re-lays out slots.</summary>
@@ -364,6 +407,8 @@ export class DiceTrayScene {
       }
     }
     this.dice.clear();
+    this.unsubscribeSkinTextures?.();
+    this.envMap?.dispose();
     this.renderer.dispose();
     this.renderer.domElement.remove();
   }

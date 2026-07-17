@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import RAPIER from "@dimforge/rapier3d-compat";
+import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import {
   addRevealDecal,
   buildDieGeometry,
@@ -10,6 +11,7 @@ import {
   relabelDieFace,
   type DieGeometry,
 } from "./geometry";
+import { onSkinTextureLoaded } from "./skins";
 import {
   quantize,
   type DiceImpact,
@@ -180,6 +182,9 @@ export class DiceEngine {
 
   private rolls = new Map<string, RollInstance>();
 
+  private envMap: THREE.Texture | null = null;
+  private unsubscribeSkinTextures: (() => void) | null = null;
+
   private rafId: number | null = null;
   private disposed = false;
 
@@ -213,6 +218,14 @@ export class DiceEngine {
     const key = new THREE.DirectionalLight(0xffffff, 1.1);
     key.position.set(6, 18, 4);
     this.scene.add(key);
+
+    // Neutral studio environment so metal/glass skins pick up reflections. PMREM targets
+    // are per-GL-context, so this engine and the tray scene each generate their own.
+    const pmrem = new THREE.PMREMGenerator(this.renderer);
+    this.envMap = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    this.scene.environment = this.envMap;
+    pmrem.dispose();
+    this.unsubscribeSkinTextures = onSkinTextureLoaded(() => this.requestRender());
 
     this.layout();
     this.resizeObserver = new ResizeObserver(() => this.layout());
@@ -349,7 +362,7 @@ export class DiceEngine {
 
   private createDie(spec: DieSpec): DieInstance {
     const geom = buildDieGeometry(spec.kind, spec.percentile);
-    const mesh = buildDieMesh(geom, dieMaterialOptions(spec.kind, spec.percentile));
+    const mesh = buildDieMesh(geom, dieMaterialOptions(spec.kind, spec.percentile, spec.skin));
     mesh.scale.setScalar(DIE_SCALE);
     return { spec, geom, mesh };
   }
@@ -1159,7 +1172,9 @@ export class DiceEngine {
       const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
       for (const material of materials) {
         material.transparent = true;
-        material.opacity = opacity;
+        // Skins that are translucent at rest (frosted glass) carry a baseOpacity;
+        // multiplying keeps them from popping fully opaque when the fade starts.
+        material.opacity = opacity * ((material.userData.baseOpacity as number | undefined) ?? 1);
         material.depthWrite = false;
         material.needsUpdate = true;
       }
@@ -1186,6 +1201,8 @@ export class DiceEngine {
     for (const rollId of [...this.rolls.keys()]) {
       this.clearRoll(rollId);
     }
+    this.unsubscribeSkinTextures?.();
+    this.envMap?.dispose();
     this.renderer.dispose();
     this.renderer.domElement.remove();
   }

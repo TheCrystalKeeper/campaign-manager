@@ -1,10 +1,24 @@
 import { useEffect, useRef, useState } from "react";
-import { CircleDollarSign, Info, Lock, Undo2, Volume2, VolumeX, X } from "lucide-react";
+import { CircleDollarSign, Info, Lock, Palette, Undo2, Volume2, VolumeX, X } from "lucide-react";
 import { DICE_QUICK_SIDES } from "../lib/dice";
 import { playRollSound } from "../lib/rollSound";
 import { clampToViewport } from "../lib/clampToViewport";
 import { campaignKey } from "../lib/campaignStore";
+import {
+  COIN_SKIN_IDS,
+  COIN_SKINS,
+  DICE_SKIN_IDS,
+  DICE_SKINS,
+  mergeSkinPref,
+  SKINNABLE_SIDES,
+  TRAY_SURFACE_IDS,
+  TRAY_SURFACE_LABELS,
+  type TraySurfaceId,
+} from "../dice/skinDefs";
 import type { DiceOverlayController } from "../dice/useDiceOverlay";
+
+/** What the skin picker is currently styling. */
+type SkinTarget = "all" | "coin" | "tray" | number;
 
 type DiceTrayProps = {
   /** Slides/fades into view when true, out when false (stays mounted). */
@@ -95,11 +109,19 @@ export function DiceTray({
   const [expression, setExpression] = useState("1d20");
   const [pos, setPos] = useState<TrayPos>(() => loadPos(roomId));
   const [showFairness, setShowFairness] = useState(false);
+  const [showSkins, setShowSkins] = useState(false);
+  const [skinTarget, setSkinTarget] = useState<SkinTarget>("all");
+  /** Tray-surface hover preview (CSS only) — null shows the committed surface. */
+  const [previewSurface, setPreviewSurface] = useState<TraySurfaceId | null>(null);
   const trayRef = useRef<HTMLDivElement>(null);
   const suppressClickRef = useRef(false);
   const lastResetRef = useRef(resetSignal);
   const fairnessRef = useRef<HTMLDivElement>(null);
   const fairnessBtnRef = useRef<HTMLButtonElement>(null);
+  const skinsRef = useRef<HTMLDivElement>(null);
+  const skinsBtnRef = useRef<HTMLButtonElement>(null);
+  /** True while the picker has an un-reverted hover preview (reset once on close). */
+  const skinsOpenedRef = useRef(false);
 
   const selectionActive = Object.keys(controller.selection).length > 0;
 
@@ -176,6 +198,48 @@ export function DiceTray({
       window.removeEventListener("keydown", onKey);
     };
   }, [showFairness]);
+
+  // Same outside-press/Esc closing for the skin picker popover.
+  useEffect(() => {
+    if (!showSkins) {
+      return;
+    }
+    const onDown = (event: PointerEvent) => {
+      const target = event.target as Node | null;
+      if (!target) return;
+      if (skinsRef.current?.contains(target) || skinsBtnRef.current?.contains(target)) {
+        return;
+      }
+      setShowSkins(false);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setShowSkins(false);
+      }
+    };
+    window.addEventListener("pointerdown", onDown, true);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("pointerdown", onDown, true);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [showSkins]);
+
+  // Opening the picker warms every skin texture (flash-free hover previews); closing it
+  // (any path: outside press, Esc, toggle) reverts a still-active hover preview.
+  useEffect(() => {
+    if (showSkins) {
+      skinsOpenedRef.current = true;
+      controller.preloadAllSkins();
+      return;
+    }
+    if (!skinsOpenedRef.current) {
+      return;
+    }
+    skinsOpenedRef.current = false;
+    setPreviewSurface(null);
+    controller.previewSkinPref(null);
+  }, [showSkins, controller]);
 
   const rollExpression = () => {
     // Highlighted dice win over the text box: Roll throws the readied selection.
@@ -292,7 +356,7 @@ export function DiceTray({
     >
       {controller.enabled ? (
         <div
-          className="dice-tray-well"
+          className={`dice-tray-well dice-tray-well--${previewSurface ?? controller.skinPrefs.tray ?? "wood"}`}
           ref={controller.trayMountRef}
           onPointerDown={(event) => {
             if (event.button !== 0) return;
@@ -417,6 +481,18 @@ export function DiceTray({
             {controller.muted ? <VolumeX size={14} strokeWidth={2.2} /> : <Volume2 size={14} strokeWidth={2.2} />}
           </button>
         ) : null}
+        {controller.enabled ? (
+          <button
+            ref={skinsBtnRef}
+            className={`chip-btn ${showSkins ? "btn-active" : ""}`}
+            title="Dice skins — style your dice, coin, and tray"
+            aria-label="Dice skins"
+            aria-expanded={showSkins}
+            onClick={() => setShowSkins((v) => !v)}
+          >
+            <Palette size={14} strokeWidth={2.2} />
+          </button>
+        ) : null}
         <button
           ref={fairnessBtnRef}
           className={`chip-btn ${showFairness ? "btn-active" : ""}`}
@@ -440,6 +516,142 @@ export function DiceTray({
           tumble, never the outcome, so a roll can't be nudged in anyone's favor.
         </div>
       ) : null}
+
+      {showSkins ? (
+        <SkinPicker
+          controller={controller}
+          skinTarget={skinTarget}
+          setSkinTarget={setSkinTarget}
+          setPreviewSurface={setPreviewSurface}
+          popoverRef={skinsRef}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+/// <summary>
+/// The dice-skins popover: target chips (All / per-die / Coin / Tray) and a swatch row
+/// for the selected target. Hovering (or focusing) a swatch live-previews it — dice and
+/// coin swatches re-skin the real idle tray dice; tray swatches swap the well's CSS
+/// surface — and the preview reverts on mouse-out. Clicking commits and persists.
+/// </summary>
+function SkinPicker({
+  controller,
+  skinTarget,
+  setSkinTarget,
+  setPreviewSurface,
+  popoverRef,
+}: {
+  controller: DiceOverlayController;
+  skinTarget: SkinTarget;
+  setSkinTarget: (target: SkinTarget) => void;
+  setPreviewSurface: (surface: TraySurfaceId | null) => void;
+  popoverRef: React.RefObject<HTMLDivElement | null>;
+}) {
+  const prefs = controller.skinPrefs;
+
+  const previewEnter = (id: string | null) => {
+    if (skinTarget === "tray") {
+      setPreviewSurface(id as TraySurfaceId | null);
+    } else {
+      controller.previewSkinPref(mergeSkinPref(prefs, skinTarget, id));
+    }
+  };
+  const previewLeave = () => {
+    if (skinTarget === "tray") {
+      setPreviewSurface(null);
+    } else {
+      controller.previewSkinPref(null);
+    }
+  };
+  const commit = (id: string | null) => {
+    controller.setSkinPref(skinTarget, id);
+    if (skinTarget === "tray") {
+      setPreviewSurface(null);
+    }
+  };
+
+  const targets: Array<[SkinTarget, string]> = [
+    ["all", "All"],
+    ...SKINNABLE_SIDES.map((sides) => [sides, `d${sides}`] as [SkinTarget, string]),
+    ["coin", "Coin"],
+    ["tray", "Tray"],
+  ];
+
+  const perDieOverride = typeof skinTarget === "number" ? prefs.perDie?.[skinTarget] : undefined;
+  const swatches: Array<{ id: string; label: string; className: string; active: boolean }> =
+    skinTarget === "tray"
+      ? TRAY_SURFACE_IDS.map((id) => ({
+          id,
+          label: TRAY_SURFACE_LABELS[id],
+          className: `skin-swatch--tray-${id}`,
+          active: (prefs.tray ?? "wood") === id,
+        }))
+      : skinTarget === "coin"
+        ? COIN_SKIN_IDS.map((id) => ({
+            id,
+            label: COIN_SKINS[id].label,
+            className: `skin-swatch--coin-${id}`,
+            active: (prefs.coin ?? "gold") === id,
+          }))
+        : DICE_SKIN_IDS.map((id) => ({
+            id,
+            label: DICE_SKINS[id].label,
+            className: `skin-swatch--${id}`,
+            active: skinTarget === "all" ? prefs.all === id : perDieOverride === id,
+          }));
+
+  return (
+    <div className="dice-skins-note" role="dialog" aria-label="Dice skins" ref={popoverRef}>
+      <div className="skin-targets">
+        {targets.map(([target, label]) => (
+          <button
+            key={String(target)}
+            className={`chip-btn skin-target${skinTarget === target ? " btn-active" : ""}${
+              typeof target === "number" && prefs.perDie?.[target] ? " skin-target--set" : ""
+            }`}
+            title={
+              typeof target === "number" && prefs.perDie?.[target]
+                ? `d${target} — has its own skin`
+                : undefined
+            }
+            onClick={() => {
+              previewLeave();
+              setSkinTarget(target);
+            }}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      <div className="skin-swatches" onMouseLeave={previewLeave}>
+        {typeof skinTarget === "number" ? (
+          <button
+            className={`skin-swatch skin-swatch--inherit${perDieOverride ? "" : " skin-swatch--active"}`}
+            title="Inherit the all-dice skin"
+            aria-label="Inherit the all-dice skin"
+            onMouseEnter={() => previewEnter(null)}
+            onFocus={() => previewEnter(null)}
+            onBlur={previewLeave}
+            onClick={() => commit(null)}
+          >
+            <Undo2 size={12} strokeWidth={2.2} />
+          </button>
+        ) : null}
+        {swatches.map((swatch) => (
+          <button
+            key={swatch.id}
+            className={`skin-swatch ${swatch.className}${swatch.active ? " skin-swatch--active" : ""}`}
+            title={swatch.label}
+            aria-label={swatch.label}
+            onMouseEnter={() => previewEnter(swatch.id)}
+            onFocus={() => previewEnter(swatch.id)}
+            onBlur={previewLeave}
+            onClick={() => commit(swatch.id)}
+          />
+        ))}
+      </div>
     </div>
   );
 }

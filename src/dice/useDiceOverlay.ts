@@ -8,7 +8,13 @@ import {
   type DieSpec,
   type WorldPoint,
 } from "../lib/dice3d";
-import { campaignKey, writeCampaignFlag } from "../lib/campaignStore";
+import { campaignKey, readCampaignJson, writeCampaignFlag, writeCampaignJson } from "../lib/campaignStore";
+import {
+  applySkinsToSpecs,
+  DEFAULT_SKIN_PREFS,
+  mergeSkinPref,
+  type DiceSkinPrefs,
+} from "./skinDefs";
 import type { DiceAudio } from "./audio";
 import type { DiceEngine, SafeInsets } from "./engine";
 import type { DiceTrayScene } from "./trayScene";
@@ -18,6 +24,8 @@ import type { DiceTrayScene } from "./trayScene";
 const ENABLED_KEY = "dice-3d-enabled";
 /** Shared with dice/audio.ts and lib/rollSound.ts — one mute for all dice sound. */
 const MUTED_KEY = "dice-muted";
+/** Cosmetic skin prefs (JSON DiceSkinPrefs) — global default + `cm:{roomId}:dice-skins`. */
+const SKINS_KEY = "dice-skins";
 
 /** Physical dice cap per throw (bigger pools resolve as text rolls). */
 const MAX_PHYSICAL_DICE = 12;
@@ -44,6 +52,21 @@ function readMuted(roomId: string | null): boolean {
   }
 }
 
+function readSkinPrefs(roomId: string | null): DiceSkinPrefs {
+  if (roomId) {
+    return readCampaignJson(roomId, "dice-skins", DEFAULT_SKIN_PREFS, SKINS_KEY);
+  }
+  try {
+    const raw = window.localStorage.getItem(SKINS_KEY);
+    if (raw !== null) {
+      return { ...DEFAULT_SKIN_PREFS, ...(JSON.parse(raw) as Partial<DiceSkinPrefs>) };
+    }
+  } catch {
+    // corrupt/unavailable — use the default
+  }
+  return DEFAULT_SKIN_PREFS;
+}
+
 /** How many physical dice one selection unit costs (a d100 is a pair of d10s). */
 function physicalCount(sides: number): number {
   return sides === 100 ? 2 : 1;
@@ -68,6 +91,21 @@ export interface DiceOverlayController {
   setEnabled: (on: boolean) => void;
   muted: boolean;
   setMuted: (muted: boolean) => void;
+  /** Cosmetic skin prefs (dice skins, coin finish, tray surface), persisted like 3D/mute. */
+  skinPrefs: DiceSkinPrefs;
+  /**
+   * Commits one skin choice: "all" = the every-die default, a number = that die size's
+   * override (null clears it back to inherit), "coin"/"tray" = those looks.
+   */
+  setSkinPref: (target: "all" | "coin" | "tray" | number, value: string | null) => void;
+  /**
+   * Live-previews prefs on the idle tray dice without persisting (hover) — build them
+   * with mergeSkinPref over `skinPrefs`. Pass null to revert to the committed prefs.
+   * Throws always read committed prefs, so an active preview can never leak into a roll.
+   */
+  previewSkinPref: (prefs: DiceSkinPrefs | null) => void;
+  /** Warms every skin texture so picker hover previews don't pop (called on picker open). */
+  preloadAllSkins: () => void;
   /** Current d#-button selection: sides → count. Selected tray dice glow. */
   selection: Record<number, number>;
   /** Adds/removes dice from the selection (delta ±1); capped at 12 physical dice. */
@@ -132,6 +170,11 @@ export function useDiceOverlay(room: GameRoom, roomId: string | null): DiceOverl
   const enabledRef = useRef(enabled);
   enabledRef.current = enabled;
   const [muted, setMutedState] = useState(() => readMuted(roomId));
+  const [skinPrefs, setSkinPrefsState] = useState<DiceSkinPrefs>(() => readSkinPrefs(roomId));
+  // Committed prefs, readable from deps-free callbacks. Throws read ONLY this ref, so a
+  // hover preview (which never touches it) can't leak into a roll.
+  const skinPrefsRef = useRef(skinPrefs);
+  skinPrefsRef.current = skinPrefs;
   const restoredDiceRoomRef = useRef<string | null>(null);
   const [selection, setSelection] = useState<Record<number, number>>({});
   const selectionRef = useRef(selection);
@@ -238,7 +281,7 @@ export function useDiceOverlay(room: GameRoom, roomId: string | null): DiceOverl
       if (cancelled) {
         return;
       }
-      const tray = new DiceTrayScene(trayMount);
+      const tray = new DiceTrayScene(trayMount, skinPrefsRef.current);
       tray.setSelection(selectionRef.current);
       trayRef.current = tray;
     });
@@ -300,6 +343,32 @@ export function useDiceOverlay(room: GameRoom, roomId: string | null): DiceOverl
     [roomId],
   );
 
+  const setSkinPref = useCallback(
+    (target: "all" | "coin" | "tray" | number, value: string | null) => {
+      const next = mergeSkinPref(skinPrefsRef.current, target, value);
+      skinPrefsRef.current = next;
+      setSkinPrefsState(next);
+      try {
+        // Global = device default; per-campaign = authoritative for this campaign.
+        window.localStorage.setItem(SKINS_KEY, JSON.stringify(next));
+        if (roomId) writeCampaignJson(roomId, "dice-skins", next);
+      } catch {
+        // preference just won't persist
+      }
+      trayRef.current?.setSkinPrefs(next);
+    },
+    [roomId],
+  );
+
+  const previewSkinPref = useCallback((prefs: DiceSkinPrefs | null) => {
+    // The tray surface previews via CSS alone (DiceTray), so it never reaches here.
+    trayRef.current?.setSkinPrefs(prefs ?? skinPrefsRef.current);
+  }, []);
+
+  const preloadAllSkins = useCallback(() => {
+    void import("./skins").then((m) => m.preloadAllSkinTextures());
+  }, []);
+
   // Restore this campaign's dice prefs once when it's joined — applies to the engine/audio and
   // migrates the pre-join global default into the per-campaign key.
   useEffect(() => {
@@ -309,6 +378,10 @@ export function useDiceOverlay(room: GameRoom, roomId: string | null): DiceOverl
     restoredDiceRoomRef.current = roomId;
     setEnabled(readEnabled(roomId));
     setMuted(readMuted(roomId));
+    const prefs = readSkinPrefs(roomId);
+    skinPrefsRef.current = prefs;
+    setSkinPrefsState(prefs);
+    trayRef.current?.setSkinPrefs(prefs);
   }, [roomId, setEnabled, setMuted]);
 
   const adjustSelection = useCallback((sides: number, delta: number) => {
@@ -457,10 +530,13 @@ export function useDiceOverlay(room: GameRoom, roomId: string | null): DiceOverl
             ]
           : [[hit, 1]];
       const poses = tray.liftForGrab(picks);
-      const specs: DieSpec[] = picks.flatMap(([sides, count]) =>
-        Array.from({ length: count }, () =>
-          decomposeDie(sides).map((spec) => ({ ...spec, id: uid() })),
-        ).flat(),
+      const specs: DieSpec[] = applySkinsToSpecs(
+        picks.flatMap(([sides, count]) =>
+          Array.from({ length: count }, () =>
+            decomposeDie(sides).map((spec) => ({ ...spec, id: uid() })),
+          ).flat(),
+        ),
+        skinPrefsRef.current,
       );
       if (specs.length === 0 || specs.length > MAX_DICE_PER_THROW) {
         tray.restoreLifted();
@@ -492,7 +568,10 @@ export function useDiceOverlay(room: GameRoom, roomId: string | null): DiceOverl
       if (!parsed || parsed.specs.length > MAX_PHYSICAL_DICE) {
         return false;
       }
-      const specs = parsed.specs.map((spec) => ({ ...spec, id: uid() }));
+      const specs = applySkinsToSpecs(
+        parsed.specs.map((spec) => ({ ...spec, id: uid() })),
+        skinPrefsRef.current,
+      );
       const engine = engineRef.current;
       const rollId = uid();
       armedRef.current.set(rollId, { specs, modifier: parsed.modifier });
@@ -516,10 +595,13 @@ export function useDiceOverlay(room: GameRoom, roomId: string | null): DiceOverl
     // the view center like an expression throw. decomposeDie handles the coin (d2)
     // and splits a d100 into its d10 pair.
     const current = selectionRef.current;
-    const specs: DieSpec[] = Object.entries(current).flatMap(([sides, count]) =>
-      Array.from({ length: count }, () =>
-        decomposeDie(Number(sides)).map((spec) => ({ ...spec, id: uid() })),
-      ).flat(),
+    const specs: DieSpec[] = applySkinsToSpecs(
+      Object.entries(current).flatMap(([sides, count]) =>
+        Array.from({ length: count }, () =>
+          decomposeDie(Number(sides)).map((spec) => ({ ...spec, id: uid() })),
+        ).flat(),
+      ),
+      skinPrefsRef.current,
     );
     if (specs.length === 0 || specs.length > MAX_DICE_PER_THROW) {
       return false;
@@ -553,6 +635,10 @@ export function useDiceOverlay(room: GameRoom, roomId: string | null): DiceOverl
     setEnabled,
     muted,
     setMuted,
+    skinPrefs,
+    setSkinPref,
+    previewSkinPref,
+    preloadAllSkins,
     selection,
     adjustSelection,
     clearSelection,
