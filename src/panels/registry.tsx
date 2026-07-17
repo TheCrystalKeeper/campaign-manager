@@ -6,6 +6,7 @@ import {
   IdCard,
   Map as MapIcon,
   MessageSquare,
+  ScrollText,
   Settings,
   Swords,
   Users,
@@ -18,6 +19,7 @@ import { ItemSheetPanel } from "../components/ItemSheetPanel";
 import { LogPanel } from "../components/LogPanel";
 import { NotesPanel } from "../components/NotesPanel";
 import { PartyPanel } from "../components/PartyPanel";
+import { HandoutsPanel } from "../components/HandoutsPanel";
 import { ScenePanel } from "../components/ScenePanel";
 import { SettingsPanel } from "../components/SettingsPanel";
 import type { WindowPos } from "../components/FloatingWindow";
@@ -36,6 +38,7 @@ export type PanelId =
   | "actors"
   | "items"
   | "party"
+  | "handouts"
   | "notes"
   | "settings";
 
@@ -51,6 +54,8 @@ export type PanelContext = {
   /** Which item the Item Sheet window is showing (DM-only). */
   viewItemId: string | null;
   openItemSheet: (itemId: string) => void;
+  /** Opens a floating handout viewer window (players re-view, DM previews). */
+  openHandout: (handoutId: string) => void;
   /** Sends UPDATE_SHEET — the server authorizes (DM: any sheet, player: own only). */
   updateSheet: (sheetId: string, sheet: CharacterSheet) => void;
   /** Rolls dice with the DM's secret toggle already applied. */
@@ -342,6 +347,24 @@ export const PANELS: PanelDef[] = [
     render: (ctx) => (
       // PC sheet ids equal slot ids, so viewing a slot's sheet is openSheet(slotId).
       <PartyPanel state={ctx.state} dm={ctx.dm} onViewSheet={ctx.openSheet} />
+    ),
+  },
+  {
+    id: "handouts",
+    label: "Handouts",
+    icon: <ScrollText size={17} strokeWidth={2.2} />,
+    dockable: true,
+    roles: ["dm", "player"],
+    title: () => "Handouts",
+    defaultPos: (vw) => ({ x: vw - 392, y: 220 }),
+    width: 340,
+    render: (ctx) => (
+      <HandoutsPanel
+        state={ctx.state}
+        dm={ctx.dm}
+        isDm={ctx.isDm}
+        openHandout={ctx.openHandout}
+      />
     ),
   },
   {

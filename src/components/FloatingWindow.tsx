@@ -155,6 +155,12 @@ export function FloatingWindow({
   } | null>(null);
 
   useEffect(() => {
+    // Re-register on effect mount, not just via the useState initializer: StrictMode's
+    // dev double-mount runs this cleanup (deleting the entry) but never re-runs the
+    // initializer, which left every fresh window "not topmost" — Esc-to-close dead
+    // until the first click. Windows that open with no interaction (handout pushes)
+    // made this visible.
+    setZ(bringToFront(id));
     return () => {
       zStack.delete(id);
     };

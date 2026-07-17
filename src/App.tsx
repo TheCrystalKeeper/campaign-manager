@@ -6,7 +6,9 @@ import { FloatingWindow } from "./components/FloatingWindow";
 import { Dock, type DockAction } from "./components/Dock";
 import { ConfirmDeleteHost, CONFIRM_DELETES_KEY } from "./components/ConfirmDeleteDialog";
 import { DiceTray } from "./components/DiceTray";
+import { HandoutViewer } from "./components/HandoutsPanel";
 import { LogToasts } from "./components/LogToasts";
+import { SceneSwitcher } from "./components/SceneSwitcher";
 import { TokenEditor } from "./components/TokenEditor";
 import { CroppableImage } from "./components/CroppableImage";
 import { dockPanelsForRole, PANELS, type PanelContext, type PanelId } from "./panels/registry";
@@ -155,6 +157,14 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   // Item-sheet windows currently open (DM-only), one FloatingWindow each, ordered by open time.
   const [openItemIds, setOpenItemIds] = useState<string[]>([]);
+  // Handout viewer windows currently open, one FloatingWindow each, ordered by open time.
+  const [openHandoutIds, setOpenHandoutIds] = useState<string[]>([]);
+  /**
+   * Last HANDOUT_SHOW payload per handout id. The push carries name+URL because it can
+   * arrive BEFORE the STATE frame that grants visibility (broadcastState persists first) —
+   * the viewer falls back to this until state.handouts catches up.
+   */
+  const handoutPushRef = useRef<Map<string, { name: string; imageUrl: string | null }>>(new Map());
   const [secretRolls, setSecretRolls] = useState(false);
   const [trayOpen, setTrayOpen] = useState(true);
   const [page, setPage] = useState<PageId>("board");
@@ -183,6 +193,24 @@ export default function App() {
   const dice = useDiceOverlay(room, roomId);
   const { state, yourRole, status, error } = room;
   const isDm = yourRole === "dm";
+
+  // Player multi-scene viewing (Phase B): which scene THIS client displays. null = follow
+  // the live scene. Client-local by design — never part of GameState, so each player can
+  // look at a different opened scene. Self-heals: if the viewed scene stops being visible
+  // (removed, or the DM closes it), redacted state no longer carries it and the guard
+  // below falls back to the live scene.
+  const [viewingSceneId, setViewingSceneId] = useState<string | null>(null);
+  const displayedSceneId =
+    viewingSceneId && state?.scenes.some((scene) => scene.id === viewingSceneId)
+      ? viewingSceneId
+      : (state?.activeSceneId ?? null);
+
+  // The DM activating a scene pulls everyone to it (Foundry semantics): drop any local
+  // side-viewing so the scene-fit effect lands this client on the new live scene.
+  const activeSceneId = state?.activeSceneId ?? null;
+  useEffect(() => {
+    setViewingSceneId(null);
+  }, [activeSceneId]);
 
   // Players have no pages — the Board (with maximizable sheet windows) covers them.
   const activePage: PageId = isDm ? page : "board";
@@ -242,6 +270,40 @@ export default function App() {
     setDiceSecret(isDm && secretRolls);
   }, [isDm, secretRolls, setDiceSecret]);
 
+  // Prune viewer ids that no longer resolve to anything this client may see (visibility
+  // revoked before any push reached us) — otherwise a later re-grant would surprise-pop
+  // a window nobody asked for. Bail out unchanged so STATE frames don't churn renders.
+  const roomState = room.state;
+  useEffect(() => {
+    if (!roomState) {
+      return;
+    }
+    setOpenHandoutIds((current) => {
+      const next = current.filter(
+        (id) =>
+          roomState.handouts.some((handout) => handout.id === id) ||
+          handoutPushRef.current.has(id),
+      );
+      return next.length === current.length ? current : next;
+    });
+  }, [roomState]);
+
+  // DM "show handout" pushes: pop the floating viewer immediately (players only receive
+  // pushes aimed at them — the server targets connections). Re-showing an open handout
+  // is a no-op; the window is already up.
+  const subscribeHandout = room.subscribeHandout;
+  useEffect(() => {
+    return subscribeHandout((event) => {
+      handoutPushRef.current.set(event.handout.id, {
+        name: event.handout.name,
+        imageUrl: event.handout.imageUrl,
+      });
+      setOpenHandoutIds((current) =>
+        current.includes(event.handout.id) ? current : [...current, event.handout.id],
+      );
+    });
+  }, [subscribeHandout]);
+
   useEffect(() => {
     if (!session) {
       return;
@@ -284,22 +346,23 @@ export default function App() {
     }
   }, [error, status, clearError]);
 
-  // Each client owns its own local viewport; fit the view when the active scene changes.
+  // Each client owns its own local viewport; fit the view when the DISPLAYED scene
+  // changes — the live scene going live, or this player switching to an opened scene.
   useEffect(() => {
     if (!state) {
       return;
     }
-    const scene = state.scenes.find((item) => item.id === state.activeSceneId);
+    const scene = state.scenes.find((item) => item.id === displayedSceneId);
     if (!scene || lastSceneRef.current === scene.id) {
       return;
     }
     lastSceneRef.current = scene.id;
-    // Undo history is scene-scoped — switching the active scene starts fresh.
+    // Undo history is scene-scoped — switching the displayed scene starts fresh.
     history.reset();
     const fitted = fitViewportToScene(scene, window.innerWidth, window.innerHeight);
     setViewport(fitted);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state?.activeSceneId, status]);
+  }, [displayedSceneId, status]);
 
   // Each client owns its own camera: players never adopt the DM's (or any other client's)
   // viewport. This is what keeps a token move — or the DM panning — from yanking a player's
@@ -387,12 +450,15 @@ export default function App() {
     setPopped([]);
     setOpenSheetIds([]);
     setOpenItemIds([]);
+    setOpenHandoutIds([]);
+    handoutPushRef.current.clear();
     setSettingsOpen(false);
     setSelectedTokenId(null);
     setSecretRolls(false);
     setDockTab("log");
     setDockOpen(true);
     setPage("board");
+    setViewingSceneId(null);
     history.reset();
     lastSceneRef.current = null;
     // Re-arm restore so re-joining any campaign reloads its saved layout.
@@ -655,6 +721,17 @@ export default function App() {
     setOpenItemIds((current) => current.filter((id) => id !== itemId));
   };
 
+  /** Open a floating handout viewer (player re-view from the panel, DM preview). */
+  const openHandout = (handoutId: string) => {
+    setOpenHandoutIds((current) =>
+      current.includes(handoutId) ? current : [...current, handoutId],
+    );
+  };
+
+  const closeHandout = (handoutId: string) => {
+    setOpenHandoutIds((current) => current.filter((id) => id !== handoutId));
+  };
+
   /** Single-click a token: just select it (the DM's Token panel shows). No sheet. */
   const selectToken = (tokenId: string | null) => {
     setSelectedTokenId(tokenId);
@@ -742,6 +819,7 @@ export default function App() {
     // Per-item windows override this with their own id; the base context has no single "current".
     viewItemId: null,
     openItemSheet,
+    openHandout,
     updateSheet: (sheetId, sheet) => room.send({ type: "UPDATE_SHEET", sheetId, sheet }),
     // The DM's persistent Secret toggle applies to every roll, sheet-clicks included.
     rollDice: (expression, options) =>
@@ -890,7 +968,7 @@ export default function App() {
       <ConfirmDeleteHost onDisableConfirms={() => setConfirmDeletesState(false)} />
       <MapCanvas
         state={state}
-        sceneId={state.activeSceneId}
+        sceneId={displayedSceneId ?? state.activeSceneId}
         isDm={isDm}
         yourPlayerId={room.yourPlayerId}
         viewport={viewport}
@@ -980,6 +1058,17 @@ export default function App() {
           <div className="page-switcher">
             <PageSwitcher active={activePage} onSelect={setPage} />
           </div>
+        ) : null}
+
+        {/* Players: scene strip when the DM has opened extra scenes (redacted state only
+            ever carries scenes this player may see, so length > 1 IS the signal). */}
+        {!isDm && state.scenes.length > 1 ? (
+          <SceneSwitcher
+            scenes={state.scenes}
+            activeSceneId={state.activeSceneId}
+            displayedSceneId={displayedSceneId ?? state.activeSceneId}
+            onView={setViewingSceneId}
+          />
         ) : null}
 
         <Dock
@@ -1128,6 +1217,45 @@ export default function App() {
                   onClose={() => closeItemSheet(itemId)}
                 >
                   {itemSheetPanel.render(itemCtx)}
+                </FloatingWindow>
+              );
+            })
+          : null}
+
+        {/* One floating viewer per open handout — DM previews and player pops share the
+            wiring. Content resolves from state, falling back to the transient push payload
+            (a HANDOUT_SHOW frame can arrive before the STATE frame that grants visibility). */}
+        {onBoard
+          ? openHandoutIds.map((handoutId, index) => {
+              const record = state.handouts.find((handout) => handout.id === handoutId);
+              const pushed = handoutPushRef.current.get(handoutId);
+              if (!record && !pushed) {
+                return null;
+              }
+              const name = record?.name ?? pushed?.name ?? "Handout";
+              const imageUrl = record?.imageUrl ?? pushed?.imageUrl ?? null;
+              // Opens near-fullscreen (the image is the point), centered, cascading like
+              // sheets so several don't land exactly atop one another.
+              const winWidth = Math.min(Math.max(window.innerWidth - 160, 320), 900);
+              const winHeight = Math.min(Math.max(window.innerHeight - 160, 280), 760);
+              const cascade = index * 32;
+              return (
+                <FloatingWindow
+                  key={`handout:${handoutId}:${layoutEpoch}`}
+                  id={`handout:${handoutId}`}
+                  roomId={session.roomId}
+                  title={name}
+                  width={winWidth}
+                  height={winHeight}
+                  minWidth={280}
+                  minHeight={220}
+                  defaultPos={(vw, vh) => ({
+                    x: Math.max(16, Math.round((vw - winWidth) / 2) + cascade),
+                    y: Math.max(16, Math.round((vh - winHeight) / 2) + cascade),
+                  })}
+                  onClose={() => closeHandout(handoutId)}
+                >
+                  <HandoutViewer name={name} imageUrl={imageUrl} />
                 </FloatingWindow>
               );
             })

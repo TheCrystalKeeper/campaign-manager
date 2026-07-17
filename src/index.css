@@ -3601,3 +3601,162 @@ body.pointer-dragging * {
   border-radius: 999px;
   box-shadow: var(--shadow-panel);
 }
+
+/* --- Handouts: DM library rows, player gallery, floating viewer ---------------- */
+/* One DM library entry: thumb + rename + delete row, visibility grants, Show row. */
+.handout-row-block {
+  padding: 0.45rem;
+  border: 1.5px solid var(--border-subtle);
+  border-radius: var(--r-wob-sm, var(--radius));
+  background: var(--surface-inset);
+}
+.handout-row {
+  align-items: center;
+}
+.handout-thumb {
+  width: 44px;
+  height: 44px;
+  flex: none;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: var(--surface-solid);
+  background-image: none;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.handout-thumb:hover {
+  border-color: var(--accent);
+}
+.handout-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+/* Visibility grants: compact wrapped checkbox pills. */
+.handout-vis {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.15rem 0.65rem;
+}
+.handout-vis-opt {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.handout-vis-summary {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.75rem;
+}
+.handout-error {
+  color: var(--danger-text, var(--danger));
+  font-size: 0.78rem;
+}
+/* Player gallery: thumbnail cards with a caption (models .asset-picker-grid). */
+.handout-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 0.5rem;
+}
+.handout-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.3rem;
+  background: var(--surface-inset);
+  background-image: none;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+.handout-card:hover {
+  border-color: var(--accent);
+}
+.handout-card-img {
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: calc(var(--radius) - 2px);
+  background: var(--surface-solid);
+  color: var(--text-muted);
+}
+.handout-card-img img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.handout-card-name {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* --- Player scene strip (multi-scene viewing) ---------------------------------- */
+/* Sits in the DM PageSwitcher's top-left slot (players have no pages — no collision). */
+.scene-switcher {
+  position: fixed;
+  top: 1rem;
+  left: 1rem;
+  z-index: 32;
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  max-width: min(60vw, 640px);
+  flex-wrap: wrap;
+  padding: 0.3rem;
+  background-color: var(--surface-solid);
+  background-image: var(--paper-layers);
+  background-size: var(--paper-sizes);
+  border: 2px solid var(--border);
+  border-radius: var(--r-wob-md);
+  box-shadow: var(--shadow-panel);
+}
+.scene-switcher button {
+  padding: 0.3rem 0.6rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 12rem;
+}
+.scene-switcher-return {
+  color: var(--accent);
+}
+
+/* Floating viewer: image fit to the window; click toggles natural-size scroll. */
+.handout-viewer {
+  width: 100%;
+  height: 100%;
+  min-height: 180px;
+  display: grid;
+  place-items: center;
+  overflow: auto;
+  background: var(--map-bg);
+  cursor: zoom-in;
+}
+.handout-viewer img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 2px;
+}
+.handout-viewer--zoomed {
+  place-items: start;
+  cursor: zoom-out;
+}
+.handout-viewer--zoomed img {
+  max-width: none;
+  max-height: none;
+}

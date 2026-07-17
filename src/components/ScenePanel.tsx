@@ -1,3 +1,4 @@
+import { Eye, EyeOff } from "lucide-react";
 import type { GameState, Scene } from "../lib/types";
 import type { useDmActions } from "../hooks/useGameRoom";
 import { createEmptyScene } from "../lib/sceneUtils";
@@ -33,6 +34,24 @@ export function ScenePanel({ state, dm }: ScenePanelProps) {
             >
               {scene.id === state.activeSceneId ? "▶ " : ""}
               {scene.name}
+            </button>
+            <button
+              className="icon-btn"
+              disabled={scene.id === state.activeSceneId}
+              title={
+                scene.id === state.activeSceneId
+                  ? "Players always see the live scene"
+                  : scene.playerVisible
+                    ? "Players can view this scene alongside the live one — click to close it"
+                    : "Hidden from players — click to let them view it alongside the live scene"
+              }
+              onClick={() => dm.setScenePlayerVisible(scene.id, !scene.playerVisible)}
+            >
+              {scene.playerVisible || scene.id === state.activeSceneId ? (
+                <Eye size={14} />
+              ) : (
+                <EyeOff size={14} />
+              )}
             </button>
             <button
               className="btn-danger"

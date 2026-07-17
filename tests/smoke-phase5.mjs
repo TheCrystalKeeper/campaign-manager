@@ -277,6 +277,9 @@ try {
   // --- hidden combatant masked -------------------------------------------------------
   dm.send({ type: "COMBAT_START", tokenIds: ["tok-vis", "tok-hid"] });
   await vex.next((m) => m.type === "STATE" && m.state.combat);
+  // The DM's own combat frame can still be in flight when vex's resolves (bigger
+  // unredacted payload) — await it too instead of reading lastState blind.
+  await dm.next((m) => m.type === "STATE" && m.state.combat);
   const vexCombat = lastState(vex).combat;
   const dmCombat = lastState(dm).combat;
   check(

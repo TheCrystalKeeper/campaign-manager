@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Eye, EyeOff } from "lucide-react";
 import { MapCanvas } from "../components/MapCanvas";
 import { SceneSettings } from "../components/SceneSettings";
 import { PageSwitcher, type PageId } from "./PageSwitcher";
@@ -296,6 +296,36 @@ export function ScenesPage({
           >
             {liveUpdates ? "Live updates: on" : "Live updates: off"}
           </button>
+          {(() => {
+            // Visibility is a table-state action, not a draft edit — read the SERVER copy
+            // and send the dedicated message immediately (never rides Apply).
+            const serverScene = state.scenes.find((scene) => scene.id === selectedSceneId);
+            const isLiveScene = selectedSceneId === state.activeSceneId;
+            if (!serverScene) {
+              return null;
+            }
+            return (
+              <button
+                className={serverScene.playerVisible && !isLiveScene ? "btn-active" : ""}
+                disabled={isLiveScene}
+                title={
+                  isLiveScene
+                    ? "Players always see the live scene"
+                    : serverScene.playerVisible
+                      ? "Players can view this scene alongside the live one — click to close it"
+                      : "Hidden from players — click to let them view it alongside the live scene"
+                }
+                onClick={() => dm.setScenePlayerVisible(serverScene.id, !serverScene.playerVisible)}
+              >
+                {serverScene.playerVisible || isLiveScene ? (
+                  <Eye size={12} strokeWidth={2.2} />
+                ) : (
+                  <EyeOff size={12} strokeWidth={2.2} />
+                )}{" "}
+                {isLiveScene ? "Visible (live)" : serverScene.playerVisible ? "Open to players" : "Players can't view"}
+              </button>
+            );
+          })()}
           <button
             className="btn-primary"
             disabled={selectedSceneId === state.activeSceneId && !dirty}

@@ -317,6 +317,34 @@ export type Scene = {
   boardBgImageUrl?: string | null;
   /** Backdrop image blur strength 0–30 (default 12). */
   boardBgBlur?: number;
+  /**
+   * Multi-scene viewing (Phase B): when true, players may switch to this scene from
+   * their scene strip even while another scene is live. Default false — nothing changes
+   * until the DM opens a scene up. The ACTIVE scene is always player-visible regardless.
+   */
+  playerVisible?: boolean;
+};
+
+/** Handout library size cap (URLs + names only, so this stays tiny on the wire). */
+export const MAX_HANDOUTS = 100;
+
+/// <summary>
+/// A handout is a DM-shared image (letter, portrait, vista) players can be shown and —
+/// once granted — re-open later from the Handouts panel. Separate lifecycle from scenes:
+/// no grid, tokens, or fog. `visibleTo` is the durable per-player grant; the ephemeral
+/// "look at this now" pop is a transient HANDOUT_SHOW push, never state.
+/// </summary>
+export type Handout = {
+  id: string;
+  name: string;
+  /** Public URL (library asset under tokens/) — never a data URL (sanitized ≤600 chars). */
+  imageUrl: string | null;
+  /** Natural pixel size captured at upload; absent for library picks (client measures on load). */
+  width?: number;
+  height?: number;
+  /** Who may (re)open it from the panel: "all", or player slot ids. [] = DM-only. */
+  visibleTo: "all" | string[];
+  createdAt: number;
 };
 
 /** Token groups. "item" = a catalog object dropped on the board (Phase 6.7). */
@@ -1273,6 +1301,8 @@ export type GameState = {
   folders: Folder[];
   /** Item catalog (DM-only; sheets copy item names into their inventories). */
   items: Record<string, ItemRecord>;
+  /** DM-managed handout images. Players receive only the ones granted to them (redacted). */
+  handouts: Handout[];
   /** Per-group default token shapes (Phase 6.7). */
   tokenShapeDefaults?: TokenShapeDefaults;
   /** Default token size in grid cells (diameter), applied to tokens without their own `size`. */
@@ -1377,6 +1407,12 @@ export type ClientMessage =
   /** Rotate the scene 90° CW: map image, geometry, AND its tokens — atomic, always live. */
   | { type: "ROTATE_SCENE"; sceneId: string }
   | { type: "REMOVE_SCENE"; sceneId: string }
+  /**
+   * Open/close a scene for player viewing alongside the active one. A dedicated tiny
+   * message (not UPDATE_SCENE) so the at-the-table toggle can't clobber a concurrent
+   * ScenesPage draft edit.
+   */
+  | { type: "SET_SCENE_PLAYER_VISIBLE"; sceneId: string; visible: boolean }
   | { type: "ADD_TOKEN"; token: Token }
   | { type: "MOVE_TOKEN"; tokenId: string; x: number; y: number; facing?: number }
   | { type: "UPDATE_TOKEN"; token: Token }
@@ -1419,6 +1455,12 @@ export type ClientMessage =
   | { type: "UPDATE_ITEM"; item: ItemRecord }
   | { type: "DUPLICATE_ITEM"; itemId: string; newItemId: string }
   | { type: "DELETE_ITEM"; itemId: string }
+  | { type: "ADD_HANDOUT"; handout: Handout }
+  /** Rename and/or edit the durable per-player visibility grants. */
+  | { type: "UPDATE_HANDOUT"; handout: Handout }
+  | { type: "REMOVE_HANDOUT"; handoutId: string }
+  /** Pop the handout on targeted players' screens now; also auto-grants lasting visibility. */
+  | { type: "SHOW_HANDOUT"; handoutId: string; to: "all" | string[] }
   | { type: "SET_TOKEN_DEFAULTS"; defaults: TokenShapeDefaults }
   | { type: "SET_DEFAULT_TOKEN_SIZE"; size: number }
   | { type: "UPDATE_DM_NOTES"; notes: string }
@@ -1550,6 +1592,13 @@ export type ServerMessage =
       tokenId: string;
       pos: { x: number; y: number } | null;
     }
+  /**
+   * Ephemeral "look at this now" push, sent only to targeted players. Self-contained
+   * (name + URL, not just an id): broadcastState awaits persistState, so this frame can
+   * arrive BEFORE the STATE frame that grants visibility — the popup must not depend on
+   * state.handouts having caught up.
+   */
+  | { type: "HANDOUT_SHOW"; handout: { id: string; name: string; imageUrl: string | null } }
   | { type: "ERROR"; message: string }
   | { type: "JOINED"; role: Role; playerId: string }
   | { type: "KICKED"; message: string }
@@ -2710,6 +2759,37 @@ export function normalizeScene(scene: Partial<Scene> & Record<string, unknown>):
     boardBgImageUrl:
       typeof scene.boardBgImageUrl === "string" ? scene.boardBgImageUrl.slice(0, 600) : null,
     boardBgBlur: Math.min(Math.max(numberOr(scene.boardBgBlur, 12), 0), 30),
+    // Default OFF: pre-Phase-B saves keep today's active-scene-only player view.
+    playerVisible: scene.playerVisible === true,
+  };
+}
+
+/// <summary>
+/// Validates a persisted/imported handout. The 600-char imageUrl slice matches the
+/// boardBgImageUrl cap: a real URL always fits, and an accidentally-embedded data URL
+/// is truncated to harmless garbage instead of bloating state frames.
+/// </summary>
+export function normalizeHandout(value: unknown): Handout | null {
+  const handout = value as Partial<Handout> | null;
+  if (!handout || typeof handout !== "object" || typeof handout.id !== "string" || !handout.id) {
+    return null;
+  }
+  const visibleTo =
+    handout.visibleTo === "all"
+      ? ("all" as const)
+      : Array.isArray(handout.visibleTo)
+        ? [...new Set(handout.visibleTo.filter((id): id is string => typeof id === "string"))]
+        : [];
+  const width = numberOr(handout.width, 0);
+  const height = numberOr(handout.height, 0);
+  return {
+    id: handout.id.slice(0, 64),
+    name: typeof handout.name === "string" ? handout.name.slice(0, 120) : "Handout",
+    imageUrl: typeof handout.imageUrl === "string" ? handout.imageUrl.slice(0, 600) : null,
+    ...(width > 0 ? { width: Math.round(width) } : {}),
+    ...(height > 0 ? { height: Math.round(height) } : {}),
+    visibleTo,
+    createdAt: numberOr(handout.createdAt, Date.now()),
   };
 }
 
@@ -2799,6 +2879,11 @@ export function normalizeGameState(state: GameState & LegacyGameStateFields): Ga
     combat: normalizeCombat(state.combat),
     folders,
     items,
+    // Pre-handout saves simply get an empty library (persist/export/import all round-trip here).
+    handouts: (Array.isArray(state.handouts) ? state.handouts : [])
+      .map((handout) => normalizeHandout(handout))
+      .filter((handout): handout is Handout => handout !== null)
+      .slice(-MAX_HANDOUTS),
     playersCanDraw: Boolean(state.playersCanDraw),
     // Default-allowed: only an explicit `false` turns these off (undefined ⇒ on).
     playersCanMove: state.playersCanMove !== false,
@@ -2858,6 +2943,7 @@ export function createInitialState(roomId: string): GameState {
     combat: null,
     folders: [],
     items: {},
+    handouts: [],
     playersCanDraw: false,
     playersCanMove: true,
     playersCanPoint: true,

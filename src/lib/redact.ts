@@ -79,16 +79,23 @@ export function redactStateFor(state: GameState, view: StateView): GameState {
       combat: null,
       folders: [],
       items: {},
+      handouts: [],
     };
   }
 
   // Joined players: hide the DM's notes, hidden tokens, unrevealed NPC sheet
   // sections, secret rolls/events, whispers addressed to someone else — and every
-  // NON-ACTIVE scene (prep must be invisible until "Set Live", not merely unrendered;
-  // Phase 6.5). Hidden tokens are stripped entirely — UI hiding is never enough.
-  // Only the active scene, with DM-only annotations (map pins) stripped.
+  // scene that is neither ACTIVE nor flagged player-visible (prep must be invisible
+  // until "Set Live" or the DM opens it up, not merely unrendered; Phase 6.5 + multi-
+  // scene Phase B). Hidden tokens are stripped entirely — UI hiding is never enough.
+  // DM-only annotations (map pins) are stripped from the scenes that do go out.
+  const visibleSceneIds = new Set(
+    state.scenes
+      .filter((scene) => scene.id === state.activeSceneId || scene.playerVisible)
+      .map((scene) => scene.id),
+  );
   const scenes = state.scenes
-    .filter((scene) => scene.id === state.activeSceneId)
+    .filter((scene) => visibleSceneIds.has(scene.id))
     .map((scene) =>
       scene.annotations.some((annotation) => annotation.dmOnly)
         ? { ...scene, annotations: scene.annotations.filter((annotation) => !annotation.dmOnly) }
@@ -98,7 +105,7 @@ export function redactStateFor(state: GameState, view: StateView): GameState {
   // (the client renders a "?" glyph off the kept flags). Done BEFORE anything below
   // derives data from tokens, so sheet/item lookups see the concealed view too.
   const tokens = state.tokens
-    .filter((token) => !token.hidden && token.sceneId === state.activeSceneId)
+    .filter((token) => !token.hidden && visibleSceneIds.has(token.sceneId))
     .map((token) =>
       token.nameConcealed || token.portraitConcealed
         ? {
@@ -220,6 +227,11 @@ export function redactStateFor(state: GameState, view: StateView): GameState {
         ),
       }
     : null;
+  // Handouts: players receive only the ones granted to them ("all" or their slot id).
+  // The unshared rest must not ride the frame — the panel gallery IS the permission surface.
+  const handouts = state.handouts.filter(
+    (handout) => handout.visibleTo === "all" || handout.visibleTo.includes(view.playerId),
+  );
   // Directories are DM-side tools; sheets carry item-name copies for players.
-  return { ...state, scenes, tokens, sheets, log, dmNotes: "", combat, folders: [], items };
+  return { ...state, scenes, tokens, sheets, log, dmNotes: "", combat, folders: [], items, handouts };
 }

@@ -121,6 +121,26 @@ export async function uploadBackdropImage(roomId: string, file: File): Promise<{
   return { url: payload.url! };
 }
 
+/// <summary>
+/// Uploads a handout image (stored under the room's token prefix, like the library).
+/// Uses the MAP cap (2560): handouts open near-fullscreen, so documents/letters need the
+/// resolution to stay legible. Returns the natural (post-optimize) pixel size too, so the
+/// Handout record can size its viewer without a client-side measure.
+/// </summary>
+export async function uploadHandoutImage(
+  roomId: string,
+  file: File,
+): Promise<{ url: string; width: number; height: number }> {
+  const { dataUrl, width, height } = await readImageFromFile(file, uploadOpts(CAP_MAP));
+  const path = import.meta.env.DEV ? "/__dev/upload-token-image" : "/api/upload-token-image";
+  const payload = await postUpload(path, {
+    roomId,
+    tokenId: `asset-${crypto.randomUUID().slice(0, 8)}`,
+    dataUrl,
+  });
+  return { url: payload.url!, width, height };
+}
+
 export type AssetInfo = { key: string; url: string; kind: string; size: number; uploaded: string };
 
 /// <summary>

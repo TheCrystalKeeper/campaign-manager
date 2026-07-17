@@ -10,6 +10,7 @@ import {
   DEFAULT_ABILITY_SCORE,
   EPHEMERAL_ANNOTATION_TTL_MS,
   MAX_FOG_REVEALS,
+  MAX_HANDOUTS,
   MAX_LIGHTS,
   MAX_LOG_ENTRIES,
   MAX_MEASURE_NUMBERS,
@@ -26,6 +27,7 @@ import {
   normalizeCharacterSheet,
   normalizeFacing,
   normalizeGameState,
+  normalizeHandout,
   normalizeItem,
   normalizeScene,
   normalizeToken,
@@ -201,6 +203,18 @@ export default class GameServer implements Party.Server {
       text,
       ...(dmOnly ? { dmOnly: true } : {}),
     });
+  }
+
+  /// <summary>
+  /// Whether players may see this scene: it's the live one, or the DM flagged it
+  /// viewable (multi-scene Phase B). Must mirror redactStateFor's scene filter —
+  /// transient relays use this so they never leak beyond what state frames reveal.
+  /// </summary>
+  isSceneVisibleToPlayers(sceneId: string): boolean {
+    if (sceneId === this.state.activeSceneId) {
+      return true;
+    }
+    return this.state.scenes.some((scene) => scene.id === sceneId && scene.playerVisible);
   }
 
   /// <summary>
@@ -1503,10 +1517,10 @@ export default class GameServer implements Party.Server {
           if (receiver.role === "dm") {
             return true;
           }
-          // Players never learn about hidden or non-active-scene tokens (mirrors redactStateFor —
+          // Players never learn about hidden or invisible-scene tokens (mirrors redactStateFor —
           // a hidden token isn't even present in their state, so a leaked position would be a bug).
           const t = this.state.tokens.find((x) => x.id === tokenId);
-          return !!t && !t.hidden && t.sceneId === this.state.activeSceneId;
+          return !!t && !t.hidden && this.isSceneVisibleToPlayers(t.sceneId);
         },
       );
       return;
@@ -1660,6 +1674,19 @@ export default class GameServer implements Party.Server {
         if (scene) {
           this.state.activeSceneId = parsed.sceneId;
           this.logEvent(`Scene changed to “${scene.name}”.`);
+          void this.broadcastState();
+        }
+        break;
+      }
+      case "SET_SCENE_PLAYER_VISIBLE": {
+        const scene = this.state.scenes.find((item) => item.id === parsed.sceneId);
+        if (scene && scene.playerVisible !== parsed.visible) {
+          scene.playerVisible = parsed.visible;
+          this.logEvent(
+            parsed.visible
+              ? `Scene “${scene.name}” opened to players.`
+              : `Scene “${scene.name}” closed to players.`,
+          );
           void this.broadcastState();
         }
         break;
@@ -2346,6 +2373,95 @@ export default class GameServer implements Party.Server {
       case "DELETE_ITEM": {
         // Sheet inventories keep their name copies, so this is always safe.
         delete this.state.items[parsed.itemId];
+        void this.broadcastState();
+        break;
+      }
+      case "ADD_HANDOUT": {
+        const handout = normalizeHandout(parsed.handout);
+        if (!handout) {
+          this.sendTo(sender, { type: "ERROR", message: "Invalid handout." });
+          return;
+        }
+        if (this.state.handouts.length >= MAX_HANDOUTS) {
+          this.sendTo(sender, {
+            type: "ERROR",
+            message: `Handout limit reached (${MAX_HANDOUTS}). Remove some first.`,
+          });
+          return;
+        }
+        if (this.state.handouts.some((item) => item.id === handout.id)) {
+          return;
+        }
+        this.state.handouts.push(handout);
+        // DM-only: adding to the library is prep, not a table event.
+        this.logEvent(`Handout “${handout.name}” added.`, true);
+        void this.broadcastState();
+        break;
+      }
+      case "UPDATE_HANDOUT": {
+        const handout = normalizeHandout(parsed.handout);
+        if (!handout) {
+          this.sendTo(sender, { type: "ERROR", message: "Invalid handout." });
+          return;
+        }
+        const index = this.state.handouts.findIndex((item) => item.id === handout.id);
+        if (index < 0) {
+          return;
+        }
+        this.state.handouts[index] = handout;
+        void this.broadcastState();
+        break;
+      }
+      case "REMOVE_HANDOUT": {
+        this.state.handouts = this.state.handouts.filter((item) => item.id !== parsed.handoutId);
+        void this.broadcastState();
+        break;
+      }
+      case "SHOW_HANDOUT": {
+        const handout = this.state.handouts.find((item) => item.id === parsed.handoutId);
+        if (!handout) {
+          this.sendTo(sender, { type: "ERROR", message: "Handout not found." });
+          return;
+        }
+        // Sanitize targets against real slots. Showing also GRANTS lasting visibility
+        // (Roll20 semantics): anyone who missed the pop finds it waiting in their panel.
+        const to: "all" | string[] =
+          parsed.to === "all"
+            ? "all"
+            : [
+                ...new Set(
+                  (Array.isArray(parsed.to) ? parsed.to : []).filter((id) =>
+                    this.state.playerSlots.some((slot) => slot.id === id),
+                  ),
+                ),
+              ];
+        if (to !== "all" && to.length === 0) {
+          this.sendTo(sender, { type: "ERROR", message: "No players selected to show to." });
+          return;
+        }
+        if (to === "all") {
+          handout.visibleTo = "all";
+        } else if (handout.visibleTo !== "all") {
+          handout.visibleTo = [...new Set([...handout.visibleTo, ...to])];
+        }
+        // Self-contained targeted push (see HANDOUT_SHOW doc: it can beat the STATE frame,
+        // so it carries name + URL). Straight sends — no relayTransient (nothing to throttle,
+        // and its skip-the-sender rule is irrelevant to a DM-only action).
+        const frame = JSON.stringify({
+          type: "HANDOUT_SHOW",
+          handout: { id: handout.id, name: handout.name, imageUrl: handout.imageUrl },
+        } satisfies ServerMessage);
+        for (const connection of this.room.getConnections()) {
+          const meta = this.clients.get(connection.id);
+          if (!meta?.joined || meta.role !== "player" || !meta.playerId) {
+            continue;
+          }
+          if (to === "all" || to.includes(meta.playerId)) {
+            connection.send(frame);
+          }
+        }
+        // A subset share stays DM-only in the log — the entry itself would leak the secret.
+        this.logEvent(`Handout shared: “${handout.name}”.`, to !== "all");
         void this.broadcastState();
         break;
       }

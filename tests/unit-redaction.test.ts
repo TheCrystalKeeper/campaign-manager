@@ -318,5 +318,97 @@ check(
   redactStateFor(hpOff, { role: "dm" }).sheets["sheet-hp"]!.data.hp.max === 30,
 );
 
+// ---------------------------------------------------------------------------
+// 8. Handouts: players receive only the ones granted to them ("all" or their
+//    slot id); the lobby stub carries none; the DM keeps the full library.
+//    Migration: pre-handout saves normalize to an empty library.
+// ---------------------------------------------------------------------------
+const handoutState = normalizeGameState({
+  ...createInitialState("room-h"),
+  playerSlots: [
+    { id: "p1", name: "Vex" },
+    { id: "p2", name: "Kit" },
+  ],
+  handouts: [
+    { id: "h-all", name: "Town notice", imageUrl: "/tokens/a.webp", visibleTo: "all", createdAt: 1 },
+    { id: "h-p1", name: "Secret letter", imageUrl: "/tokens/b.webp", visibleTo: ["p1"], createdAt: 2 },
+    { id: "h-dm", name: "Unshared map", imageUrl: "/tokens/c.webp", visibleTo: [], createdAt: 3 },
+  ],
+} as unknown as GameState);
+const p1Handouts = redactStateFor(handoutState, { role: "player", playerId: "p1" }).handouts;
+const p2Handouts = redactStateFor(handoutState, { role: "player", playerId: "p2" }).handouts;
+check(
+  "player p1 receives 'all' + own grant, never the unshared handout",
+  p1Handouts.length === 2 &&
+    p1Handouts.some((h) => h.id === "h-all") &&
+    p1Handouts.some((h) => h.id === "h-p1"),
+  JSON.stringify(p1Handouts.map((h) => h.id)),
+);
+check(
+  "player p2 receives only the 'all' handout (no leak of p1's letter)",
+  p2Handouts.length === 1 && p2Handouts[0]!.id === "h-all",
+  JSON.stringify(p2Handouts.map((h) => h.id)),
+);
+check("lobby stub carries no handouts", redactStateFor(handoutState, null).handouts.length === 0);
+check("DM keeps the full handout library", redactStateFor(handoutState, { role: "dm" }).handouts.length === 3);
+const legacyState = { ...createInitialState("room-l") } as GameState & { handouts?: unknown };
+delete legacyState.handouts;
+check(
+  "pre-handout save normalizes to an empty library",
+  Array.isArray(normalizeGameState(legacyState as GameState).handouts) &&
+    normalizeGameState(legacyState as GameState).handouts.length === 0,
+);
+
+// ---------------------------------------------------------------------------
+// 9. Multi-scene viewing: a scene flagged playerVisible reaches players alongside
+//    the active one (tokens included, dmOnly pins stripped); unflagged scenes and
+//    their tokens stay invisible; pre-flag saves normalize to false.
+// ---------------------------------------------------------------------------
+const msBase = createInitialState("room-ms");
+const msState = normalizeGameState({
+  ...msBase,
+  playerSlots: [{ id: "p1", name: "Vex" }],
+  scenes: [
+    ...msBase.scenes.map((scene, index) =>
+      index === 1
+        ? {
+            ...scene,
+            playerVisible: true,
+            annotations: [
+              { id: "pin-s", kind: "pin", x: 1, y: 1, text: "secret", dmOnly: true, authorId: "dm" },
+            ],
+          }
+        : scene,
+    ),
+    { id: "scene-prep", name: "Prep", mapUrl: null, width: 800, height: 600 },
+  ],
+  tokens: [
+    { id: "tok-flagged", sceneId: msBase.scenes[1].id, x: 0, y: 0, label: "Side", color: "#c45c5c", kind: "enemy" },
+    { id: "tok-prep", sceneId: "scene-prep", x: 0, y: 0, label: "Prep", color: "#c45c5c", kind: "enemy" },
+  ],
+} as unknown as GameState);
+const msView = redactStateFor(msState, { role: "player", playerId: "p1" });
+check(
+  "player receives active + flagged scenes, never unflagged prep",
+  msView.scenes.length === 2 &&
+    msView.scenes.some((s) => s.id === msState.activeSceneId) &&
+    msView.scenes.some((s) => s.id === msBase.scenes[1].id) &&
+    !msView.scenes.some((s) => s.id === "scene-prep"),
+  JSON.stringify(msView.scenes.map((s) => s.id)),
+);
+check(
+  "flagged scene's tokens arrive; prep tokens stay stripped; dmOnly pins stripped",
+  msView.tokens.some((t) => t.id === "tok-flagged") &&
+    !msView.tokens.some((t) => t.id === "tok-prep") &&
+    msView.scenes.every((s) => s.annotations.every((a) => !a.dmOnly)),
+  JSON.stringify(msView.tokens.map((t) => t.id)),
+);
+check(
+  "playerVisible normalizes to false when absent (pre-flag saves unchanged)",
+  normalizeGameState(createInitialState("room-old")).scenes.every(
+    (s) => s.playerVisible === false,
+  ),
+);
+
 console.log(failures === 0 ? "\nALL CHECKS PASSED" : `\n${failures} CHECK(S) FAILED`);
 process.exit(failures === 0 ? 0 : 1);

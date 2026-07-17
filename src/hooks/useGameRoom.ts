@@ -5,6 +5,7 @@ import type {
   ClientMessage,
   Folder,
   GameState,
+  Handout,
   ItemRecord,
   JoinMessage,
   Light,
@@ -64,6 +65,8 @@ export type MeasureEvent = Extract<ServerMessage, { type: "MEASURE" }>;
 export type TemplateEvent = Extract<ServerMessage, { type: "TEMPLATE" }>;
 /** Another client's live token drag (transient relay); null pos = drag ended. */
 export type TokenDragEvent = Extract<ServerMessage, { type: "TOKEN_DRAG" }>;
+/** The DM popped a handout on this client's screen (targeted transient push). */
+export type HandoutShowEvent = Extract<ServerMessage, { type: "HANDOUT_SHOW" }>;
 
 export type GameRoom = {
   status: ConnectionStatus;
@@ -88,6 +91,8 @@ export type GameRoom = {
   subscribeTemplate: (listener: (event: TemplateEvent) => void) => () => void;
   /** Listen for other clients' live token drags; returns an unsubscribe function. */
   subscribeTokenDrag: (listener: (event: TokenDragEvent) => void) => () => void;
+  /** Listen for DM "show handout" pushes aimed at this client; returns an unsubscribe function. */
+  subscribeHandout: (listener: (event: HandoutShowEvent) => void) => () => void;
   clearError: () => void;
 };
 
@@ -266,6 +271,7 @@ export function useGameRoom(roomId: string | null): GameRoom {
   const measureListenersRef = useRef<Set<(event: MeasureEvent) => void>>(new Set());
   const templateListenersRef = useRef<Set<(event: TemplateEvent) => void>>(new Set());
   const tokenDragListenersRef = useRef<Set<(event: TokenDragEvent) => void>>(new Set());
+  const handoutListenersRef = useRef<Set<(event: HandoutShowEvent) => void>>(new Set());
 
   const send = useCallback((message: ClientMessage) => {
     const socket = socketRef.current;
@@ -375,6 +381,10 @@ export function useGameRoom(roomId: string | null): GameRoom {
         for (const listener of tokenDragListenersRef.current) {
           listener(message);
         }
+      } else if (message.type === "HANDOUT_SHOW") {
+        for (const listener of handoutListenersRef.current) {
+          listener(message);
+        }
       } else if (message.type === "CAMPAIGN_EXPORT") {
         // The DM's full-campaign backup → download it as a JSON file.
         try {
@@ -470,6 +480,13 @@ export function useGameRoom(roomId: string | null): GameRoom {
     };
   }, []);
 
+  const subscribeHandout = useCallback((listener: (event: HandoutShowEvent) => void) => {
+    handoutListenersRef.current.add(listener);
+    return () => {
+      handoutListenersRef.current.delete(listener);
+    };
+  }, []);
+
   return {
     status,
     error,
@@ -485,6 +502,7 @@ export function useGameRoom(roomId: string | null): GameRoom {
     subscribeMeasure,
     subscribeTemplate,
     subscribeTokenDrag,
+    subscribeHandout,
     clearError,
   };
 }
@@ -500,6 +518,8 @@ export function useDmActions(room: GameRoom) {
       addScene: (scene: Scene) => send({ type: "ADD_SCENE", scene }),
       updateScene: (scene: Scene) => send({ type: "UPDATE_SCENE", scene }),
       removeScene: (sceneId: string) => send({ type: "REMOVE_SCENE", sceneId }),
+      setScenePlayerVisible: (sceneId: string, visible: boolean) =>
+        send({ type: "SET_SCENE_PLAYER_VISIBLE", sceneId, visible }),
       addToken: (token: Token) => send({ type: "ADD_TOKEN", token }),
       moveToken: (tokenId: string, x: number, y: number) =>
         send({ type: "MOVE_TOKEN", tokenId, x, y }),
@@ -546,6 +566,11 @@ export function useDmActions(room: GameRoom) {
       duplicateItem: (itemId: string, newItemId: string) =>
         send({ type: "DUPLICATE_ITEM", itemId, newItemId }),
       deleteItem: (itemId: string) => send({ type: "DELETE_ITEM", itemId }),
+      addHandout: (handout: Handout) => send({ type: "ADD_HANDOUT", handout }),
+      updateHandout: (handout: Handout) => send({ type: "UPDATE_HANDOUT", handout }),
+      removeHandout: (handoutId: string) => send({ type: "REMOVE_HANDOUT", handoutId }),
+      showHandout: (handoutId: string, to: "all" | string[]) =>
+        send({ type: "SHOW_HANDOUT", handoutId, to }),
       setTokenDefaults: (defaults: TokenShapeDefaults) =>
         send({ type: "SET_TOKEN_DEFAULTS", defaults }),
       setDefaultTokenSize: (size: number) => send({ type: "SET_DEFAULT_TOKEN_SIZE", size }),
