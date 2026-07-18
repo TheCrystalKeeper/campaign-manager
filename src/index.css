@@ -3934,3 +3934,23 @@ body.pointer-dragging * {
     display: none;
   }
 }
+
+/* Tabs inside the compendium picker toolbar (Equipment | Magic items). */
+.cmp-tabs {
+  display: inline-flex;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.cmp-tab {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  padding: 0.25rem 0.6rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+.cmp-tab--on {
+  background: var(--surface-plaque);
+  color: var(--text-invert);
+}

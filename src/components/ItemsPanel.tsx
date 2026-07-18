@@ -1,6 +1,10 @@
+import { useState } from "react";
+import { BookOpen } from "lucide-react";
 import { Directory, type DirectoryRowData } from "./Directory";
 import { confirmDelete } from "./ConfirmDeleteDialog";
-import { DEFAULT_ICON_CROP, inventoryRowFromItem, type GameState } from "../lib/types";
+import { SrdItemPickerModal } from "./SrdItemPickerModal";
+import { itemPatchFromEquipment, itemPatchFromMagicItem } from "../lib/compendiumMap";
+import { DEFAULT_ICON_CROP, inventoryRowFromItem, type ItemRecord, type GameState } from "../lib/types";
 import type { useDmActions } from "../hooks/useGameRoom";
 
 type ItemsPanelProps = {
@@ -30,6 +34,22 @@ const nextName = (prefix: string, taken: string[]) => {
 /// Inventory section of any open character sheet).
 /// </summary>
 export function ItemsPanel({ state, dm, openItemSheet, dropItemAt }: ItemsPanelProps) {
+  const [srdPickerOpen, setSrdPickerOpen] = useState(false);
+
+  /** SRD pick → a new catalog item (create + fill, ordered messages). */
+  const importSrdItem = (patch: Partial<ItemRecord> & { name: string }) => {
+    const itemId = newId("item");
+    dm.createItem(itemId, patch.name);
+    dm.updateItem({
+      id: itemId,
+      description: "",
+      iconUrl: null,
+      iconCrop: { ...DEFAULT_ICON_CROP },
+      folderId: null,
+      ...patch,
+    });
+  };
+
   const rows: DirectoryRowData[] = Object.values(state.items)
     .map((item) => ({
       id: item.id,
@@ -61,11 +81,25 @@ export function ItemsPanel({ state, dm, openItemSheet, dropItemAt }: ItemsPanelP
   };
 
   return (
+    <>
+    {srdPickerOpen ? (
+      <SrdItemPickerModal
+        onPickEquipment={(eq) => importSrdItem(itemPatchFromEquipment(eq))}
+        onPickMagicItem={(mi) => importSrdItem(itemPatchFromMagicItem(mi))}
+        onClose={() => setSrdPickerOpen(false)}
+      />
+    ) : null}
     <Directory
       kind="item"
       folders={state.folders.filter((folder) => folder.kind === "item")}
       rows={rows}
       createLabel="Create Item"
+      extraCreate={{
+        label: "Add from SRD",
+        title: "Import items from the 5e SRD compendium",
+        icon: <BookOpen size={15} strokeWidth={2.2} />,
+        onClick: () => setSrdPickerOpen(true),
+      }}
       onCreate={(name, folderId) => {
         const itemId = newId("item");
         const finalName = name || nextName("Item", Object.values(state.items).map((i) => i.name));
@@ -140,5 +174,6 @@ export function ItemsPanel({ state, dm, openItemSheet, dropItemAt }: ItemsPanelP
         </>
       )}
     />
+    </>
   );
 }

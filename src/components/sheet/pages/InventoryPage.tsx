@@ -1,14 +1,18 @@
+import { useState } from "react";
 import { Shield } from "lucide-react";
 import {
   createInventoryRow,
   INVENTORY_CATEGORIES,
+  SHEET_ROW_CAPS,
   type Currency,
   type InventoryCategory,
   type InventoryEntry,
 } from "../../../lib/types";
+import { inventoryRowFromEquipment, inventoryRowFromMagicItem } from "../../../lib/compendiumMap";
 import { attackModParts, sumParts } from "../../../lib/rules5e";
 import { NumberInput } from "../../NumberInput";
 import { RowTable, type RowGroup } from "../RowTable";
+import { SrdItemPickerModal } from "../../SrdItemPickerModal";
 import { DerivedNumber } from "../atoms";
 import { advFromEvent, ROLL_HINT, type SheetEdit } from "../context";
 import { RangeTagSelect, ToHitAbilitySelect } from "./FeaturesPage";
@@ -35,9 +39,12 @@ const CURRENCY_KEYS: Array<{ key: keyof Currency; label: string }> = [
  * client-side display sum — no rules automation (Phase 7 manual-fields-first).
  */
 export function InventoryPage({ sheet }: { sheet: SheetEdit }) {
-  const { value, canEdit, derived, setOverride, update, onRollCheck, actions } = sheet;
+  const { value, canEdit, isDm, derived, setOverride, update, onRollCheck, actions } = sheet;
+  const [srdPickerOpen, setSrdPickerOpen] = useState(false);
 
   const setRows = (rows: InventoryEntry[]) => update({ inventory: rows });
+  const appendRow = (row: InventoryEntry) =>
+    update({ inventory: [...sheet.value.inventory, row].slice(0, SHEET_ROW_CAPS.inventory) });
   const patchRow = (id: string, patch: Partial<InventoryEntry>) =>
     setRows(value.inventory.map((r) => (r.id === id ? { ...r, ...patch } : r)));
 
@@ -126,6 +133,26 @@ export function InventoryPage({ sheet }: { sheet: SheetEdit }) {
           </div>
         ))}
       </div>
+
+      {canEdit && isDm ? (
+        <div className="spell-add-bar">
+          <button
+            type="button"
+            className="btn-ghost"
+            title="Browse the full SRD item list (DM only)"
+            onClick={() => setSrdPickerOpen(true)}
+          >
+            ＋ From SRD
+          </button>
+        </div>
+      ) : null}
+      {srdPickerOpen ? (
+        <SrdItemPickerModal
+          onPickEquipment={(eq) => appendRow(inventoryRowFromEquipment(eq))}
+          onPickMagicItem={(mi) => appendRow(inventoryRowFromMagicItem(mi))}
+          onClose={() => setSrdPickerOpen(false)}
+        />
+      ) : null}
 
       <RowTable
         groups={groups}

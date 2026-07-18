@@ -116,7 +116,7 @@ export function inventoryRowFromMagicItem(mi: CompendiumMagicItem): InventoryEnt
 }
 
 /** Patch applied after dm.createItem() — fills catalog fields from an equipment entry. */
-export function itemPatchFromEquipment(eq: CompendiumEquipment): Partial<ItemRecord> {
+export function itemPatchFromEquipment(eq: CompendiumEquipment): Partial<ItemRecord> & { name: string } {
   return {
     name: cap(eq.name, NAME_CAP),
     type: eq.itemType,
@@ -130,7 +130,7 @@ export function itemPatchFromEquipment(eq: CompendiumEquipment): Partial<ItemRec
   };
 }
 
-export function itemPatchFromMagicItem(mi: CompendiumMagicItem): Partial<ItemRecord> {
+export function itemPatchFromMagicItem(mi: CompendiumMagicItem): Partial<ItemRecord> & { name: string } {
   return {
     name: cap(mi.name, NAME_CAP),
     type: mi.itemType,

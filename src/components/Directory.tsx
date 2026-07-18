@@ -30,6 +30,8 @@ type DirectoryProps = {
   onCreateFolder: (name: string) => void;
   /** Optional extra create action (Actors sidebar: "Create Player" → new slot). */
   onCreatePlayer?: () => void;
+  /** Optional second create button (e.g. "Add from SRD" / "From SRD monster"). */
+  extraCreate?: { label: string; icon?: ReactNode; title?: string; onClick: () => void };
   onRenameFolder: (folderId: string, name: string) => void;
   /** Reorder a folder among its siblings (drag a folder header onto another). */
   onMoveFolder?: (folderId: string, sortOrder: number) => void;
@@ -83,6 +85,7 @@ export function Directory({
   onCreate,
   onCreateFolder,
   onCreatePlayer,
+  extraCreate,
   onRenameFolder,
   onMoveFolder,
   onDeleteFolder,
@@ -383,6 +386,12 @@ export function Directory({
           <button className="dir-create" title="Create a player slot" onClick={onCreatePlayer}>
             <span className="dir-create-ico"><UserPlus size={15} strokeWidth={2.2} /></span>
             Create Player
+          </button>
+        ) : null}
+        {extraCreate ? (
+          <button className="dir-create" title={extraCreate.title ?? extraCreate.label} onClick={extraCreate.onClick}>
+            {extraCreate.icon ? <span className="dir-create-ico">{extraCreate.icon}</span> : null}
+            {extraCreate.label}
           </button>
         ) : null}
         <button
