@@ -29,7 +29,10 @@
    ]
   },
   "subclassIds": [
-   "path-of-the-berserker"
+   "path-of-the-berserker",
+   "path-of-the-wild-heart",
+   "path-of-the-world-tree",
+   "path-of-the-zealot"
   ],
   "subclassLevel": 3,
   "multiclass": {
@@ -42,11 +45,11 @@
      "mode": "and"
     }
    ],
-   "armorProfs": [
-    "Shields"
-   ],
    "weaponProfs": [
     "Martial Weapons"
+   ],
+   "armorProfs": [
+    "Shields"
    ]
   }
  },
@@ -64,6 +67,9 @@
   ],
   "weaponProfs": [
    "Simple Weapons"
+  ],
+  "toolProfs": [
+   "3 Musical Instruments"
   ],
   "skillChoices": {
    "choose": 3,
@@ -93,7 +99,10 @@
    "casterType": "full"
   },
   "subclassIds": [
-   "college-of-lore"
+   "college-of-dance",
+   "college-of-glamour",
+   "college-of-lore",
+   "college-of-valor"
   ],
   "subclassLevel": 3,
   "multiclass": {
@@ -105,9 +114,6 @@
      "min": 13,
      "mode": "and"
     }
-   ],
-   "armorProfs": [
-    "Light Armor"
    ],
    "skillChoice": {
     "choose": 1,
@@ -131,7 +137,13 @@
      "skill-stealth",
      "skill-survival"
     ]
-   }
+   },
+   "toolProfs": [
+    "One Musical Instrument of your choice"
+   ],
+   "armorProfs": [
+    "Light Armor"
+   ]
   }
  },
  {
@@ -166,7 +178,10 @@
    "casterType": "full"
   },
   "subclassIds": [
-   "life-domain"
+   "life-domain",
+   "light-domain",
+   "trickery-domain",
+   "war-domain"
   ],
   "subclassLevel": 3,
   "multiclass": {
@@ -196,14 +211,13 @@
    "wis"
   ],
   "armorProfs": [
-   "Light Armor",
-   "Shields"
+   "Light Armor And Shields"
   ],
   "weaponProfs": [
    "Simple Weapons"
   ],
   "toolProfs": [
-   "Herbalism Kit"
+   "Herbalism kit"
   ],
   "skillChoices": {
    "choose": 2,
@@ -223,7 +237,10 @@
    "casterType": "full"
   },
   "subclassIds": [
-   "circle-of-the-land"
+   "circle-of-the-land",
+   "circle-of-the-moon",
+   "circle-of-the-sea",
+   "circle-of-the-stars"
   ],
   "subclassLevel": 3,
   "multiclass": {
@@ -252,7 +269,9 @@
    "con"
   ],
   "armorProfs": [
-   "All armor",
+   "Light Armor",
+   "Medium Armor",
+   "Heavy Armor",
    "Shields"
   ],
   "weaponProfs": [
@@ -268,12 +287,16 @@
     "skill-history",
     "skill-insight",
     "skill-intimidation",
+    "skill-persuasion",
     "skill-perception",
     "skill-survival"
    ]
   },
   "subclassIds": [
-   "champion"
+   "battle-master",
+   "champion",
+   "eldritch-knight",
+   "psi-warrior"
   ],
   "subclassLevel": 3,
   "multiclass": {
@@ -287,13 +310,13 @@
      "mode": "or"
     }
    ],
+   "weaponProfs": [
+    "Martial Weapons"
+   ],
    "armorProfs": [
     "Light Armor",
     "Medium Armor",
     "Shields"
-   ],
-   "weaponProfs": [
-    "Martial Weapons"
    ]
   }
  },
@@ -307,10 +330,10 @@
    "dex"
   ],
   "weaponProfs": [
-   "Simple Weapons",
-   "Scimitars",
-   "Shortswords",
-   "Hand crossbows"
+   "Simple Weapons And Martial Weapons That Have The Light Property"
+  ],
+  "toolProfs": [
+   "Any one type of artisan's tools or any one musical instrument of your choice"
   ],
   "skillChoices": {
    "choose": 2,
@@ -324,6 +347,9 @@
    ]
   },
   "subclassIds": [
+   "warrior-of-mercy",
+   "warrior-of-shadow",
+   "warrior-of-the-elements",
    "warrior-of-the-open-hand"
   ],
   "subclassLevel": 3,
@@ -356,7 +382,9 @@
    "cha"
   ],
   "armorProfs": [
-   "All armor",
+   "Light Armor",
+   "Medium Armor",
+   "Heavy Armor",
    "Shields"
   ],
   "weaponProfs": [
@@ -379,7 +407,10 @@
    "casterType": "half"
   },
   "subclassIds": [
-   "oath-of-devotion"
+   "oath-of-devotion",
+   "oath-of-glory",
+   "oath-of-the-ancients",
+   "oath-of-vengeance"
   ],
   "subclassLevel": 3,
   "multiclass": {
@@ -399,13 +430,13 @@
      "mode": "and"
     }
    ],
+   "weaponProfs": [
+    "Martial Weapons"
+   ],
    "armorProfs": [
     "Light Armor",
     "Medium Armor",
     "Shields"
-   ],
-   "weaponProfs": [
-    "Martial Weapons"
    ]
   }
  },
@@ -445,6 +476,9 @@
    "casterType": "half"
   },
   "subclassIds": [
+   "beast-master",
+   "fey-wanderer",
+   "gloom-stalker",
    "hunter"
   ],
   "subclassLevel": 3,
@@ -465,14 +499,6 @@
      "mode": "and"
     }
    ],
-   "armorProfs": [
-    "Light Armor",
-    "Medium Armor",
-    "Shields"
-   ],
-   "weaponProfs": [
-    "Martial Weapons"
-   ],
    "skillChoice": {
     "choose": 1,
     "from": [
@@ -485,7 +511,15 @@
      "skill-stealth",
      "skill-survival"
     ]
-   }
+   },
+   "weaponProfs": [
+    "Martial Weapons"
+   ],
+   "armorProfs": [
+    "Light Armor",
+    "Medium Armor",
+    "Shields"
+   ]
   }
  },
  {
@@ -501,16 +535,10 @@
    "Light Armor"
   ],
   "weaponProfs": [
-   "Simple Weapons",
-   "Longswords",
-   "Rapiers",
-   "Scimitars",
-   "Shortswords",
-   "Whips",
-   "Hand crossbows"
+   "Simple Weapons And Martial Weapons That Have The Finesse Or Light Property"
   ],
   "toolProfs": [
-   "Tool: Thieves' Tools"
+   "Thieves' tools"
   ],
   "skillChoices": {
    "choose": 4,
@@ -529,6 +557,9 @@
    ]
   },
   "subclassIds": [
+   "arcane-trickster",
+   "assassin",
+   "soulknife",
    "thief"
   ],
   "subclassLevel": 3,
@@ -542,12 +573,6 @@
      "mode": "and"
     }
    ],
-   "armorProfs": [
-    "Light Armor"
-   ],
-   "toolProfs": [
-    "Tool: Thieves' Tools"
-   ],
    "skillChoice": {
     "choose": 1,
     "from": [
@@ -558,12 +583,17 @@
      "skill-intimidation",
      "skill-investigation",
      "skill-perception",
-     "skill-performance",
      "skill-persuasion",
      "skill-sleight-of-hand",
      "skill-stealth"
     ]
-   }
+   },
+   "toolProfs": [
+    "Thieves' Tools"
+   ],
+   "armorProfs": [
+    "Light Armor"
+   ]
   }
  },
  {
@@ -594,7 +624,10 @@
    "casterType": "full"
   },
   "subclassIds": [
-   "draconic-sorcery"
+   "aberrant-sorcery",
+   "clockwork-sorcery",
+   "draconic-sorcery",
+   "wild-magic-sorcery"
   ],
   "subclassLevel": 3,
   "multiclass": {
@@ -641,7 +674,10 @@
    "casterType": "pact"
   },
   "subclassIds": [
-   "fiend-patron"
+   "archfey-patron",
+   "celestial-patron",
+   "fiend-patron",
+   "great-old-one-patron"
   ],
   "subclassLevel": 3,
   "multiclass": {
@@ -679,6 +715,7 @@
     "skill-insight",
     "skill-investigation",
     "skill-medicine",
+    "skill-nature",
     "skill-religion"
    ]
   },
@@ -687,7 +724,10 @@
    "casterType": "full"
   },
   "subclassIds": [
-   "evoker"
+   "abjurer",
+   "diviner",
+   "evoker",
+   "illusionist"
   ],
   "subclassLevel": 3,
   "multiclass": {

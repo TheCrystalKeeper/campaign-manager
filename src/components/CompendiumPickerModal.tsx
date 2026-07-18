@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Search } from "lucide-react";
-import { SRD_ATTRIBUTION, searchCompendium } from "../lib/compendium";
+import { COMPENDIUM_ATTRIBUTION, searchCompendium } from "../lib/compendium";
 
 /// <summary>
-/// Shared "browse the SRD" picker: search box (+ optional filter controls), a
-/// two-pane body (result list left, full-text preview right), an optional footer
-/// for per-category controls (autofill checkboxes etc.), and the CC-BY-4.0
-/// attribution line. Same portal/backdrop/Esc pattern as AssetPickerModal.
+/// Shared "browse the compendium" picker: search box (+ optional filter controls),
+/// a two-pane body (result list left, full-text preview right), an optional footer
+/// for per-category controls (autofill checkboxes etc.), and the attribution
+/// line. Same portal/backdrop/Esc pattern as AssetPickerModal.
 /// `multiPick` keeps the modal open after Add so several entries can be grabbed
 /// in one visit (added rows get a ✓).
 /// </summary>
@@ -200,7 +200,7 @@ export function CompendiumPickerModal<T extends { id: string; name: string }>({
 
         {footer}
         <div className="cmp-actions">
-          <span className="cmp-attribution muted">{SRD_ATTRIBUTION}</span>
+          <span className="cmp-attribution muted">{COMPENDIUM_ATTRIBUTION}</span>
           <button className="btn-primary" disabled={!selected} onClick={() => selected && pick(selected)}>
             {pickLabel}
           </button>

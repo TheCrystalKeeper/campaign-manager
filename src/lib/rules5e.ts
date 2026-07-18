@@ -293,10 +293,10 @@ const CLASS_CASTER_WEIGHT: Record<string, "full" | "half"> = {
 };
 
 /**
- * Official third-caster subclasses. They are NOT in the SRD (its 12 subclasses include
- * neither), so the compendium can't mark them — slot pooling recognizes them by the
- * free-text subclass name as a hardcoded exception. Slot pooling only; spell-list
- * access stays with subclass features.
+ * Official third-caster subclasses. Both are in the compendium's subclass data, but a
+ * sheet's subclassName is free text, so slot pooling recognizes them by name as a
+ * hardcoded exception. Slot pooling only; spell-list access stays with subclass
+ * features.
  */
 const THIRD_CASTER_SUBCLASS = /eldritch\s*knight|arcane\s*trickster/i;
 

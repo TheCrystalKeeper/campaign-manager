@@ -19,7 +19,7 @@ const SKILL_NAME: Record<string, string> = Object.fromEntries(
 );
 
 /// <summary>
-/// SRD class/subclass picker, opened from the class chip. Default = names only
+/// Compendium class/subclass picker, opened from the class chip. Default = names only
 /// (sets the class and nothing else); the "Autofill basics" checkbox additionally
 /// applies hit die, save dots, proficiencies, spellcasting ability, and a
 /// choose-N skill grid. When the sheet already has a class, an "Add as
@@ -117,7 +117,7 @@ export function ClassPickerModal({
             </p>
           ) : null}
           <p className="muted">
-            Subclass unlocks at level {c.subclassLevel}. The SRD includes one subclass per class.
+            Subclass unlocks at level {c.subclassLevel}. Includes the four PHB subclasses for each class.
           </p>
         </div>
       )}

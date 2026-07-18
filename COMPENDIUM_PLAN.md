@@ -1,4 +1,30 @@
-# Plan: 5e SRD Compendium (2024 rules) — classes, spells, items, monsters
+# Plan: 5e Compendium (2024 rules) — classes, spells, items, monsters
+
+> **Update (2026-07-18): source replaced — full 2024 core books from local XML.**
+> The SRD network pipeline below is superseded: `scripts/build-compendium.mjs` now parses
+> **`Official Only 2024.xml`** at the repo root (Fight Club 5 compendium XML v5, full 2024
+> PHB/DMG/MM) with a built-in minimal XML parser — no network, no dependencies. Same JSON
+> schemas, committed output, deterministic across runs. What changed:
+> - **Counts:** 12 classes / **48 subclasses (4 per class — Rogue now has Assassin,
+>   Soulknife, Thief, Arcane Trickster)** / 10 species / **16 backgrounds (new category)** /
+>   185 feats / 296 equipment / 1316 magic items / 391 spells / 520 monsters.
+> - **Backgrounds** got the full pattern after all: `backgrounds.json` + player-facing
+>   `BackgroundPickerModal` (background chip on FeaturesPage next to species; autofill
+>   grants the two skill proficiencies via `backgroundAutofillPatch`).
+> - **Lineage merge:** "Elf, Drow/High/Wood", "Gnome, Forest/Rock", "Tiefling,
+>   Abyssal/Chthonic/Infernal" are merged into parent species with lineage subspecies;
+>   traits identical across variants dedupe to the species, the rest (e.g. Drow's 120 ft.
+>   Darkvision) stay on the lineage.
+> - **Pseudo-spell fold:** the XML's `Maneuver:`/`Metamagic:`/`Invocation:` entries (58)
+>   are feat-picker categories, not spells.
+> - **Multiclass prereqs** aren't in the XML — the PHB 2024 table is hardcoded in the
+>   script. Third-caster subclasses now exist in data, but rules5e still matches them by
+>   name (sheet subclassName is free text).
+> - **Licensing:** this content is © Wizards of the Coast, NOT SRD/CC-BY. Private-table
+>   use; keep the repo/deploys private and don't redistribute. Attribution strings and
+>   meta.json updated accordingly (`COMPENDIUM_ATTRIBUTION` replaced `SRD_ATTRIBUTION`).
+> - Verified by the rewritten `unit-compendium` suite (47 checks, all 520 monsters fit the
+>   20 KB sheet cap — worst is Vampire at ~6.5 KB) plus headless E2E.
 
 > **Implementation status (2026-07-17): SHIPPED** — all steps landed (commits `6e455a4`..`d88bb02`),
 > verified by 42 unit checks + headless E2E (DM and player roles). Deliberate deviations from Step 8:

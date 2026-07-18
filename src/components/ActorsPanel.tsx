@@ -122,8 +122,8 @@ export function ActorsPanel({
       rows={rows}
       createLabel="Create NPC"
       extraCreate={{
-        label: "From SRD",
-        title: "Create an NPC from an SRD monster stat block",
+        label: "From compendium",
+        title: "Create an NPC from a compendium monster stat block",
         icon: <Skull size={15} strokeWidth={2.2} />,
         onClick: () => setMonsterPickerOpen(true),
       }}

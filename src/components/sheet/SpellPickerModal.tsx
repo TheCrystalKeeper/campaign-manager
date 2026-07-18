@@ -9,7 +9,7 @@ const CASTER_CLASSES = ["bard", "cleric", "druid", "paladin", "ranger", "sorcere
 const levelLabel = (level: number) => (level === 0 ? "Cantrip" : String(level));
 
 /// <summary>
-/// DM-only SRD spell browser (opened from the Spells page add-bar). Multi-pick:
+/// DM-only compendium spell browser (opened from the Spells page add-bar). Multi-pick:
 /// each Add appends a fully-filled spell row at the spell's own level. Level and
 /// class filters narrow the 339-spell list.
 /// </summary>
@@ -19,7 +19,7 @@ export function SpellPickerModal({ sheet, onClose }: { sheet: SheetEdit; onClose
 
   return (
     <CompendiumPickerModal<CompendiumSpell>
-      title="Add spells from the SRD"
+      title="Add spells from the compendium"
       load={loadSpells}
       columns={[
         { label: "Lv", render: (s) => levelLabel(s.level) },

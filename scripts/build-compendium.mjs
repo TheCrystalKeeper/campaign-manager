@@ -1,57 +1,23 @@
-// Builds public/compendium/*.json — the read-only 5e SRD 5.2.1 (2024 rules) dataset
-// the in-app pickers search. Generated output is committed; re-run only to bump the
-// pinned source or pick up upstream corrections:  npm run compendium
+// Builds public/compendium/*.json — the read-only D&D 2024 dataset the in-app
+// pickers search. Parsed from the local "Official Only 2024.xml" (Fight Club 5
+// compendium XML v5 carrying the full 2024 PHB/DMG/MM). Regenerate after
+// swapping the XML:  npm run compendium
 //
-// Sources (both are SRD 5.2/5.2.1 content, CC-BY-4.0):
-//  - 5e-bits/5e-database (pinned commit): classes, subclasses, species, feats,
-//    equipment, magic items. The repo has no 2024 spells and only stub monsters.
-//  - Open5e API v2 (document srd-2024): spells + creatures. Not pinnable — the
-//    committed output is the reproducibility anchor.
+// The committed JSON output is what the app serves (statically, lazy-fetched
+// per category). Content © Wizards of the Coast — private-table use only.
 
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const BITS_SHA = "46aa9f13dfa7d04ff121c2db3c568d9c673c870d";
-const BITS_BASE = `https://raw.githubusercontent.com/5e-bits/5e-database/${BITS_SHA}/src/2024/en/`;
-const OPEN5E_BASE = "https://api.open5e.com/v2/";
-const OPEN5E_DOC = "srd-2024";
-
-const OUT_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "public", "compendium");
-
-const ATTRIBUTION =
-  "This work includes material from the System Reference Document 5.2.1 (“SRD 5.2.1”) by Wizards of the Coast LLC, " +
-  "available at https://www.dndbeyond.com/srd. The SRD 5.2.1 is licensed under the Creative Commons Attribution 4.0 " +
-  "International License, available at https://creativecommons.org/licenses/by/4.0/legalcode. " +
-  "Data via 5e-bits/5e-database (MIT) and Open5e.";
-
-async function fetchJson(url) {
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`${res.status} ${res.statusText} for ${url}`);
-  return res.json();
-}
-
-async function fetchBits(name) {
-  return fetchJson(`${BITS_BASE}5e-SRD-${name}.json`);
-}
-
-/** Page through an Open5e v2 list endpoint, returning all results. */
-async function fetchOpen5e(endpoint) {
-  const results = [];
-  let url = `${OPEN5E_BASE}${endpoint}/?document__key=${OPEN5E_DOC}&limit=100`;
-  while (url) {
-    const page = await fetchJson(url);
-    results.push(...page.results);
-    url = page.next;
-  }
-  return results;
-}
+const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
+const XML_FILE = "Official Only 2024.xml";
+const OUT_DIR = path.join(ROOT, "public", "compendium");
 
 const assert = (cond, msg) => {
   if (!cond) throw new Error(`Validation failed: ${msg}`);
 };
 const byId = (a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
-const stripKey = (key) => key.replace(/^srd-2024_/, "");
 const clean = (obj) => {
   // Drop undefined/null/empty-array/empty-string fields for lean, stable output.
   for (const [k, v] of Object.entries(obj)) {
@@ -59,6 +25,146 @@ const clean = (obj) => {
   }
   return obj;
 };
+
+// ---------------------------------------------------------------------------
+// Minimal XML parser — the compendium file is regular machine-generated XML:
+// no CDATA, no comments, no entities beyond the standard five (verified).
+// ---------------------------------------------------------------------------
+
+function decodeEntities(s) {
+  if (!s.includes("&")) return s;
+  return s.replace(/&(#x?[0-9a-fA-F]+|[a-z]+);/g, (whole, code) => {
+    if (code[0] === "#") {
+      const n = code[1] === "x" || code[1] === "X" ? parseInt(code.slice(2), 16) : parseInt(code.slice(1), 10);
+      return String.fromCodePoint(n);
+    }
+    const named = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'" }[code];
+    assert(named !== undefined, `unknown entity &${code};`);
+    return named;
+  });
+}
+
+function parseXml(src) {
+  const root = { tag: "#root", attrs: {}, children: [], text: "" };
+  const stack = [root];
+  let i = 0;
+  while (i < src.length) {
+    const lt = src.indexOf("<", i);
+    if (lt < 0) {
+      stack[stack.length - 1].text += decodeEntities(src.slice(i));
+      break;
+    }
+    if (lt > i) stack[stack.length - 1].text += decodeEntities(src.slice(i, lt));
+    const gt = src.indexOf(">", lt);
+    assert(gt > lt, `unterminated tag at offset ${lt}`);
+    let raw = src.slice(lt + 1, gt);
+    i = gt + 1;
+    if (raw.startsWith("?")) {
+      assert(stack.length === 1 && root.children.length === 0, "processing instruction past prolog");
+      continue;
+    }
+    assert(!raw.startsWith("!"), `unexpected <! markup at offset ${lt}`);
+    if (raw.startsWith("/")) {
+      const closed = stack.pop();
+      assert(closed && closed.tag === raw.slice(1).trim(), `mismatched closing tag </${raw.slice(1)}>`);
+      continue;
+    }
+    const selfClosing = raw.endsWith("/");
+    if (selfClosing) raw = raw.slice(0, -1);
+    const nameMatch = /^([\w:.-]+)\s*/.exec(raw);
+    assert(nameMatch, `bad tag <${raw}>`);
+    const el = { tag: nameMatch[1], attrs: {}, children: [], text: "" };
+    const attrRe = /([\w:.-]+)\s*=\s*(?:"([^"]*)"|'([^']*)')/g;
+    let am;
+    while ((am = attrRe.exec(raw.slice(nameMatch[0].length)))) el.attrs[am[1]] = decodeEntities(am[2] ?? am[3]);
+    stack[stack.length - 1].children.push(el);
+    if (!selfClosing) stack.push(el);
+  }
+  assert(stack.length === 1, `unclosed <${stack[stack.length - 1].tag}> at EOF`);
+  return root;
+}
+
+const kids = (el, tag) => el.children.filter((c) => c.tag === tag);
+const kid = (el, tag) => el.children.find((c) => c.tag === tag);
+const text1 = (el, tag) => (kid(el, tag)?.text ?? "").trim();
+const texts = (el, tag) => kids(el, tag).map((c) => c.text);
+const intOf = (el, tag) => {
+  const t = text1(el, tag);
+  return t === "" ? undefined : Number.parseInt(t, 10);
+};
+const floatOf = (el, tag) => {
+  const t = text1(el, tag);
+  return t === "" ? undefined : Number.parseFloat(t);
+};
+
+// ---------------------------------------------------------------------------
+// Shared text helpers
+// ---------------------------------------------------------------------------
+
+const stripYear = (s) => s.replace(/\s*\[2024\]\s*$/, "").trim();
+const kebab = (s) =>
+  s
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+const capFirst = (s) => (s ? s[0].toUpperCase() + s.slice(1) : s);
+const titleWords = (s) =>
+  s
+    .split(/\s+/)
+    .map((w) => capFirst(w))
+    .join(" ");
+
+const SMALL_WORDS = new Set(["of", "the", "and", "a", "an", "in", "to", "or", "for", "with"]);
+/** "Path Of The Wild Heart" -> "Path of the Wild Heart" (file TitleCases everything). */
+const titleFix = (s) =>
+  s
+    .split(" ")
+    .map((w, i) => (i > 0 && SMALL_WORDS.has(w.toLowerCase()) ? w.toLowerCase() : w))
+    .join(" ");
+
+/**
+ * Join a tag's <text> nodes into paragraphed prose. Empty <text/> nodes are
+ * paragraph breaks, leading tabs are indentation only, and the trailing
+ * "Source: …" line is captured separately.
+ */
+function joinTexts(rawLines) {
+  let source;
+  const lines = [];
+  for (const raw of rawLines) {
+    const line = raw.replace(/^\t+/, "").replace(/\s+$/, "");
+    const sm = /^Source:\s*(.+)$/.exec(line);
+    if (sm) {
+      source = source ?? sm[1].trim();
+      continue;
+    }
+    if (line === "" && (lines.length === 0 || lines[lines.length - 1] === "")) continue;
+    lines.push(line);
+  }
+  while (lines.length && lines[lines.length - 1] === "") lines.pop();
+  return { text: lines.join("\n"), source };
+}
+
+const ABILITY_IDS = { strength: "str", dexterity: "dex", constitution: "con", intelligence: "int", wisdom: "wis", charisma: "cha" };
+const ABILITY_SHORT = new Set(Object.values(ABILITY_IDS));
+function abilityId(word) {
+  const id = ABILITY_IDS[word.trim().toLowerCase()];
+  assert(id, `unknown ability "${word}"`);
+  return id;
+}
+
+// The 18 skill ids from DEFAULT_SHEET_TEMPLATE (src/lib/types.ts) — everything
+// we emit must land on one of these or the sheet mappers silently drop it.
+const SKILL_IDS = new Set([
+  "skill-acrobatics", "skill-animal-handling", "skill-arcana", "skill-athletics", "skill-deception",
+  "skill-history", "skill-insight", "skill-intimidation", "skill-investigation", "skill-medicine",
+  "skill-nature", "skill-perception", "skill-performance", "skill-persuasion", "skill-religion",
+  "skill-sleight-of-hand", "skill-stealth", "skill-survival",
+]);
+function skillId(name) {
+  const id = `skill-${kebab(name)}`;
+  assert(SKILL_IDS.has(id), `unknown skill "${name}"`);
+  return id;
+}
 
 // ---------------------------------------------------------------------------
 // Classes / subclasses
@@ -75,440 +181,730 @@ const CASTER_TYPES = {
   warlock: "pact",
 };
 
-/** proficiency index -> bucket, via Proficiencies.json `type`. */
-function buildProfClassifier(proficiencies) {
-  const bucketByType = {
-    Armor: "armor",
-    Weapons: "weapons",
-    Skills: "skills",
-    "Saving Throws": "saves",
-    "Artisan's Tools": "tools",
-    Tools: "tools",
-    "Musical Instruments": "tools",
-    Other: "tools",
-  };
-  const map = new Map();
-  for (const p of proficiencies) {
-    const bucket = bucketByType[p.type];
-    assert(bucket, `unknown proficiency type "${p.type}" (${p.index})`);
-    map.set(p.index, { bucket, name: p.name.replace(/^Skill: /, "") });
-  }
-  return map;
-}
+// PHB 2024 multiclassing table — the XML carries no structured prerequisites.
+const MULTICLASS_PREREQS = {
+  barbarian: [{ abilityIds: ["str"], min: 13, mode: "and" }],
+  bard: [{ abilityIds: ["cha"], min: 13, mode: "and" }],
+  cleric: [{ abilityIds: ["wis"], min: 13, mode: "and" }],
+  druid: [{ abilityIds: ["wis"], min: 13, mode: "and" }],
+  fighter: [{ abilityIds: ["str", "dex"], min: 13, mode: "or" }],
+  monk: [
+    { abilityIds: ["dex"], min: 13, mode: "and" },
+    { abilityIds: ["wis"], min: 13, mode: "and" },
+  ],
+  paladin: [
+    { abilityIds: ["str"], min: 13, mode: "and" },
+    { abilityIds: ["cha"], min: 13, mode: "and" },
+  ],
+  ranger: [
+    { abilityIds: ["dex"], min: 13, mode: "and" },
+    { abilityIds: ["wis"], min: 13, mode: "and" },
+  ],
+  rogue: [{ abilityIds: ["dex"], min: 13, mode: "and" }],
+  sorcerer: [{ abilityIds: ["cha"], min: 13, mode: "and" }],
+  warlock: [{ abilityIds: ["cha"], min: 13, mode: "and" }],
+  wizard: [{ abilityIds: ["int"], min: 13, mode: "and" }],
+};
 
-/** Split a proficiency ref list into { armorProfs, weaponProfs, toolProfs }. */
-function classifyProfs(refs, classifier) {
-  const out = { armorProfs: [], weaponProfs: [], toolProfs: [] };
-  for (const ref of refs ?? []) {
-    const info = classifier.get(ref.index);
-    assert(info, `unclassified proficiency ref ${ref.index}`);
-    if (info.bucket === "armor") out.armorProfs.push(info.name);
-    else if (info.bucket === "weapons") out.weaponProfs.push(info.name);
-    else if (info.bucket === "tools") out.toolProfs.push(info.name);
-    // saves are carried by saving_throws; skills don't appear as direct grants in 2024 classes
+/** "Light and Medium armor and Shields" -> ["Light Armor", "Medium Armor", "Shields"] */
+function parseArmorList(value) {
+  const out = [];
+  for (const raw of value.replace(/\./g, "").split(/,|\band\b/)) {
+    const t = raw.trim().toLowerCase();
+    if (!t) continue;
+    if (t === "shield" || t === "shields") out.push("Shields");
+    else if (/^(light|medium|heavy)$/.test(t)) out.push(titleWords(`${t} armor`));
+    else out.push(titleWords(t.endsWith("armor") ? t : `${t} armor`));
   }
   return out;
 }
 
-/** First proficiency_choices group made purely of skill-* options -> {choose, from}. */
-function skillChoiceFrom(choices) {
-  for (const group of choices ?? []) {
-    const opts = group.from?.options ?? [];
-    const indexes = opts.map((o) => o.item?.index).filter(Boolean);
-    if (indexes.length && indexes.every((i) => i.startsWith("skill-"))) {
-      return { choose: group.choose, from: indexes };
+/** "Simple and Martial weapons" -> ["Simple Weapons", "Martial Weapons"] */
+function parseWeaponList(value) {
+  const out = [];
+  for (const raw of value.replace(/\./g, "").split(/,|\band\b/)) {
+    const t = raw.trim().toLowerCase();
+    if (!t) continue;
+    if (/^(simple|martial)$/.test(t)) out.push(titleWords(`${t} weapons`));
+    else out.push(titleWords(t));
+  }
+  return out;
+}
+
+function parseCsvProfs(value, mapper) {
+  const v = value.trim();
+  if (!v || v.toLowerCase() === "none") return [];
+  return v.split(",").map((t) => mapper(t.trim())).filter(Boolean);
+}
+
+function transformClasses(rawClasses) {
+  const classes = [];
+  const subclasses = [];
+  for (const el of rawClasses) {
+    const name = stripYear(text1(el, "name"));
+    const id = kebab(name);
+    // Split on "." too — the file has one OCR typo ("Intimidation. Persuasion").
+    const profEntries = text1(el, "proficiency").split(/[,.]/).map((t) => t.trim()).filter(Boolean);
+    assert(profEntries.length >= 2, `class ${id}: proficiency list too short`);
+    const saves = profEntries.slice(0, 2).map(abilityId);
+    const skillList = profEntries.slice(2).map(skillId);
+    const numSkills = intOf(el, "numSkills") ?? 2;
+    const spellAbility = text1(el, "spellAbility");
+
+    const subByName = new Map(); // lowercased subclass name -> record
+    let primaryAbility;
+    const multiclass = { prereqs: MULTICLASS_PREREQS[id] };
+    assert(multiclass.prereqs, `class ${id}: missing hardcoded multiclass prereqs`);
+
+    // Pass 1: collect subclass intros so feature routing can match by name.
+    for (const auto of kids(el, "autolevel")) {
+      for (const feature of kids(auto, "feature")) {
+        if (feature.attrs.optional !== "YES") continue;
+        const fname = text1(feature, "name");
+        const intro = new RegExp(`^${name} Subclass:\\s*(.+)$`, "i").exec(fname);
+        if (!intro) continue;
+        const subName = titleFix(intro[1].trim());
+        const rec = {
+          id: kebab(subName),
+          name: subName,
+          classId: id,
+          intro: joinTexts(texts(feature, "text")).text,
+          features: [],
+        };
+        assert(!subByName.has(subName.toLowerCase()), `class ${id}: duplicate subclass ${subName}`);
+        subByName.set(subName.toLowerCase(), rec);
+      }
     }
-  }
-  return undefined;
-}
 
-function multiclassFrom(mc, classifier) {
-  const prereqs = [];
-  for (const p of mc.prerequisites ?? []) {
-    prereqs.push({ abilityIds: [p.ability_score.index], min: p.minimum_score, mode: "and" });
-  }
-  const opt = mc.prerequisite_options;
-  if (opt) {
-    const abilityIds = (opt.from?.options ?? []).map((o) => o.ability_score.index);
-    const min = (opt.from?.options ?? [])[0]?.minimum_score ?? 13;
-    prereqs.push({ abilityIds, min, mode: "or" });
-  }
-  return clean({
-    prereqs,
-    ...classifyProfs(mc.proficiencies, classifier),
-    skillChoice: skillChoiceFrom(mc.proficiency_choices),
-  });
-}
+    // Pass 2: route features.
+    for (const auto of kids(el, "autolevel")) {
+      const level = Number(auto.attrs.level ?? 0);
+      for (const feature of kids(auto, "feature")) {
+        const fname = text1(feature, "name");
+        const optional = feature.attrs.optional === "YES";
+        const { text } = joinTexts(texts(feature, "text"));
+        if (!optional) continue; // base class features are not part of the compendium schema
+        if (new RegExp(`^${name} Subclass:`, "i").test(fname)) continue; // handled in pass 1
+        const subFeature = /^Level (\d+):\s*(.+?)\s*\(([^()]+)\)$/.exec(fname);
+        if (subFeature && subByName.has(subFeature[3].trim().toLowerCase())) {
+          subByName.get(subFeature[3].trim().toLowerCase()).features.push({
+            level: Number(subFeature[1]),
+            name: titleFix(subFeature[2]),
+            text,
+          });
+          continue;
+        }
+        if (/Multiclass Character$/i.test(fname)) {
+          for (const line of text.split("\n")) {
+            const kv = /^([^:]+):\s*(.+)$/.exec(line.trim());
+            if (!kv) continue;
+            const [, key, value] = kv;
+            if (/^Armor Training$/i.test(key)) multiclass.armorProfs = parseArmorList(value);
+            else if (/^Weapon Proficienc/i.test(key)) multiclass.weaponProfs = parseWeaponList(value);
+            else if (/^Tool Proficienc/i.test(key)) {
+              multiclass.toolProfs = [capFirst(value.replace(/^proficiency with\s*/i, "").trim())];
+            } else if (/^Skill Proficienc/i.test(key)) {
+              const choose = /^Choose (\d+):\s*(.+)$/i.exec(value);
+              if (choose) {
+                multiclass.skillChoice = {
+                  choose: Number(choose[1]),
+                  from: choose[2].split(/,|\bor\b/).map((s) => s.trim()).filter(Boolean).map(skillId),
+                };
+              } else {
+                // "proficiency in one skill of your choice" (bard) — any skill.
+                multiclass.skillChoice = { choose: 1, from: [...SKILL_IDS].sort() };
+              }
+            }
+          }
+          continue;
+        }
+        if (/Level 1 Character$/i.test(fname)) {
+          const pa = /^Primary Ability:\s*(.+)$/m.exec(text);
+          if (pa) primaryAbility = pa[1].trim();
+          continue;
+        }
+        // Anything else optional (none observed) is ignored.
+      }
+    }
 
-function transformClasses(rawClasses, rawSubclasses, classifier) {
-  const subclassLevels = new Map();
-  for (const sc of rawSubclasses) {
-    const levels = (sc.features ?? []).map((f) => f.level).filter((n) => typeof n === "number");
-    subclassLevels.set(sc.index, levels.length ? Math.min(...levels) : 3);
-  }
-  return rawClasses
-    .map((c) => {
-      const spellAbility = c.spellcasting?.spellcasting_ability?.index;
-      const subclassIds = (c.subclasses ?? []).map((s) => s.index);
-      return clean({
-        id: c.index,
-        name: c.name,
-        hitDie: c.hit_die,
-        primaryAbility: c.primary_ability?.desc,
-        saves: (c.saving_throws ?? []).map((s) => s.index),
-        ...classifyProfs(c.proficiencies, classifier),
-        skillChoices: skillChoiceFrom(c.proficiency_choices),
-        spellcasting: spellAbility
-          ? { abilityId: spellAbility, casterType: CASTER_TYPES[c.index] ?? "full" }
-          : undefined,
-        subclassIds,
-        subclassLevel: subclassIds.length ? Math.min(...subclassIds.map((id) => subclassLevels.get(id) ?? 3)) : 3,
-        multiclass: multiclassFrom(c.multi_classing ?? {}, classifier),
-      });
-    })
-    .sort(byId);
-}
+    const subs = [...subByName.values()];
+    assert(subs.length > 0, `class ${id}: no subclasses parsed`);
+    const featureLevels = subs.flatMap((s) => s.features.map((f) => f.level));
+    for (const sub of subs) {
+      sub.features.sort((a, b) => a.level - b.level);
+      subclasses.push(
+        clean({
+          id: sub.id,
+          name: sub.name,
+          classId: sub.classId,
+          description: [sub.intro, ...sub.features.map((f) => `Level ${f.level} — ${f.name}. ${f.text}`)]
+            .filter(Boolean)
+            .join("\n\n"),
+        }),
+      );
+    }
 
-function transformSubclasses(rawSubclasses) {
-  return rawSubclasses
-    .map((sc) => {
-      const features = (sc.features ?? [])
-        .map((f) => `Level ${f.level} — ${f.name}. ${f.description}`)
-        .join("\n\n");
-      return clean({
-        id: sc.index,
-        name: sc.name,
-        classId: sc.class.index,
-        summary: sc.summary,
-        description: [sc.description, features].filter(Boolean).join("\n\n"),
-      });
-    })
-    .sort(byId);
-}
-
-// ---------------------------------------------------------------------------
-// Species / feats
-// ---------------------------------------------------------------------------
-
-function transformSpecies(rawSpecies, rawSubspecies, rawTraits) {
-  const traitById = new Map(rawTraits.map((t) => [t.index, t]));
-  const resolveTraits = (refs) =>
-    (refs ?? []).map((ref) => {
-      const t = traitById.get(ref.index);
-      assert(t, `unknown trait ref ${ref.index}`);
-      // Ref names can be more specific than the trait record ("Darkvision (60 ft.)").
-      return { name: ref.name ?? t.name, description: t.description };
-    });
-  const subspeciesByParent = new Map();
-  for (const ss of rawSubspecies) {
-    const parent = ss.species.index;
-    if (!subspeciesByParent.has(parent)) subspeciesByParent.set(parent, []);
-    subspeciesByParent.get(parent).push(
+    classes.push(
       clean({
-        id: ss.index,
-        name: ss.name,
-        damageType: ss.damage_type?.name,
-        traits: resolveTraits(ss.traits),
+        id,
+        name,
+        hitDie: intOf(el, "hd"),
+        primaryAbility,
+        saves,
+        armorProfs: parseCsvProfs(text1(el, "armor"), (t) => titleWords(t)),
+        weaponProfs: parseCsvProfs(text1(el, "weapons"), (t) => titleWords(t)),
+        toolProfs: parseCsvProfs(text1(el, "tools"), (t) => capFirst(t)),
+        skillChoices: skillList.length ? { choose: numSkills, from: skillList } : undefined,
+        spellcasting: CASTER_TYPES[id]
+          ? { abilityId: abilityId(spellAbility), casterType: CASTER_TYPES[id] }
+          : undefined,
+        subclassIds: subs.map((s) => s.id),
+        subclassLevel: featureLevels.length ? Math.min(...featureLevels) : 3,
+        multiclass: clean(multiclass),
       }),
     );
   }
-  return rawSpecies
-    .map((sp) =>
-      clean({
-        id: sp.index,
-        name: sp.name,
-        creatureType: sp.type,
-        size: sp.size,
-        speed: sp.speed,
-        traits: resolveTraits(sp.traits),
-        subspecies: (subspeciesByParent.get(sp.index) ?? []).sort(byId),
-      }),
-    )
-    .sort(byId);
-}
-
-function transformFeats(rawFeats) {
-  return rawFeats
-    .map((f) => clean({ id: f.index, name: f.name, category: f.type, description: f.description }))
-    .sort(byId);
+  return { classes: classes.sort(byId), subclasses: subclasses.sort(byId) };
 }
 
 // ---------------------------------------------------------------------------
-// Equipment / magic items
+// Species (races merged into species + lineage subspecies)
 // ---------------------------------------------------------------------------
 
-function equipmentItemType(categoryIds) {
-  const has = (id) => categoryIds.includes(id);
-  if (has("weapons")) return "weapon";
-  if (has("armor") || has("shields")) return "armor";
-  if (has("artisans-tools") || has("other-tools") || has("tools") || has("gaming-sets") || has("musical-instruments"))
-    return "tool";
-  return "gear";
-}
+const SIZE_WORDS = { T: "Tiny", S: "Small", M: "Medium", L: "Large", H: "Huge", G: "Gargantuan" };
 
-function transformEquipment(rawEquipment) {
-  return rawEquipment
-    .map((e) => {
-      const categoryIds = (e.equipment_categories ?? []).map((c) => c.index);
-      const properties = (e.properties ?? []).map((p) => p.name);
-      if (e.two_handed_damage) {
-        const i = properties.indexOf("Versatile");
-        const versatile = `Versatile (${e.two_handed_damage.damage_dice})`;
-        if (i >= 0) properties[i] = versatile;
-        else properties.push(versatile);
-      }
-      if (e.mastery) properties.push(`Mastery: ${e.mastery.name}`);
-      const ac = e.armor_class;
-      return clean({
-        id: e.index,
-        name: e.name,
-        category: e.equipment_categories?.[0]?.name ?? "Gear",
-        itemType: equipmentItemType(categoryIds),
-        cost: e.cost ? `${e.cost.quantity} ${e.cost.unit}` : undefined,
-        weight: e.weight,
-        damage: e.damage?.damage_dice,
-        damageType: e.damage?.damage_type?.name?.toLowerCase(),
-        range: categoryIds.includes("weapons")
-          ? categoryIds.includes("ranged-weapons")
-            ? "ranged"
-            : "melee"
-          : undefined,
-        properties,
-        acBase: ac?.base,
-        acDexBonus: ac?.dex_bonus,
-        acMaxBonus: ac ? (ac.dex_bonus ? ac.max_bonus || undefined : undefined) : undefined,
-        strMin: e.str_minimum || undefined,
-        stealthDisadvantage: e.stealth_disadvantage || undefined,
-        description: e.description,
-      });
-    })
-    .sort(byId);
-}
-
-const MAGIC_ITEM_TYPES = {
-  Armor: "armor",
-  Weapons: "weapon",
-  Potions: "consumable",
-  Rings: "wondrous",
-  Staffs: "wondrous",
-  Wands: "wondrous",
-  "Wondrous Items": "wondrous",
-};
-
-function magicRarity(name) {
-  const simple = {
-    Common: "common",
-    Uncommon: "uncommon",
-    Rare: "rare",
-    "Very Rare": "very-rare",
-    Legendary: "legendary",
-    Artifact: "artifact",
-  }[name];
-  return simple ?? "varies";
-}
-
-function transformMagicItems(rawMagicItems) {
-  return rawMagicItems
-    .map((m) =>
-      clean({
-        id: m.index,
-        name: m.name,
-        itemType: MAGIC_ITEM_TYPES[m.equipment_category?.name] ?? "wondrous",
-        category: m.equipment_category?.name ?? "Wondrous Items",
-        rarity: magicRarity(m.rarity?.name),
-        rarityText: magicRarity(m.rarity?.name) === "varies" ? m.rarity?.name : undefined,
-        attunement: m.attunement || undefined,
-        // true = concrete variant of a generic parent (e.g. "+1 Longsword" under "+1 Weapon")
-        variant: m.variant || undefined,
-        hasVariants: (m.variants ?? []).length > 0 || undefined,
-        description: m.desc,
-      }),
-    )
-    .sort(byId);
-}
-
-// ---------------------------------------------------------------------------
-// Spells (Open5e)
-// ---------------------------------------------------------------------------
-
-function castingTime(raw) {
-  const text = String(raw ?? "").replace(/[-_]/g, " ");
-  if (/^(action|bonus action|reaction)$/.test(text)) return `1 ${text}`;
-  // "1minute" / "10minutes" / "1hour" → "1 minute" / "10 minutes" / "1 hour"
-  const timed = /^(\d+)\s*(minute|hour)s?$/.exec(text);
-  if (timed) return `${timed[1]} ${timed[2]}${Number(timed[1]) > 1 ? "s" : ""}`;
-  return text;
-}
-
-// Upstream Open5e data omissions, patched with the SRD 5.2.1 text (CC-BY-4.0).
-const SPELL_DESC_PATCHES = {
-  "greater-invisibility": "A creature you touch has the Invisible condition until the spell ends.",
-};
-
-function transformSpells(rawSpells) {
-  return rawSpells
-    .map((s) => {
-      const comps = [s.verbal && "V", s.somatic && "S", s.material && "M"].filter(Boolean).join(", ");
-      const descParts = [s.desc?.trim() || SPELL_DESC_PATCHES[stripKey(s.key)]];
-      if (s.higher_level) descParts.push(`Using a Higher-Level Spell Slot. ${s.higher_level}`);
-      if (s.material_specified) descParts.push(`Material: ${s.material_specified}`);
-      if (s.reaction_condition) descParts.push(`Reaction trigger: ${s.reaction_condition}`);
-      return clean({
-        id: stripKey(s.key),
-        name: s.name,
-        level: s.level,
-        school: s.school?.name,
-        time: castingTime(s.casting_time),
-        range: s.range_text || (s.range === 0 ? "Self" : `${s.range} ${s.range_unit ?? "feet"}`),
-        components: comps,
-        duration: s.duration,
-        concentration: s.concentration || undefined,
-        ritual: s.ritual || undefined,
-        classes: (s.classes ?? []).map((c) => stripKey(c.key)),
-        roll: s.damage_roll || undefined,
-        saveAbility: s.saving_throw_ability || undefined,
-        description: descParts.filter(Boolean).join("\n\n"),
-      });
-    })
-    .sort(byId);
-}
-
-// ---------------------------------------------------------------------------
-// Creatures (Open5e)
-// ---------------------------------------------------------------------------
-
-const ABILITY_IDS = {
-  strength: "str",
-  dexterity: "dex",
-  constitution: "con",
-  intelligence: "int",
-  wisdom: "wis",
-  charisma: "cha",
-};
-
-function crString(cr) {
-  if (cr === 0.125) return "1/8";
-  if (cr === 0.25) return "1/4";
-  if (cr === 0.5) return "1/2";
-  return String(cr);
-}
-
-function speedLine(speedAll) {
-  if (!speedAll) return "";
-  const parts = [];
-  const unit = speedAll.unit ?? "feet";
-  const suffix = unit === "feet" ? "ft." : ` ${unit}`;
-  if (speedAll.walk) parts.push(`${speedAll.walk} ${suffix}`);
-  for (const mode of ["fly", "swim", "climb", "burrow"]) {
-    if (speedAll[mode]) parts.push(`${mode} ${speedAll[mode]} ${suffix}${mode === "fly" && speedAll.hover ? " (hover)" : ""}`);
+function parseRace(el) {
+  const fullName = stripYear(text1(el, "name"));
+  const [baseName, variantName] = fullName.split(/,\s*/);
+  let creatureType;
+  const traits = [];
+  for (const traitEl of kids(el, "trait")) {
+    const tname = text1(traitEl, "name");
+    const { text } = joinTexts(texts(traitEl, "text"));
+    if (tname === "Creature Type") {
+      creatureType = text.split("\n")[0].trim();
+      continue;
+    }
+    if (tname === "Size") continue; // carried by the size field
+    traits.push({ name: tname, description: text });
   }
-  return parts.join(", ");
-}
-
-function sensesLine(c) {
-  const parts = [];
-  if (c.darkvision_range) parts.push(`Darkvision ${c.darkvision_range} ft.`);
-  if (c.blindsight_range) parts.push(`Blindsight ${c.blindsight_range} ft.`);
-  if (c.tremorsense_range) parts.push(`Tremorsense ${c.tremorsense_range} ft.`);
-  if (c.truesight_range) parts.push(`Truesight ${c.truesight_range} ft.`);
-  if (c.passive_perception != null) parts.push(`Passive Perception ${c.passive_perception}`);
-  return parts.join(", ");
-}
-
-/** "Bludgeoning, Piercing, and Slashing from..." keeps commas — split only on ';'. */
-function splitResistList(display, list) {
-  if (display) return display.split(";").map((s) => s.trim()).filter(Boolean);
-  return (list ?? []).map((x) => x?.name ?? String(x)).filter(Boolean);
-}
-
-function attackFields(action) {
-  const atk = (action.attacks ?? [])[0];
-  if (atk && atk.to_hit_mod != null) {
-    const die = atk.damage_die_type ? `${atk.damage_die_count ?? 1}${String(atk.damage_die_type).toLowerCase()}` : "";
-    const bonus = atk.damage_bonus ? `+${atk.damage_bonus}` : "";
-    return {
-      toHit: atk.to_hit_mod,
-      damage: die ? `${die}${bonus}` : undefined,
-      damageType: (atk.damage_type?.name ?? atk.extra_damage_type?.name)?.toLowerCase(),
-    };
-  }
-  // Regex fallback on 2024 statblock text: "Melee Attack Roll: +9, ... 12 (2d6 + 5) Bludgeoning damage."
-  const toHitMatch = /Attack Roll:\s*\+(\d+)/.exec(action.desc ?? "");
-  const dmgMatch = /\((\d+d\d+(?:\s*[+-]\s*\d+)?)\)\s*(\w+)\s+damage/i.exec(action.desc ?? "");
   return {
-    toHit: toHitMatch ? Number(toHitMatch[1]) : undefined,
-    damage: dmgMatch ? dmgMatch[1].replace(/\s+/g, "") : undefined,
-    damageType: dmgMatch ? dmgMatch[2].toLowerCase() : undefined,
+    baseName,
+    variantName,
+    size: SIZE_WORDS[text1(el, "size")] ?? "Medium",
+    speed: intOf(el, "speed") ?? 30,
+    creatureType,
+    traits,
   };
 }
 
-function usesFrom(usageLimits) {
-  // Open5e usage_limits e.g. { type: "PER_DAY", quantity: 3 } — shape is loose; be defensive.
-  if (!usageLimits || typeof usageLimits !== "object") return undefined;
-  const qty = usageLimits.quantity ?? usageLimits.uses ?? usageLimits.count;
-  return typeof qty === "number" && qty > 0 ? { current: qty, max: qty } : undefined;
+function transformSpecies(rawRaces) {
+  const groups = new Map();
+  for (const el of rawRaces) {
+    const race = parseRace(el);
+    if (!groups.has(race.baseName)) groups.set(race.baseName, []);
+    groups.get(race.baseName).push(race);
+  }
+  const species = [];
+  for (const [baseName, variants] of groups) {
+    const base = variants[0];
+    if (variants.length === 1) {
+      species.push(
+        clean({
+          id: kebab(baseName),
+          name: baseName,
+          creatureType: base.creatureType,
+          size: base.size,
+          speed: base.speed,
+          traits: base.traits,
+        }),
+      );
+      continue;
+    }
+    // Shared traits (identical name+text in every variant) belong to the species;
+    // the rest (e.g. Drow's 120 ft. Darkvision, each "X Lineage") go to the lineage.
+    // "Description" gets paragraph-level treatment: common leading paragraphs are
+    // species lore, variant-specific tails become lineage descriptions.
+    const key = (t) => `${t.name} ${t.description}`;
+    const inAll = (t) => variants.every((v) => v.traits.some((vt) => key(vt) === key(t)));
+    const sharedTraits = [];
+    let commonDescParas;
+    for (const t of base.traits) {
+      if (t.name === "Description") {
+        const paraLists = variants.map((v) => (v.traits.find((vt) => vt.name === "Description")?.description ?? "").split("\n\n"));
+        let n = 0;
+        while (paraLists.every((p) => p.length > n && p[0 + n] === paraLists[0][n])) n++;
+        commonDescParas = n;
+        if (n > 0) sharedTraits.push({ name: "Description", description: paraLists[0].slice(0, n).join("\n\n") });
+        continue;
+      }
+      if (inAll(t)) sharedTraits.push(t);
+    }
+    const subspecies = variants
+      .map((v) => {
+        const lineageTraits = [];
+        for (const t of v.traits) {
+          if (t.name === "Description") {
+            const rest = t.description.split("\n\n").slice(commonDescParas ?? 0).join("\n\n");
+            if (rest) lineageTraits.push({ name: "Description", description: rest });
+            continue;
+          }
+          if (!sharedTraits.some((st) => key(st) === key(t))) lineageTraits.push(t);
+        }
+        return clean({ id: kebab(`${baseName} ${v.variantName}`), name: v.variantName, traits: lineageTraits });
+      })
+      .sort(byId);
+    species.push(
+      clean({
+        id: kebab(baseName),
+        name: baseName,
+        creatureType: base.creatureType,
+        size: base.size,
+        speed: base.speed,
+        traits: sharedTraits,
+        subspecies,
+      }),
+    );
+  }
+  return species.sort(byId);
 }
 
-function transformCreatures(rawCreatures) {
-  return rawCreatures
-    .map((c) => {
-      const abilities = {};
-      for (const [long, short] of Object.entries(ABILITY_IDS)) {
-        abilities[short] = c.ability_scores?.[long] ?? 10;
-      }
-      const saves = {};
-      for (const [long, short] of Object.entries(ABILITY_IDS)) {
-        const stated = c.saving_throws?.[long];
-        if (typeof stated === "number") saves[short] = stated;
-      }
-      const skills = {};
-      for (const [name, bonus] of Object.entries(c.skill_bonuses ?? {})) {
-        skills[`skill-${name.replace(/_/g, "-")}`] = bonus;
-      }
-      const groups = { actions: [], bonusActions: [], reactions: [], legendary: [] };
-      for (const a of c.actions ?? []) {
-        const entry = clean({
-          name: a.name,
-          description: a.desc,
-          ...attackFields(a),
-          uses: usesFrom(a.usage_limits),
-        });
-        if (a.action_type === "LEGENDARY_ACTION") groups.legendary.push(entry);
-        else if (a.action_type === "REACTION") groups.reactions.push(entry);
-        else if (a.action_type === "BONUS_ACTION") groups.bonusActions.push(entry);
-        else groups.actions.push(entry);
-      }
-      const ri = c.resistances_and_immunities ?? {};
-      const cr = c.challenge_rating ?? 0;
-      const hitDiceMatch = /^(\d+)d(\d+)/.exec(c.hit_dice ?? "");
+// ---------------------------------------------------------------------------
+// Backgrounds
+// ---------------------------------------------------------------------------
+
+function transformBackgrounds(rawBackgrounds) {
+  return rawBackgrounds
+    .map((el) => {
+      const name = stripYear(text1(el, "name"));
+      const description = kids(el, "trait")
+        .filter((t) => text1(t, "name") === "Description")
+        .map((t) => joinTexts(texts(t, "text")).text)
+        .join("\n\n");
       return clean({
-        id: stripKey(c.key),
-        name: c.name,
-        size: c.size?.name,
-        type: c.type?.name,
-        alignment: c.alignment,
-        ac: c.armor_class,
-        acNote: c.armor_detail,
-        hp: c.hit_points,
-        hitDice: c.hit_dice,
+        id: kebab(name),
+        name,
+        skills: text1(el, "proficiency").split(",").map((s) => skillId(s.trim())),
+        description,
+      });
+    })
+    .sort(byId);
+}
+
+// ---------------------------------------------------------------------------
+// Feats (plus Maneuver/Metamagic/Invocation pseudo-spells folded in)
+// ---------------------------------------------------------------------------
+
+function featCategory(rawName) {
+  if (rawName.startsWith("Origin: ")) return { name: rawName.slice(8), category: "origin" };
+  if (rawName.startsWith("Fighting Style: ")) return { name: rawName.slice(16), category: "fighting-style" };
+  if (/^Boon of\b/i.test(rawName)) return { name: rawName, category: "epic-boon" };
+  return { name: rawName, category: "general" };
+}
+
+function transformFeats(rawFeats, pseudoFeats) {
+  const rows = rawFeats.map((el) => {
+    const { name, category } = featCategory(stripYear(text1(el, "name")));
+    const prereq = text1(el, "prerequisite");
+    const { text } = joinTexts(texts(el, "text"));
+    return clean({
+      id: kebab(name),
+      name,
+      category,
+      description: [prereq ? `Prerequisite: ${prereq}` : "", text].filter(Boolean).join("\n\n"),
+    });
+  });
+  return rows.concat(pseudoFeats).sort(byId);
+}
+
+// ---------------------------------------------------------------------------
+// Spells
+// ---------------------------------------------------------------------------
+
+const SCHOOLS = {
+  A: "Abjuration",
+  C: "Conjuration",
+  D: "Divination",
+  EN: "Enchantment",
+  EV: "Evocation",
+  I: "Illusion",
+  N: "Necromancy",
+  T: "Transmutation",
+};
+
+const PSEUDO_SPELL_PREFIXES = { Maneuver: "maneuver", Metamagic: "metamagic", Invocation: "invocation" };
+
+function normalizeSpellTime(raw) {
+  // The file doubles the prefix once ("Bonus Action, Bonus Action, which…").
+  const t = raw.trim().replace(/^Bonus Action,\s*Bonus Action,/i, "Bonus Action,");
+  const clause = /^(Action|Bonus Action|1 reaction|Reaction)(?:,\s*(.+))?$/is.exec(t);
+  if (clause) {
+    const base = clause[1].toLowerCase();
+    return {
+      time: base === "action" ? "1 action" : base === "bonus action" ? "1 bonus action" : "1 reaction",
+      trigger: clause[2]?.trim(),
+    };
+  }
+  const timed = /^(\d+)\s*(minute|hour)s?$/i.exec(t);
+  if (timed) return { time: `${timed[1]} ${timed[2].toLowerCase()}${Number(timed[1]) > 1 ? "s" : ""}` };
+  return { time: t };
+}
+
+function transformSpells(rawSpells) {
+  const spells = [];
+  const pseudoFeats = [];
+  for (const el of rawSpells) {
+    const rawName = stripYear(text1(el, "name"));
+    const pseudo = /^([A-Za-z]+):\s*(.+)$/.exec(rawName);
+    const { text } = joinTexts(texts(el, "text"));
+    if (pseudo && PSEUDO_SPELL_PREFIXES[pseudo[1]]) {
+      // Battle Master maneuvers, Sorcerer metamagic, Warlock invocations ride
+      // along as feat-picker entries — they're pickable character options, not spells.
+      pseudoFeats.push(clean({ id: kebab(pseudo[2]), name: pseudo[2], category: PSEUDO_SPELL_PREFIXES[pseudo[1]], description: text }));
+      continue;
+    }
+    const school = SCHOOLS[text1(el, "school")];
+    assert(school, `spell ${rawName}: unknown school "${text1(el, "school")}"`);
+    const duration = text1(el, "duration");
+    const { time, trigger } = normalizeSpellTime(text1(el, "time"));
+    const classes = text1(el, "classes")
+      .split(",")
+      .map((c) => c.trim())
+      .filter((c) => /^[A-Za-z]+ \[2024\]$/.test(c))
+      .map((c) => kebab(stripYear(c)));
+    const rollMatch = /(\d+d\d+(?:\s*\+\s*\d+)?)\s+[A-Za-z]+\s+damage/i.exec(text);
+    spells.push(
+      clean({
+        id: kebab(rawName),
+        name: rawName,
+        level: intOf(el, "level") ?? 0,
+        school,
+        time,
+        range: text1(el, "range"),
+        components: text1(el, "components"),
+        duration,
+        concentration: /^Concentration/i.test(duration) || undefined,
+        ritual: text1(el, "ritual") === "YES" || undefined,
+        classes,
+        roll: rollMatch ? rollMatch[1].replace(/\s+/g, "") : undefined,
+        description: [text, trigger ? `Trigger: ${capFirst(trigger)}` : ""].filter(Boolean).join("\n\n"),
+      }),
+    );
+  }
+  return { spells: spells.sort(byId), pseudoFeats };
+}
+
+// ---------------------------------------------------------------------------
+// Items → equipment + magic items
+// ---------------------------------------------------------------------------
+
+const DMG_TYPES = { B: "bludgeoning", P: "piercing", S: "slashing", R: "radiant", N: "necrotic", Y: "psychic" };
+const WEAPON_PROPS = {
+  A: "Ammunition",
+  F: "Finesse",
+  H: "Heavy",
+  L: "Light",
+  LD: "Loading",
+  M: "Martial",
+  R: "Reach",
+  S: "Special",
+  T: "Thrown",
+  "2H": "Two-Handed",
+  V: "Versatile",
+};
+const EQUIP_CATEGORY = {
+  M: "Melee Weapons",
+  R: "Ranged Weapons",
+  A: "Ammunition",
+  LA: "Light Armor",
+  MA: "Medium Armor",
+  HA: "Heavy Armor",
+  S: "Shields",
+  G: "Adventuring Gear",
+  P: "Potions",
+  SC: "Scrolls",
+  W: "Wondrous Items",
+  RD: "Rods",
+  ST: "Staffs",
+  WD: "Wands",
+  RG: "Rings",
+  $: "Treasure",
+};
+const ARMOR_CODES = new Set(["LA", "MA", "HA", "S"]);
+
+function costString(value) {
+  if (value == null || Number.isNaN(value)) return undefined;
+  const cp = Math.round(value * 100);
+  if (cp % 100 === 0) return `${cp / 100} gp`;
+  if (cp % 10 === 0) return `${cp / 10} sp`;
+  return `${cp} cp`;
+}
+
+function equipmentItemType(code, name) {
+  if (code === "M" || code === "R") return "weapon";
+  if (ARMOR_CODES.has(code)) return "armor";
+  if (code === "$") return "treasure";
+  if (code === "G" && /tool|kit|instrument|supplies|gaming set/i.test(name)) return "tool";
+  return "gear";
+}
+
+function magicItemType(code) {
+  if (code === "M" || code === "R") return "weapon";
+  if (ARMOR_CODES.has(code)) return "armor";
+  if (code === "P" || code === "SC") return "consumable";
+  return "wondrous";
+}
+
+function magicRarity(detail) {
+  const m = /^(common|uncommon|rare|very rare|legendary|artifact|varies)\b/i.exec(detail);
+  return m ? m[1].toLowerCase().replace(" ", "-") : "varies";
+}
+
+/** Pull "Sap (Mastery). …" paragraphs out of the text → "Mastery: Sap" property. */
+function extractMastery(text) {
+  const paragraphs = text.split("\n\n");
+  const kept = [];
+  const masteries = [];
+  for (const p of paragraphs) {
+    const m = /^([A-Za-z' -]+?)\s*\(Mastery\)[.:]/.exec(p);
+    if (m) masteries.push(`Mastery: ${m[1].trim()}`);
+    else kept.push(p);
+  }
+  return { text: kept.join("\n\n"), masteries };
+}
+
+function transformItems(rawItems) {
+  const equipment = [];
+  const magicItems = [];
+  const seen = new Map();
+  for (const el of rawItems) {
+    const name = stripYear(text1(el, "name"));
+    const id = kebab(name);
+    const code = text1(el, "type");
+    assert(EQUIP_CATEGORY[code], `item ${id}: unknown type code "${code}"`);
+    const isMagic = text1(el, "magic") === "1";
+    if (seen.has(id)) {
+      // The file doubles a few magic items verbatim (PHB + DMG printings).
+      assert(seen.get(id) === code, `item ${id}: duplicate with different type`);
+      continue;
+    }
+    seen.set(id, code);
+    const { text } = joinTexts(texts(el, "text"));
+    const detail = text1(el, "detail");
+    const dmg1 = text1(el, "dmg1");
+    const dmg2 = text1(el, "dmg2");
+    const dmgTypeCode = text1(el, "dmgType");
+    if (dmgTypeCode) assert(DMG_TYPES[dmgTypeCode], `item ${id}: unknown damage type "${dmgTypeCode}"`);
+    const weight = floatOf(el, "weight");
+    const cost = costString(floatOf(el, "value"));
+
+    if (isMagic) {
+      const rarity = magicRarity(detail);
+      const attuneQualifier = /requires attunement (by [^)]+)/i.exec(detail);
+      magicItems.push(
+        clean({
+          id,
+          name,
+          itemType: magicItemType(code),
+          category: EQUIP_CATEGORY[code],
+          rarity,
+          rarityText: rarity === "varies" ? capFirst(detail) : undefined,
+          attunement: /requires attunement/i.test(detail) || undefined,
+          description: [attuneQualifier ? `Requires attunement ${attuneQualifier[1]}.` : "", text]
+            .filter(Boolean)
+            .join("\n\n"),
+        }),
+      );
+      continue;
+    }
+
+    const { text: strippedText, masteries } = extractMastery(text);
+    const properties = text1(el, "property")
+      .split(",")
+      .map((p) => p.trim())
+      .filter(Boolean)
+      .map((p) => {
+        assert(WEAPON_PROPS[p], `item ${id}: unknown property code "${p}"`);
+        return WEAPON_PROPS[p] === "Versatile" && dmg2 ? `Versatile (${dmg2})` : WEAPON_PROPS[p];
+      });
+    const rangeText = text1(el, "range");
+    if (rangeText) properties.push(`Range ${rangeText}`);
+    properties.push(...masteries);
+    const ac = intOf(el, "ac");
+    equipment.push(
+      clean({
+        id,
+        name,
+        category: EQUIP_CATEGORY[code],
+        itemType: equipmentItemType(code, name),
+        cost,
+        weight,
+        damage: dmg1 || undefined,
+        damageType: dmgTypeCode ? DMG_TYPES[dmgTypeCode] : undefined,
+        range: code === "M" ? "melee" : code === "R" ? "ranged" : undefined,
+        properties,
+        acBase: ARMOR_CODES.has(code) ? ac : undefined,
+        acDexBonus: code === "LA" || code === "MA" || undefined,
+        acMaxBonus: code === "MA" ? 2 : undefined,
+        strMin: intOf(el, "strength") || undefined,
+        stealthDisadvantage: text1(el, "stealth") === "1" || undefined,
+        description: strippedText,
+      }),
+    );
+  }
+  return { equipment: equipment.sort(byId), magicItems: magicItems.sort(byId) };
+}
+
+// ---------------------------------------------------------------------------
+// Monsters
+// ---------------------------------------------------------------------------
+
+const XP_BY_CR = {
+  0: 10, "1/8": 25, "1/4": 50, "1/2": 100, 1: 200, 2: 450, 3: 700, 4: 1100, 5: 1800,
+  6: 2300, 7: 2900, 8: 3900, 9: 5000, 10: 5900, 11: 7200, 12: 8400, 13: 10000, 14: 11500,
+  15: 13000, 16: 15000, 17: 18000, 18: 20000, 19: 22000, 20: 25000, 21: 33000, 22: 41000,
+  23: 50000, 24: 62000, 25: 75000, 26: 90000, 27: 105000, 28: 120000, 29: 135000, 30: 155000,
+};
+
+const crToNumber = (cr) => (cr.includes("/") ? Number(cr.split("/")[0]) / Number(cr.split("/")[1]) : Number(cr));
+
+function parseSignedPairs(value, keyMapper) {
+  const out = {};
+  for (const part of value.split(",")) {
+    const m = /^(.+?)\s*([+-]\d+)$/.exec(part.trim());
+    if (!m) continue;
+    const key = keyMapper(m[1].trim());
+    if (key) out[key] = Number(m[2]);
+  }
+  return out;
+}
+
+const splitList = (value) =>
+  value
+    .split(/[;,]/)
+    .map((s) => capFirst(s.trim()))
+    .filter(Boolean);
+
+function monsterActionEntry(el) {
+  let name = text1(el, "name");
+  const { text } = joinTexts(texts(el, "text"));
+  let isBonus = false;
+  const bonusMatch = /^(.*?)\s*\(bonus action\)\s*$/i.exec(name);
+  if (bonusMatch) {
+    name = bonusMatch[1];
+    isBonus = true;
+  }
+  const usesMatch = /\((\d+)\/day\b[^)]*\)/i.exec(name);
+  let toHit;
+  let damage;
+  const attack = kid(el, "attack")?.text;
+  if (attack) {
+    const parts = attack.split("|");
+    if (parts[1] && /^[+-]?\d+$/.test(parts[1].trim())) toHit = Number(parts[1].trim());
+    const dm = /^(\d*d\d+(?:[+-]\d+)?)/.exec((parts[2] ?? "").replace(/\s+/g, ""));
+    if (dm) damage = dm[1];
+  }
+  if (toHit === undefined) {
+    const m = /Attack Roll:\s*\+(\d+)/.exec(text);
+    if (m) toHit = Number(m[1]);
+  }
+  if (!damage) {
+    const m = /\((\d+d\d+(?:\s*[+-]\s*\d+)?)\)/.exec(text);
+    if (m) damage = m[1].replace(/\s+/g, "");
+  }
+  const typeMatch = /\)\s*([A-Za-z]+)\s+damage/.exec(text) ?? /\b([A-Za-z]+)\s+damage\b/.exec(text);
+  return {
+    entry: clean({
+      name,
+      description: text,
+      toHit,
+      damage,
+      damageType: damage && typeMatch ? typeMatch[1].toLowerCase() : undefined,
+      uses: usesMatch ? { current: Number(usesMatch[1]), max: Number(usesMatch[1]) } : undefined,
+    }),
+    isBonus,
+  };
+}
+
+function transformMonsters(rawMonsters) {
+  return rawMonsters
+    .map((el) => {
+      const name = stripYear(text1(el, "name"));
+      const acMatch = /^(\d+)(?:\s*\((.+)\))?$/.exec(text1(el, "ac"));
+      assert(acMatch, `monster ${name}: unparseable ac "${text1(el, "ac")}"`);
+      const hpMatch = /^(\d+)(?:\s*\((.+)\))?$/.exec(text1(el, "hp"));
+      assert(hpMatch, `monster ${name}: unparseable hp "${text1(el, "hp")}"`);
+      const hitDice = hpMatch[2];
+      const hitDiceMatch = /(\d+)d(\d+)/.exec(hitDice ?? "");
+      const speedLine = text1(el, "speed");
+      const cr = text1(el, "cr");
+      const abilities = {};
+      for (const short of ABILITY_SHORT) abilities[short] = intOf(el, short) ?? 10;
+
+      let source;
+      const traits = [];
+      for (const traitEl of kids(el, "trait")) {
+        const tname = text1(traitEl, "name");
+        const { text } = joinTexts(texts(traitEl, "text"));
+        if (tname === "Source") {
+          source = source ?? text.split("\n")[0];
+          continue;
+        }
+        if (tname === "Proficiency Bonus" && /^(equals your Proficiency Bonus|\+\d+)$/i.test(text)) continue;
+        const usesMatch = /\((\d+)\/day\b[^)]*\)/i.exec(tname);
+        traits.push(
+          clean({
+            name: tname,
+            description: text,
+            uses: usesMatch ? { current: Number(usesMatch[1]), max: Number(usesMatch[1]) } : undefined,
+          }),
+        );
+      }
+
+      const groups = { actions: [], bonusActions: [], reactions: [], legendary: [] };
+      for (const a of kids(el, "action")) {
+        const { entry, isBonus } = monsterActionEntry(a);
+        (isBonus ? groups.bonusActions : groups.actions).push(entry);
+      }
+      for (const r of kids(el, "reaction")) groups.reactions.push(monsterActionEntry(r).entry);
+      for (const l of kids(el, "legendary")) groups.legendary.push(monsterActionEntry(l).entry);
+
+      const senses = [text1(el, "senses"), intOf(el, "passive") != null ? `Passive Perception ${intOf(el, "passive")}` : ""]
+        .filter(Boolean)
+        .join(", ");
+      return clean({
+        id: kebab(name),
+        name,
+        size: SIZE_WORDS[text1(el, "size")] ?? text1(el, "size"),
+        type: capFirst(text1(el, "type").replace(/\s*\(.*\)$/, "").trim()),
+        alignment: titleWords(text1(el, "alignment")),
+        ac: Number(acMatch[1]),
+        acNote: acMatch[2],
+        hp: Number(hpMatch[1]),
+        hitDice,
         hitDiceCount: hitDiceMatch ? Number(hitDiceMatch[1]) : undefined,
         hitDie: hitDiceMatch ? `d${hitDiceMatch[2]}` : undefined,
-        walkSpeed: c.speed_all?.walk ?? 30,
-        speedLine: speedLine(c.speed_all),
+        walkSpeed: Number(/^(\d+)/.exec(speedLine)?.[1] ?? 30),
+        speedLine,
         abilities,
-        initiative: c.initiative_bonus ?? undefined,
-        saves,
-        skills,
-        senses: sensesLine(c),
-        languages: c.languages?.as_string,
-        cr: crString(cr),
-        xp: c.experience_points ?? undefined,
-        profBonus: c.proficiency_bonus ?? Math.max(2, Math.ceil(cr / 4) + 1),
-        vulnerabilities: splitResistList(ri.damage_vulnerabilities_display, ri.damage_vulnerabilities),
-        resistances: splitResistList(ri.damage_resistances_display, ri.damage_resistances),
-        immunities: splitResistList(ri.damage_immunities_display, ri.damage_immunities),
-        conditionImmunities: splitResistList(ri.condition_immunities_display, ri.condition_immunities),
-        traits: (c.traits ?? []).map((t) => ({ name: t.name, description: t.desc })),
+        initiative: intOf(el, "init"),
+        saves: parseSignedPairs(text1(el, "save"), (k) => {
+          const id = k.toLowerCase();
+          assert(ABILITY_SHORT.has(id), `monster ${name}: unknown save "${k}"`);
+          return id;
+        }),
+        skills: parseSignedPairs(text1(el, "skill"), (k) => skillId(k)),
+        senses: capFirst(senses),
+        languages: text1(el, "languages"),
+        cr,
+        xp: XP_BY_CR[cr],
+        profBonus: Math.max(2, Math.ceil(crToNumber(cr) / 4) + 1),
+        vulnerabilities: splitList(text1(el, "vulnerable")),
+        resistances: splitList(text1(el, "resist")),
+        immunities: splitList(text1(el, "immune")),
+        conditionImmunities: splitList(text1(el, "conditionImmune")),
+        source,
+        traits,
         ...groups,
       });
     })
@@ -518,43 +914,34 @@ function transformCreatures(rawCreatures) {
 // ---------------------------------------------------------------------------
 
 async function main() {
-  console.log("Fetching 5e-bits files (pinned " + BITS_SHA.slice(0, 10) + ")...");
-  const [rawClasses, rawSubclasses, rawProfs, rawSpecies, rawSubspecies, rawTraits, rawFeats, rawEquipment, rawMagicItems] =
-    await Promise.all([
-      fetchBits("Classes"),
-      fetchBits("Subclasses"),
-      fetchBits("Proficiencies"),
-      fetchBits("Species"),
-      fetchBits("Subspecies"),
-      fetchBits("Traits"),
-      fetchBits("Feats"),
-      fetchBits("Equipment"),
-      fetchBits("Magic-Items"),
-    ]);
-  console.log("Fetching Open5e spells + creatures (document " + OPEN5E_DOC + ")...");
-  const [rawSpells, rawCreatures] = await Promise.all([fetchOpen5e("spells"), fetchOpen5e("creatures")]);
+  const xmlPath = path.join(ROOT, XML_FILE);
+  let xml;
+  try {
+    xml = await readFile(xmlPath, "utf8");
+  } catch {
+    throw new Error(`Missing "${XML_FILE}" at the repo root — the compendium is generated from that local file.`);
+  }
+  console.log(`Parsing ${XML_FILE} (${(xml.length / 1024 / 1024).toFixed(1)} MB)...`);
+  const root = parseXml(xml);
+  const compendium = root.children.find((c) => c.tag === "compendium");
+  assert(compendium, "no <compendium> root element");
 
-  const classifier = buildProfClassifier(rawProfs);
+  const { classes, subclasses } = transformClasses(kids(compendium, "class"));
+  const { spells, pseudoFeats } = transformSpells(kids(compendium, "spell"));
+  const { equipment, magicItems } = transformItems(kids(compendium, "item"));
   const out = {
-    classes: transformClasses(rawClasses, rawSubclasses, classifier),
-    subclasses: transformSubclasses(rawSubclasses),
-    species: transformSpecies(rawSpecies, rawSubspecies, rawTraits),
-    feats: transformFeats(rawFeats),
-    equipment: transformEquipment(rawEquipment),
-    "magic-items": transformMagicItems(rawMagicItems),
-    spells: transformSpells(rawSpells),
-    monsters: transformCreatures(rawCreatures),
+    classes,
+    subclasses,
+    species: transformSpecies(kids(compendium, "race")),
+    backgrounds: transformBackgrounds(kids(compendium, "background")),
+    feats: transformFeats(kids(compendium, "feat"), pseudoFeats),
+    equipment,
+    "magic-items": magicItems,
+    spells,
+    monsters: transformMonsters(kids(compendium, "monster")),
   };
 
   // --- validation -----------------------------------------------------------
-  assert(out.classes.length === 12, `expected 12 classes, got ${out.classes.length}`);
-  assert(out.subclasses.length === 12, `expected 12 subclasses, got ${out.subclasses.length}`);
-  assert(out.species.length === 9, `expected 9 species, got ${out.species.length}`);
-  assert(out.feats.length === 17, `expected 17 feats, got ${out.feats.length}`);
-  assert(out.equipment.length === 182, `expected 182 equipment, got ${out.equipment.length}`);
-  assert(out["magic-items"].length === 262, `expected 262 magic items, got ${out["magic-items"].length}`);
-  assert(out.spells.length === 339, `expected 339 spells, got ${out.spells.length}`);
-  assert(out.monsters.length === 331, `expected 331 monsters, got ${out.monsters.length}`);
   for (const [category, rows] of Object.entries(out)) {
     const seen = new Set();
     for (const row of rows) {
@@ -563,17 +950,53 @@ async function main() {
       seen.add(row.id);
     }
   }
+  assert(out.classes.length === 12, `expected 12 classes, got ${out.classes.length}`);
+  assert(out.subclasses.length === 48, `expected 48 subclasses, got ${out.subclasses.length}`);
+  assert(out.species.length === 10, `expected 10 species, got ${out.species.length}`);
+  assert(out.backgrounds.length === 16, `expected 16 backgrounds, got ${out.backgrounds.length}`);
+  assert(out.spells.length === 391, `expected 391 spells, got ${out.spells.length}`);
+  assert(out.monsters.length === 520, `expected 520 monsters, got ${out.monsters.length}`);
   for (const cls of out.classes) {
     assert(cls.hitDie >= 6 && cls.hitDie <= 12, `class ${cls.id}: odd hit die ${cls.hitDie}`);
     assert(cls.saves.length === 2, `class ${cls.id}: expected 2 saves`);
+    assert(cls.subclassIds.length === 4, `class ${cls.id}: expected 4 subclasses, got ${cls.subclassIds.length}`);
     assert(cls.multiclass?.prereqs?.length, `class ${cls.id}: missing multiclass prereqs`);
+  }
+  const rogue = out.classes.find((c) => c.id === "rogue");
+  for (const scId of ["arcane-trickster", "assassin", "soulknife", "thief"]) {
+    assert(rogue.subclassIds.includes(scId), `rogue missing subclass ${scId}`);
+  }
+  const thirdCasters = out.subclasses.filter((sc) => /eldritch\s*knight|arcane\s*trickster/i.test(sc.name));
+  assert(thirdCasters.length === 2, "expected Eldritch Knight + Arcane Trickster subclasses");
+  const fireball = out.spells.find((s) => s.id === "fireball");
+  assert(fireball?.level === 3 && fireball.roll === "8d6", "fireball spot-check failed");
+  assert(fireball.classes.includes("sorcerer") && fireball.classes.includes("wizard"), "fireball classes spot-check failed");
+  const longsword = out.equipment.find((e) => e.id === "longsword");
+  assert(longsword?.damage === "1d8" && longsword.damageType === "slashing" && longsword.cost === "15 gp", "longsword spot-check failed");
+  assert(longsword.properties.some((p) => p.startsWith("Versatile (1d10)")), "longsword versatile spot-check failed");
+  assert(longsword.properties.includes("Mastery: Sap"), "longsword mastery spot-check failed");
+  const goblinBoss = out.monsters.find((m) => m.id === "goblin-boss");
+  assert(goblinBoss?.ac === 17 && goblinBoss.hp === 21 && goblinBoss.cr === "1", "goblin-boss spot-check failed");
+  assert(goblinBoss.skills["skill-stealth"] === 6, "goblin-boss stealth spot-check failed");
+  const acolyte = out.backgrounds.find((b) => b.id === "acolyte");
+  assert(
+    acolyte && acolyte.skills.includes("skill-insight") && acolyte.skills.includes("skill-religion"),
+    "acolyte background spot-check failed",
+  );
+  const drow = out.species.find((s) => s.id === "elf")?.subspecies?.find((ss) => ss.id === "elf-drow");
+  assert(drow?.traits.some((t) => /Darkvision/i.test(t.name) && /120/.test(t.description)), "drow darkvision spot-check failed");
+  const MONSTER_TYPES = new Set([
+    "Aberration", "Beast", "Celestial", "Construct", "Dragon", "Elemental", "Fey",
+    "Fiend", "Giant", "Humanoid", "Monstrosity", "Ooze", "Plant", "Undead", "Varies",
+  ]);
+  for (const m of out.monsters) {
+    assert(typeof m.hp === "number" && typeof m.ac === "number", `monster ${m.id}: missing hp/ac`);
+    assert(MONSTER_TYPES.has(m.type), `monster ${m.id}: unexpected type "${m.type}"`);
+    assert(XP_BY_CR[m.cr] !== undefined, `monster ${m.id}: unexpected cr "${m.cr}"`);
   }
   for (const sp of out.spells) {
     assert(sp.level >= 0 && sp.level <= 9, `spell ${sp.id}: bad level`);
     assert(sp.description, `spell ${sp.id}: missing description`);
-  }
-  for (const m of out.monsters) {
-    assert(typeof m.hp === "number" && typeof m.ac === "number", `monster ${m.id}: missing hp/ac`);
   }
 
   // --- write ----------------------------------------------------------------
@@ -584,13 +1007,10 @@ async function main() {
     await writeFile(path.join(OUT_DIR, `${category}.json`), JSON.stringify(rows, null, 1) + "\n");
   }
   const meta = {
-    ruleset: "D&D 5e 2024 (SRD 5.2.1)",
-    license: "CC-BY-4.0",
-    attribution: ATTRIBUTION,
-    sources: {
-      "5e-bits/5e-database": { commit: BITS_SHA, categories: ["classes", "subclasses", "species", "feats", "equipment", "magic-items"] },
-      "open5e-api-v2": { document: OPEN5E_DOC, categories: ["spells", "monsters"] },
-    },
+    ruleset: "D&D 5e 2024 (Player's Handbook, Dungeon Master's Guide, Monster Manual)",
+    license: "Content © Wizards of the Coast — private-table use only, not for redistribution",
+    attribution: "Compendium data from the D&D 2024 core rulebooks (Wizards of the Coast).",
+    source: { file: XML_FILE, format: "Fight Club 5 compendium XML v5" },
     counts,
     generated: new Date().toISOString().slice(0, 10),
   };
@@ -601,7 +1021,8 @@ async function main() {
   console.table(counts);
   const distinct = (rows, f) => [...new Set(rows.map(f))].sort();
   console.log("casting times:", distinct(out.spells, (s) => s.time).join(" | "));
-  console.log("spell ranges (sample):", distinct(out.spells, (s) => s.range).slice(0, 12).join(" | "));
+  console.log("feat categories:", distinct(out.feats, (f) => f.category).join(" | "));
+  console.log("monster types:", distinct(out.monsters, (m) => m.type).join(" | "));
   const noAtk = out.monsters.filter((m) => (m.actions ?? []).length && !(m.actions ?? []).some((a) => a.toHit != null));
   console.log(`monsters with actions but no parsed to-hit: ${noAtk.length}`, noAtk.slice(0, 8).map((m) => m.id).join(", "));
   const biggest = [...out.monsters].sort((a, b) => JSON.stringify(b).length - JSON.stringify(a).length)[0];

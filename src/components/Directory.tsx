@@ -30,7 +30,7 @@ type DirectoryProps = {
   onCreateFolder: (name: string) => void;
   /** Optional extra create action (Actors sidebar: "Create Player" → new slot). */
   onCreatePlayer?: () => void;
-  /** Optional second create button (e.g. "Add from SRD" / "From SRD monster"). */
+  /** Optional second create button (e.g. "Add from compendium" / "From compendium monster"). */
   extraCreate?: { label: string; icon?: ReactNode; title?: string; onClick: () => void };
   onRenameFolder: (folderId: string, name: string) => void;
   /** Reorder a folder among its siblings (drag a folder header onto another). */

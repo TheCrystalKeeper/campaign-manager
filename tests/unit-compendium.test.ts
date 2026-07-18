@@ -9,16 +9,19 @@ import {
   normalizeCharacterSheet,
 } from "@lib/types";
 import type {
+  CompendiumBackground,
   CompendiumClass,
   CompendiumEquipment,
   CompendiumMagicItem,
   CompendiumMonster,
   CompendiumSpecies,
   CompendiumSpell,
+  CompendiumSubclass,
 } from "@lib/compendium";
 import { searchCompendium } from "@lib/compendium";
 import {
   addMulticlassPatch,
+  backgroundAutofillPatch,
   classAutofillPatch,
   featureRowFromFeat,
   inventoryRowFromEquipment,
@@ -41,16 +44,26 @@ const load = <T>(name: string): T[] =>
   JSON.parse(readFileSync(`public/compendium/${name}.json`, "utf8"));
 
 const classes = load<CompendiumClass>("classes");
+const subclasses = load<CompendiumSubclass>("subclasses");
 const species = load<CompendiumSpecies>("species");
+const backgrounds = load<CompendiumBackground>("backgrounds");
 const spells = load<CompendiumSpell>("spells");
 const equipment = load<CompendiumEquipment>("equipment");
 const magicItems = load<CompendiumMagicItem>("magic-items");
 const monsters = load<CompendiumMonster>("monsters");
 
 // --- generated data shape ----------------------------------------------------
-check("data: 12 classes / 9 species / 339 spells / 331 monsters",
-  classes.length === 12 && species.length === 9 && spells.length === 339 && monsters.length === 331,
+check("data: 12 classes / 10 species / 391 spells / 520 monsters",
+  classes.length === 12 && species.length === 10 && spells.length === 391 && monsters.length === 520,
   `${classes.length}/${species.length}/${spells.length}/${monsters.length}`);
+check("data: 48 subclasses (4 per class) + 16 backgrounds",
+  subclasses.length === 48 && backgrounds.length === 16 &&
+    classes.every((c) => c.subclassIds.length === 4 &&
+      subclasses.filter((sc) => sc.classId === c.id).length === 4),
+  `${subclasses.length}/${backgrounds.length}`);
+check("data: rogue has all four PHB subclasses incl. Assassin",
+  ["arcane-trickster", "assassin", "soulknife", "thief"].every((id) =>
+    classes.find((c) => c.id === "rogue")!.subclassIds.includes(id)));
 check("data: every class has 2 saves + multiclass prereqs",
   classes.every((c) => c.saves.length === 2 && c.multiclass.prereqs.length > 0));
 check("data: every spell has description + level 0-9",
@@ -119,11 +132,28 @@ const elf = species.find((s) => s.id === "elf")!;
     Object.keys(namesOnly).join(",") === "race" && namesOnly.race === "Elf");
   const full = speciesAutofillPatch(elf, { autofill: true, sheet });
   check("species autofill: size/speed set", full.size === "Medium" && full.speed === 30);
-  check("species autofill: 5 species trait rows",
-    (full.features ?? []).filter((f) => f.source === "species").length === 5);
-  const drow = speciesAutofillPatch(elf, { autofill: true, subspeciesId: "elven-lineage-drow", sheet });
-  check("species subspecies: display name + extra traits",
-    drow.race === "Elf (Drow)" && (drow.features ?? []).length > 5);
+  const baseTraitRows = (full.features ?? []).filter((f) => f.source === "species");
+  check("species autofill: shared elf traits incl. Fey Ancestry",
+    baseTraitRows.length === 4 && baseTraitRows.some((f) => f.name === "Fey Ancestry"),
+    baseTraitRows.map((f) => f.name).join(","));
+  const drow = speciesAutofillPatch(elf, { autofill: true, subspeciesId: "elf-drow", sheet });
+  check("species subspecies: display name + lineage traits (Drow darkvision 120 ft.)",
+    drow.race === "Elf (Drow)" && (drow.features ?? []).length > baseTraitRows.length &&
+      (drow.features ?? []).some((f) => f.name === "Darkvision" && /120/.test(f.description ?? "")));
+}
+
+// --- backgrounds -------------------------------------------------------------
+{
+  const acolyte = backgrounds.find((b) => b.id === "acolyte")!;
+  check("acolyte: Insight + Religion skills",
+    acolyte.skills.length === 2 && acolyte.skills.includes("skill-insight") && acolyte.skills.includes("skill-religion"));
+  const sheet = createDefaultSheet("Test");
+  const namesOnly = backgroundAutofillPatch(acolyte, { autofill: false, sheet });
+  check("background names-only: writes exactly background",
+    Object.keys(namesOnly).join(",") === "background" && namesOnly.background === "Acolyte");
+  const full = backgroundAutofillPatch(acolyte, { autofill: true, sheet });
+  check("background autofill: skill proficiency dots",
+    full.skillProfs?.["skill-insight"] === 1 && full.skillProfs?.["skill-religion"] === 1);
 }
 
 // --- feats -------------------------------------------------------------------
@@ -159,7 +189,7 @@ const elf = species.find((s) => s.id === "elf")!;
   const derived = computeDerived(sheet, "npc");
   check("goblin boss: derived Stealth +6 via skillMods delta",
     derived.values["skill-stealth"] === 6, `stealth=${derived.values["skill-stealth"]}`);
-  check("goblin boss: derived WIS save -1 (stat block value)",
+  check("goblin boss: derived WIS save -1 (WIS 8, no save prof in the 2024 block)",
     derived.values["save-wis"] === -1, `save-wis=${derived.values["save-wis"]}`);
   check("goblin boss: scimitar attack row parsed",
     sheet.attacks.some((a) => a.name === "Scimitar" && a.toHit === 4 && a.damage === "1d6+2"));

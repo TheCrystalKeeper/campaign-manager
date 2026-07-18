@@ -11,6 +11,7 @@ import { NumberInput } from "../../NumberInput";
 import { RowTable, type RowGroup } from "../RowTable";
 import { UsesCell } from "../atoms";
 import { advFromEvent, ROLL_HINT, type SheetEdit } from "../context";
+import { BackgroundPickerModal } from "../BackgroundPickerModal";
 import { ClassPickerModal } from "../ClassPickerModal";
 import { FeatPickerModal } from "../FeatPickerModal";
 import { ManageClassesModal } from "../ManageClassesModal";
@@ -89,6 +90,7 @@ export function FeaturesPage({ sheet }: { sheet: SheetEdit }) {
   const [classPickerOpen, setClassPickerOpen] = useState(false);
   const [manageClassesOpen, setManageClassesOpen] = useState(false);
   const [speciesPickerOpen, setSpeciesPickerOpen] = useState(false);
+  const [backgroundPickerOpen, setBackgroundPickerOpen] = useState(false);
   const [featPickerOpen, setFeatPickerOpen] = useState(false);
 
   // 2+ classes: the chip shows the composed list and opens the multiclass manager.
@@ -174,7 +176,7 @@ export function FeaturesPage({ sheet }: { sheet: SheetEdit }) {
             <button
               type="button"
               className="class-chip class-chip--btn"
-              title="Set a class from the SRD (optional for NPCs)"
+              title="Set a class from the compendium (optional for NPCs)"
               onClick={openClassEditor}
             >
               {value.characterClass ? classChipText : "＋ Class"}
@@ -223,7 +225,7 @@ export function FeaturesPage({ sheet }: { sheet: SheetEdit }) {
               <button
                 type="button"
                 className="class-chip-browse"
-                title="Browse the SRD classes"
+                title="Browse the compendium classes"
                 onClick={() => setClassPickerOpen(true)}
               >
                 <Search size={12} strokeWidth={2.2} />
@@ -242,7 +244,7 @@ export function FeaturesPage({ sheet }: { sheet: SheetEdit }) {
               <button
                 type="button"
                 className="class-chip-browse"
-                title="Browse the SRD species"
+                title="Browse the compendium species"
                 onClick={() => setSpeciesPickerOpen(true)}
               >
                 <Search size={12} strokeWidth={2.2} />
@@ -252,10 +254,31 @@ export function FeaturesPage({ sheet }: { sheet: SheetEdit }) {
             <div className="class-chip">{value.race}</div>
           ) : null}
           {canEdit ? (
+            <div className="class-chip class-chip--edit">
+              <input
+                className="class-chip-input"
+                value={value.background}
+                placeholder="Background"
+                aria-label="Background"
+                onChange={(e) => update({ background: e.target.value })}
+              />
+              <button
+                type="button"
+                className="class-chip-browse"
+                title="Browse the compendium backgrounds"
+                onClick={() => setBackgroundPickerOpen(true)}
+              >
+                <Search size={12} strokeWidth={2.2} />
+              </button>
+            </div>
+          ) : value.background ? (
+            <div className="class-chip">{value.background}</div>
+          ) : null}
+          {canEdit ? (
             <button
               type="button"
               className="btn-ghost chip-row-add"
-              title="Add a feat from the SRD"
+              title="Add a feat from the compendium"
               onClick={() => setFeatPickerOpen(true)}
             >
               ＋ Feat
@@ -266,6 +289,7 @@ export function FeaturesPage({ sheet }: { sheet: SheetEdit }) {
       {classPickerOpen ? <ClassPickerModal sheet={sheet} onClose={() => setClassPickerOpen(false)} /> : null}
       {manageClassesOpen ? <ManageClassesModal sheet={sheet} onClose={() => setManageClassesOpen(false)} /> : null}
       {speciesPickerOpen ? <SpeciesPickerModal sheet={sheet} onClose={() => setSpeciesPickerOpen(false)} /> : null}
+      {backgroundPickerOpen ? <BackgroundPickerModal sheet={sheet} onClose={() => setBackgroundPickerOpen(false)} /> : null}
       {featPickerOpen ? <FeatPickerModal sheet={sheet} onClose={() => setFeatPickerOpen(false)} /> : null}
 
       <RowTable

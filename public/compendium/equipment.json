@@ -9,30 +9,89 @@
   "description": "When you take the Attack action, you can replace one of your attacks with throwing a vial of Acid. Target one creature or object you can see within 20 feet of yourself. The target must succeed on a Dexterity saving throw (DC 8 plus your Dexterity modifier and Proficiency Bonus) or take 2d6 Acid damage."
  },
  {
-  "id": "alchemists-fire",
+  "id": "airship",
+  "name": "Airship",
+  "category": "Adventuring Gear",
+  "itemType": "gear",
+  "cost": "40000 gp",
+  "description": "Speed: 8 mph\nCrew: 10\nPassengers: 20\nCargo (Tons): 1\nAC: 13\nHP: 300\nDamage Threshold: -"
+ },
+ {
+  "id": "alchemist-s-fire",
   "name": "Alchemist's Fire",
   "category": "Adventuring Gear",
   "itemType": "gear",
-  "cost": "25 gp",
+  "cost": "50 gp",
   "weight": 1,
-  "description": "When you take the Attack action, you can replace one of your attacks with throwing a flask of Alchemist's Fire. Target one creature or object you can see within 20 feet of yourself. The target must succeed on a Dexterity saving throw (DC 8 plus your Dexterity modifier and Proficiency Bonus) or take 1d4 Fire damage and start burning (see “Rules Glossary”)."
+  "description": "When you take the Attack action, you can replace one of your attacks with throwing a flask of Alchemist's Fire. Target one creature or object you can see within 20 feet of yourself. The target must succeed on a Dexterity saving throw (DC 8 plus your Dexterity modifier and Proficiency Bonus) or take 1d4 Fire damage and start burning."
  },
  {
-  "id": "alchemists-supplies",
+  "id": "alchemist-s-supplies",
   "name": "Alchemist's Supplies",
-  "category": "Artisan's Tools",
+  "category": "Adventuring Gear",
   "itemType": "tool",
   "cost": "50 gp",
-  "weight": 8
+  "weight": 8,
+  "description": "Ability: Intelligence\nUtilize: Identify a substance (DC 15), or start a fire (DC 15)\nCraft: Acid, Alchemist's Fire, Component Pouch, Oil, Paper, Perfume"
  },
  {
-  "id": "amulet",
-  "name": "Amulet",
+  "id": "ale-mug",
+  "name": "Ale (mug)",
+  "category": "Adventuring Gear",
+  "itemType": "gear",
+  "cost": "4 cp"
+ },
+ {
+  "id": "alexandrite",
+  "name": "Alexandrite",
+  "category": "Treasure",
+  "itemType": "treasure",
+  "cost": "500 gp",
+  "description": "A dark green gemstone."
+ },
+ {
+  "id": "amber",
+  "name": "Amber",
+  "category": "Treasure",
+  "itemType": "treasure",
+  "cost": "100 gp",
+  "description": "A watery gold to rich gold gemstone."
+ },
+ {
+  "id": "amethyst",
+  "name": "Amethyst",
+  "category": "Treasure",
+  "itemType": "treasure",
+  "cost": "100 gp",
+  "description": "A deep purple gemstone."
+ },
+ {
+  "id": "amulet-holy-symbol",
+  "name": "Amulet (holy symbol)",
   "category": "Adventuring Gear",
   "itemType": "gear",
   "cost": "5 gp",
   "weight": 1,
-  "description": "A Holy Symbol takes one of the forms in the Holy Symbol table and is bejeweled or painted to channel divine magic. A Cleric or Paladin can use a Holy Symbol as a Spellcasting Focus.\nThe table indicates whether a Holy Symbol needs to be held, worn, or borne on fabric (such as a tabard or banner) or a Shield."
+  "description": "A Holy Symbol takes one of the forms in the Holy Symbol table and is bejeweled or painted to channel divine magic. A Cleric or Paladin can use a Holy Symbol as a Spellcasting Focus.\nFor an Amulet to be an effective Holy Symbol, it must be worn or held."
+ },
+ {
+  "id": "antimatter-rifle",
+  "name": "Antimatter Rifle",
+  "category": "Ranged Weapons",
+  "itemType": "weapon",
+  "weight": 10,
+  "damage": "6d8",
+  "damageType": "necrotic",
+  "range": "ranged",
+  "properties": [
+   "Martial",
+   "Ammunition",
+   "Loading",
+   "Two-Handed",
+   "Range 120/360",
+   "Mastery: Sap"
+  ],
+  "description": "Ammunition. You can use a weapon that has the Ammunition property to make a ranged attack only if you have ammunition to fire from it. The type of ammunition required is specified with the weapon's range. Each attack expends one piece of ammunition. Drawing the ammunition is part of the attack (you need a free hand to load a one-handed weapon). After a fight, you can spend 1 minute to recover half the ammunition (round down) you used in the fight; the rest is lost.\n\nLoading. You can fire only one piece of ammunition from a Loading weapon when you use an action, a Bonus Action, or a Reaction to fire it, regardless of the number of attacks you can normally make.\n\nTwo-Handed. A Two-Handed weapon requires two hands when you attack with it."
  },
  {
   "id": "antitoxin",
@@ -40,16 +99,59 @@
   "category": "Adventuring Gear",
   "itemType": "gear",
   "cost": "50 gp",
-  "weight": 1,
   "description": "As a Bonus Action, you can drink a vial of Antitoxin to gain Advantage on saving throws to avoid or end the Poisoned condition for 1 hour."
  },
  {
-  "id": "arrows",
-  "name": "Arrows",
+  "id": "aquamarine",
+  "name": "Aquamarine",
+  "category": "Treasure",
+  "itemType": "treasure",
+  "cost": "500 gp",
+  "description": "A pale blue green gemstone."
+ },
+ {
+  "id": "arrows-20",
+  "name": "Arrows (20)",
   "category": "Ammunition",
   "itemType": "gear",
   "cost": "1 gp",
-  "weight": 1
+  "weight": 1,
+  "description": "Arrows are used with a weapon that has the ammunition property to make a ranged attack. Each time you attack with the weapon, you expend one piece of ammunition. Drawing the ammunition from a quiver, case, or other container is part of the attack (you need a free hand to load a one-handed weapon). At the end of the battle, you can recover half your expended ammunition by taking a minute to search the battlefield.\nArrows are typically stored in a Quiver (bought separately)."
+ },
+ {
+  "id": "assassin-s-blood",
+  "name": "Assassin's Blood",
+  "category": "Adventuring Gear",
+  "itemType": "gear",
+  "cost": "150 gp",
+  "description": "A creature subjected to Assassin's Blood makes a DC 10 Constitution saving throw. On a failed save, the creature takes 6 (1d12) Poison damage and has the Poisoned condition for 24 hours. On a successful save, the creature takes half as much damage only."
+ },
+ {
+  "id": "automatic-rifle",
+  "name": "Automatic Rifle",
+  "category": "Ranged Weapons",
+  "itemType": "weapon",
+  "weight": 8,
+  "damage": "2d8",
+  "damageType": "piercing",
+  "range": "ranged",
+  "properties": [
+   "Martial",
+   "Ammunition",
+   "Loading",
+   "Two-Handed",
+   "Range 80/240",
+   "Mastery: Slow"
+  ],
+  "description": "Ammunition. You can use a weapon that has the Ammunition property to make a ranged attack only if you have ammunition to fire from it. The type of ammunition required is specified with the weapon's range. Each attack expends one piece of ammunition. Drawing the ammunition is part of the attack (you need a free hand to load a one-handed weapon). After a fight, you can spend 1 minute to recover half the ammunition (round down) you used in the fight; the rest is lost.\n\nLoading. You can fire only one piece of ammunition from a Loading weapon when you use an action, a Bonus Action, or a Reaction to fire it, regardless of the number of attacks you can normally make.\n\nTwo-Handed. A Two-Handed weapon requires two hands when you attack with it."
+ },
+ {
+  "id": "azurite",
+  "name": "Azurite",
+  "category": "Treasure",
+  "itemType": "treasure",
+  "cost": "10 gp",
+  "description": "A mottled deep blue gemstone."
  },
  {
   "id": "backpack",
@@ -63,19 +165,28 @@
  {
   "id": "bagpipes",
   "name": "Bagpipes",
-  "category": "Musical Instruments",
-  "itemType": "tool",
+  "category": "Adventuring Gear",
+  "itemType": "gear",
   "cost": "30 gp",
-  "weight": 6
+  "weight": 6,
+  "description": "Ability: Charisma\nUtilize: Play a known tune (DC 10), or improvise a song (DC 15)"
  },
  {
   "id": "ball-bearings",
-  "name": "Ball bearings",
+  "name": "Ball Bearings",
   "category": "Adventuring Gear",
   "itemType": "gear",
   "cost": "1 gp",
   "weight": 2,
-  "description": "As a Utilize action, you can spill Ball Bearings from their pouch. They spread to cover a level, 10-footsquare area within 10 feet of yourself. A creature that enters this area for the first time on a turn must succeed on a DC 10 Dexterity saving throw or have the Prone condition. It takes 10 minutes to recover the Ball Bearings."
+  "description": "As a Utilize action, you can spill Ball Bearings from their pouch. They spread to cover a level, 10-foot-square area within 10 feet of yourself. A creature that enters this area for the first time on a turn must succeed on a DC 10 Dexterity saving throw or have the Prone condition. It takes 10 minutes to recover the Ball Bearings."
+ },
+ {
+  "id": "banded-agate",
+  "name": "Banded Agate",
+  "category": "Treasure",
+  "itemType": "treasure",
+  "cost": "10 gp",
+  "description": "A striped brown, blue, white, or red gemstone."
  },
  {
   "id": "barrel",
@@ -91,14 +202,14 @@
   "name": "Basket",
   "category": "Adventuring Gear",
   "itemType": "gear",
-  "cost": "2 gp",
+  "cost": "4 sp",
   "weight": 2,
   "description": "A Basket holds up to 40 pounds within 2 cubic feet."
  },
  {
   "id": "battleaxe",
   "name": "Battleaxe",
-  "category": "Martial Melee Weapons",
+  "category": "Melee Weapons",
   "itemType": "weapon",
   "cost": "10 gp",
   "weight": 4,
@@ -106,18 +217,20 @@
   "damageType": "slashing",
   "range": "melee",
   "properties": [
+   "Martial",
    "Versatile (1d10)",
    "Mastery: Topple"
-  ]
+  ],
+  "description": "Versatile. A Versatile weapon can be used with one or two hands. A damage value in parentheses appears with the property. The weapon deals that damage when used with two hands to make a melee attack."
  },
  {
   "id": "bedroll",
   "name": "Bedroll",
   "category": "Adventuring Gear",
   "itemType": "gear",
-  "cost": "2 gp",
-  "weight": 25,
-  "description": "A Bedroll sleeps one Small or Medium creature. While in a Bedroll, you automatically succeed on saving throws against extreme cold (see “Gameplay Toolbox”)."
+  "cost": "1 gp",
+  "weight": 7,
+  "description": "A Bedroll sleeps one Small or Medium creature. While in a Bedroll, you automatically succeed on saving throws against extreme cold (see the Dungeon Master's Guide)."
  },
  {
   "id": "bell",
@@ -125,21 +238,44 @@
   "category": "Adventuring Gear",
   "itemType": "gear",
   "cost": "1 gp",
-  "weight": 1,
   "description": "When rung as a Utilize action, a Bell produces a sound that can be heard up to 60 feet away."
+ },
+ {
+  "id": "black-opal",
+  "name": "Black Opal",
+  "category": "Treasure",
+  "itemType": "treasure",
+  "cost": "1000 gp",
+  "description": "A dark green with black mottling and golden flecks gemstone."
+ },
+ {
+  "id": "black-pearl",
+  "name": "Black Pearl",
+  "category": "Treasure",
+  "itemType": "treasure",
+  "cost": "500 gp",
+  "description": "A pure black gemstone."
+ },
+ {
+  "id": "black-sapphire",
+  "name": "Black Sapphire",
+  "category": "Treasure",
+  "itemType": "treasure",
+  "cost": "5000 gp",
+  "description": "A lustrous black with glowing highlights gemstone."
  },
  {
   "id": "blanket",
   "name": "Blanket",
   "category": "Adventuring Gear",
   "itemType": "gear",
-  "cost": "5 gp",
+  "cost": "5 sp",
   "weight": 3,
-  "description": "While wrapped in a blanket, you have Advantage on saving throws against extreme cold (see “Gameplay Toolbox”)."
+  "description": "While wrapped in a blanket, you have Advantage on saving throws against extreme cold (see the Dungeon Master's Guide)."
  },
  {
   "id": "block-and-tackle",
-  "name": "Block and tackle",
+  "name": "Block and Tackle",
   "category": "Adventuring Gear",
   "itemType": "gear",
   "cost": "1 gp",
@@ -147,9 +283,17 @@
   "description": "A Block and Tackle allows you to hoist up to four times the weight you can normally lift."
  },
  {
+  "id": "bloodstone",
+  "name": "Bloodstone",
+  "category": "Treasure",
+  "itemType": "treasure",
+  "cost": "50 gp",
+  "description": "A dark gray with red flecks gemstone."
+ },
+ {
   "id": "blowgun",
   "name": "Blowgun",
-  "category": "Martial Weapons",
+  "category": "Ranged Weapons",
   "itemType": "weapon",
   "cost": "10 gp",
   "weight": 1,
@@ -157,18 +301,55 @@
   "damageType": "piercing",
   "range": "ranged",
   "properties": [
+   "Martial",
    "Ammunition",
    "Loading",
+   "Range 25/100",
    "Mastery: Vex"
-  ]
+  ],
+  "description": "Ammunition. You can use a weapon that has the Ammunition property to make a ranged attack only if you have ammunition to fire from it. The type of ammunition required is specified with the weapon's range. Each attack expends one piece of ammunition. Drawing the ammunition is part of the attack (you need a free hand to load a one-handed weapon). After a fight, you can spend 1 minute to recover half the ammunition (round down) you used in the fight; the rest is lost.\n\nLoading. You can fire only one piece of ammunition from a Loading weapon when you use an action, a Bonus Action, or a Reaction to fire it, regardless of the number of attacks you can normally make."
  },
  {
-  "id": "bolts",
-  "name": "Bolts",
+  "id": "blue-quartz",
+  "name": "Blue Quartz",
+  "category": "Treasure",
+  "itemType": "treasure",
+  "cost": "10 gp",
+  "description": "A pale blue gemstone."
+ },
+ {
+  "id": "blue-sapphire",
+  "name": "Blue Sapphire",
+  "category": "Treasure",
+  "itemType": "treasure",
+  "cost": "1000 gp",
+  "description": "A medium blue gemstone."
+ },
+ {
+  "id": "blue-spinel",
+  "name": "Blue Spinel",
+  "category": "Treasure",
+  "itemType": "treasure",
+  "cost": "500 gp",
+  "description": "A deep blue gemstone."
+ },
+ {
+  "id": "bolts-20",
+  "name": "Bolts (20)",
   "category": "Ammunition",
   "itemType": "gear",
   "cost": "1 gp",
-  "weight": 1.5
+  "weight": 1.5,
+  "description": "Crossbow bolts are used with a weapon that has the ammunition property to make a ranged attack. Each time you attack with the weapon, you expend one piece of ammunition. Drawing the ammunition from a quiver, case, or other container is part of the attack (you need a free hand to load a one-handed weapon). At the end of the battle, you can recover half your expended ammunition by taking a minute to search the battlefield.\nBolts are typically stored in a Crossbow Bolt Case (bought separately)."
+ },
+ {
+  "id": "bomb",
+  "name": "Bomb",
+  "category": "Adventuring Gear",
+  "itemType": "gear",
+  "cost": "100 gp",
+  "weight": 1,
+  "description": "As an action, you can light a Bomb and throw it at a point up to 60 feet away, where it explodes. Each creature in a 5-foot-radius Sphere centered on that point makes a DC 12 Dexterity saving throw, taking 3d6 Fire damage on a failed save or half as much damage on a successful one."
  },
  {
   "id": "book",
@@ -186,12 +367,19 @@
   "itemType": "gear",
   "cost": "2 gp",
   "weight": 2,
-  "description": "A Glass Bottle holds up to 11/2 pints."
+  "description": "A Glass Bottle holds up to 1 1/2 pints."
+ },
+ {
+  "id": "bread-loaf",
+  "name": "Bread (loaf)",
+  "category": "Adventuring Gear",
+  "itemType": "gear",
+  "cost": "2 cp"
  },
  {
   "id": "breastplate",
   "name": "Breastplate",
-  "category": "Armor",
+  "category": "Medium Armor",
   "itemType": "armor",
   "cost": "400 gp",
   "weight": 20,
@@ -200,12 +388,13 @@
   "acMaxBonus": 2
  },
  {
-  "id": "brewers-supplies",
+  "id": "brewer-s-supplies",
   "name": "Brewer's Supplies",
-  "category": "Artisan's Tools",
+  "category": "Adventuring Gear",
   "itemType": "tool",
   "cost": "20 gp",
-  "weight": 9
+  "weight": 9,
+  "description": "Ability: Intelligence\nUtilize: Detect poisoned drink (DC 15), or identify alcohol (DC 10)\nCraft: Antitoxin"
  },
  {
   "id": "bucket",
@@ -217,46 +406,64 @@
   "description": "A Bucket holds up to half a cubic foot of contents."
  },
  {
-  "id": "bullets-firearm",
-  "name": "Bullets, Firearm",
+  "id": "bullets-firearm-10",
+  "name": "Bullets, Firearm (10)",
   "category": "Ammunition",
   "itemType": "gear",
   "cost": "3 gp",
-  "weight": 2
+  "weight": 2,
+  "description": "The ammunition of a firearm is destroyed upon use.\nFirearm Bullets are typically stored in a Pouch (bought separately)."
  },
  {
-  "id": "bullets-sling",
-  "name": "Bullets, Sling",
+  "id": "bullets-sling-20",
+  "name": "Bullets, Sling (20)",
   "category": "Ammunition",
   "itemType": "gear",
   "cost": "4 cp",
-  "weight": 1.5
+  "weight": 1.5,
+  "description": "Sling bullets are used with a weapon that has the ammunition property to make a ranged attack. Each time you attack with the weapon, you expend one piece of ammunition. Drawing the ammunition from a quiver, case, or other container is part of the attack (you need a free hand to load a one-handed weapon). At the end of the battle, you can recover half your expended ammunition by taking a minute to search the battlefield.\nSling Bullets are typically stored in a Pouch (bought separately)."
  },
  {
-  "id": "burglars-pack",
+  "id": "burglar-s-pack",
   "name": "Burglar's Pack",
   "category": "Adventuring Gear",
   "itemType": "gear",
   "cost": "16 gp",
-  "weight": 20,
+  "weight": 47.5,
   "description": "A Burglar's Pack contains the following items: Backpack, Ball Bearings, Bell, 10 Candles, Crowbar, Hooded Lantern, 7 flasks of Oil, 5 days of Rations, Rope, Tinderbox, and Waterskin."
  },
  {
-  "id": "calligraphers-supplies",
+  "id": "burnt-othur-fumes",
+  "name": "Burnt Othur Fumes",
+  "category": "Adventuring Gear",
+  "itemType": "gear",
+  "cost": "500 gp",
+  "description": "A creature subjected to Burnt Othur Fumes must succeed on a DC 13 Constitution saving throw or take 10 (3d6) Poison damage, and it must repeat the save at the start of each of its turns. On each successive failed save, the creature takes 3 (1d6) Poison damage. After three successful saves, the poison ends."
+ },
+ {
+  "id": "calligrapher-s-supplies",
   "name": "Calligrapher's Supplies",
-  "category": "Artisan's Tools",
+  "category": "Adventuring Gear",
   "itemType": "tool",
   "cost": "10 gp",
-  "weight": 5
+  "weight": 5,
+  "description": "Ability: Dexterity\nUtilize: Write text with impressive flourishes that guard against forgery (DC 15)\nCraft: Ink, Spell Scroll"
  },
  {
   "id": "caltrops",
   "name": "Caltrops",
   "category": "Adventuring Gear",
   "itemType": "gear",
-  "cost": "2 gp",
+  "cost": "1 gp",
   "weight": 2,
   "description": "As a Utilize action, you can spread Caltrops from their bag to cover a 5-foot-square area within 5 feet of yourself. A creature that enters this area for the first time on a turn must succeed on a DC 15 Dexterity saving throw or take 1 Piercing damage and have its Speed reduced to 0 until the start of its next turn. It takes 10 minutes to recover the Caltrops."
+ },
+ {
+  "id": "camel",
+  "name": "Camel",
+  "category": "Adventuring Gear",
+  "itemType": "gear",
+  "cost": "50 gp"
  },
  {
   "id": "candle",
@@ -264,24 +471,57 @@
   "category": "Adventuring Gear",
   "itemType": "gear",
   "cost": "1 cp",
-  "weight": 0,
   "description": "For 1 hour, a lit Candle sheds Bright Light in a 5-foot radius and Dim Light for an additional 5 feet."
  },
  {
-  "id": "carpenters-tools",
-  "name": "Carpenter's Tools",
-  "category": "Artisan's Tools",
-  "itemType": "tool",
-  "cost": "8 gp",
-  "weight": 6
+  "id": "carnelian",
+  "name": "Carnelian",
+  "category": "Treasure",
+  "itemType": "treasure",
+  "cost": "50 gp",
+  "description": "A orange to red brown gemstone."
  },
  {
-  "id": "cartographer-tools",
+  "id": "carpenter-s-tools",
+  "name": "Carpenter's Tools",
+  "category": "Adventuring Gear",
+  "itemType": "tool",
+  "cost": "8 gp",
+  "weight": 6,
+  "description": "Ability: Strength\nUtilize: Seal or pry open a door or container (DC 20)\nCraft: Club, Greatclub, Quarterstaff, Barrel, Chest, Ladder, Pole, Portable Ram, Torch"
+ },
+ {
+  "id": "carriage",
+  "name": "Carriage",
+  "category": "Adventuring Gear",
+  "itemType": "gear",
+  "cost": "100 gp",
+  "weight": 600
+ },
+ {
+  "id": "carrion-crawler-mucus",
+  "name": "Carrion Crawler Mucus",
+  "category": "Adventuring Gear",
+  "itemType": "gear",
+  "cost": "200 gp",
+  "description": "A creature subjected to Carrion Crawler Mucus must succeed on a DC 13 Constitution saving throw or have the Poisoned condition for 1 minute. The creature also has the Paralyzed condition while Poisoned in this way. The creature repeats the save at the end of each of its turns, ending the effect on itself on a success."
+ },
+ {
+  "id": "cart",
+  "name": "Cart",
+  "category": "Adventuring Gear",
+  "itemType": "gear",
+  "cost": "15 gp",
+  "weight": 200
+ },
+ {
+  "id": "cartographer-s-tools",
   "name": "Cartographer's Tools",
-  "category": "Artisan's Tools",
+  "category": "Adventuring Gear",
   "itemType": "tool",
   "cost": "15 gp",
-  "weight": 6
+  "weight": 6,
+  "description": "Ability: Wisdom\nUtilize: Draft a map of a small area (DC 15)\nCraft: Map"
  },
  {
   "id": "case-crossbow-bolt",
@@ -307,48 +547,94 @@
   "category": "Adventuring Gear",
   "itemType": "gear",
   "cost": "5 gp",
-  "weight": 6,
+  "weight": 10,
   "description": "As a Utilize action, you can wrap a Chain around an unwilling creature within 5 feet of yourself that has the Grappled, Incapacitated, or Restrained condition if you succeed on a DC 13 Strength (Athletics) check. If the creature's legs are bound, the creature has the Restrained condition until it escapes. Escaping the Chain requires the creature to make a successful DC 18 Dexterity (Acrobatics) check as an action. Bursting the Chain requires a successful DC 20 Strength (Athletics) check as an action."
  },
  {
   "id": "chain-mail",
   "name": "Chain Mail",
-  "category": "Armor",
+  "category": "Heavy Armor",
   "itemType": "armor",
   "cost": "75 gp",
   "weight": 55,
   "acBase": 16,
-  "acDexBonus": false,
   "strMin": 13,
   "stealthDisadvantage": true
  },
  {
   "id": "chain-shirt",
   "name": "Chain Shirt",
-  "category": "Armor",
+  "category": "Medium Armor",
   "itemType": "armor",
   "cost": "50 gp",
-  "weight": 14,
+  "weight": 20,
   "acBase": 13,
   "acDexBonus": true,
   "acMaxBonus": 2
+ },
+ {
+  "id": "chalcedony",
+  "name": "Chalcedony",
+  "category": "Treasure",
+  "itemType": "treasure",
+  "cost": "50 gp",
+  "description": "A white gemstone."
+ },
+ {
+  "id": "chariot",
+  "name": "Chariot",
+  "category": "Adventuring Gear",
+  "itemType": "gear",
+  "cost": "250 gp",
+  "weight": 100
+ },
+ {
+  "id": "cheese-wedge",
+  "name": "Cheese (wedge)",
+  "category": "Adventuring Gear",
+  "itemType": "gear",
+  "cost": "1 sp"
  },
  {
   "id": "chest",
   "name": "Chest",
   "category": "Adventuring Gear",
   "itemType": "gear",
-  "cost": "50 gp",
-  "weight": 20,
+  "cost": "5 gp",
+  "weight": 25,
   "description": "A Chest holds up to 12 cubic feet of contents."
  },
  {
-  "id": "climbers-kit",
+  "id": "chrysoberyl",
+  "name": "Chrysoberyl",
+  "category": "Treasure",
+  "itemType": "treasure",
+  "cost": "100 gp",
+  "description": "A yellow green to pale green gemstone."
+ },
+ {
+  "id": "chrysoprase",
+  "name": "Chrysoprase",
+  "category": "Treasure",
+  "itemType": "treasure",
+  "cost": "50 gp",
+  "description": "A green gemstone."
+ },
+ {
+  "id": "citrine",
+  "name": "Citrine",
+  "category": "Treasure",
+  "itemType": "treasure",
+  "cost": "50 gp",
+  "description": "A pale yellow brown gemstone."
+ },
+ {
+  "id": "climber-s-kit",
   "name": "Climber's Kit",
   "category": "Adventuring Gear",
-  "itemType": "gear",
+  "itemType": "tool",
   "cost": "25 gp",
-  "weight": 8,
+  "weight": 12,
   "description": "A Climber's Kit includes boot tips, gloves, pitons, and a harness. As a Utilize action, you can use the Climber's Kit to anchor yourself; when you do, you can't fall more than 25 feet from the anchor point, and you can't move more than 25 feet from there without undoing the anchor as a Bonus Action."
  },
  {
@@ -357,15 +643,15 @@
   "category": "Adventuring Gear",
   "itemType": "gear",
   "cost": "15 gp",
-  "weight": 3,
+  "weight": 6,
   "description": "Fine Clothes are made of expensive fabrics and adorned with expertly crafted details. Some events and locations admit only people wearing these clothes."
  },
  {
-  "id": "clothes-travelers",
+  "id": "clothes-traveler-s",
   "name": "Clothes, Traveler's",
   "category": "Adventuring Gear",
   "itemType": "gear",
-  "cost": "5 gp",
+  "cost": "2 gp",
   "weight": 4,
   "description": "Traveler's Clothes are resilient garments designed for travel in various environments."
  },
@@ -382,32 +668,51 @@
   "properties": [
    "Light",
    "Mastery: Slow"
-  ]
+  ],
+  "description": "Light. When you take the Attack action on your turn and. attack with a Light weapon, you can make one extra attack as a Bonus Action later on the same turn. That extra attack must be made with a different Light weapon, and you don't add your ability modifier to the extra attack's damage unless that modifier is negative. For example, you can attack with a Shortsword in one hand and a Dagger in the other using the Attack action and a Bonus Action, but you don't add your Strength or Dexterity modifier to the damage roll of the Bonus Action unless that modifier is negative."
  },
  {
-  "id": "cobblers-tools",
+  "id": "cobbler-s-tools",
   "name": "Cobbler's Tools",
-  "category": "Artisan's Tools",
+  "category": "Adventuring Gear",
   "itemType": "tool",
   "cost": "5 gp",
-  "weight": 5
+  "weight": 5,
+  "description": "Ability: Dexterity\nUtilize: Modify footwear to give Advantage on the wearer's next Dexterity (Acrobatics) check (DC 10)\nCraft: Climber's Kit"
  },
  {
   "id": "component-pouch",
   "name": "Component Pouch",
   "category": "Adventuring Gear",
   "itemType": "gear",
-  "cost": "2 gp",
-  "weight": 1,
+  "cost": "25 gp",
+  "weight": 2,
   "description": "A Component Pouch is watertight and filled with compartments that hold all the free Material components of your spells."
  },
  {
-  "id": "cooks-utensils",
+  "id": "cook-s-utensils",
   "name": "Cook's Utensils",
-  "category": "Artisan's Tools",
-  "itemType": "tool",
+  "category": "Adventuring Gear",
+  "itemType": "gear",
   "cost": "1 gp",
-  "weight": 8
+  "weight": 8,
+  "description": "Ability: Wisdom\nUtilize: Improve food's flavor (DC 10), or detect spoiled or poisoned food (DC 15)\nCraft: Rations"
+ },
+ {
+  "id": "copper-piece-cp",
+  "name": "Copper Piece (CP)",
+  "category": "Treasure",
+  "itemType": "treasure",
+  "weight": 0.02,
+  "description": "Characters often find coins on their adventures and can spend those coins in shops, inns, and other businesses. Coins come in different denominations based on the relative worth of t heir material. The Coin Values table lists coins and how much they're worth relative to the Gold Piece, which is the game's main coin. For example, 100 Copper Pieces are worth 1 Gold Piece.\nA coin weighs about a third of an ounce, so fifty coins weigh a pound.\n\nCoin | Value in GP\nCopper Piece (CP) | 1/100\nSilver Piece (SP) | 1/10\nElectrum Piece (EP) | 1/2\nGold Piece (GP) | 1\nPlatinum Piece (PP) | 10"
+ },
+ {
+  "id": "coral",
+  "name": "Coral",
+  "category": "Treasure",
+  "itemType": "treasure",
+  "cost": "100 gp",
+  "description": "A crimson gemstone."
  },
  {
   "id": "costume",
@@ -428,12 +733,13 @@
   "description": "Using a Crowbar gives you Advantage on Strength checks where the Crowbar's leverage can be applied."
  },
  {
-  "id": "crystal",
-  "name": "Crystal",
-  "category": "Arcane Foci",
+  "id": "crystal-focus",
+  "name": "Crystal (focus)",
+  "category": "Adventuring Gear",
   "itemType": "gear",
   "cost": "10 gp",
-  "weight": 1
+  "weight": 1,
+  "description": "An Arcane Focus takes one of the forms in the Arcane Focuses table and is bejeweled or carved to channel arcane magic. A Sorcerer, Warlock, or Wizard can use such an item as a Spellcasting Focus."
  },
  {
   "id": "dagger",
@@ -449,15 +755,17 @@
    "Finesse",
    "Light",
    "Thrown",
+   "Range 20/60",
    "Mastery: Nick"
-  ]
+  ],
+  "description": "Finesse. When making an attack with a Finesse weapon, use your choice of your Strength or Dexterity modifier for the attack and damage rolls. You must use the same modifier for both rolls.\n\nLight. When you take the Attack action on your turn and. attack with a Light weapon, you can make one extra attack as a Bonus Action later on the same turn. That extra attack must be made with a different Light weapon, and you don't add your ability modifier to the extra attack's damage unless that modifier is negative. For example, you can attack with a Shortsword in one hand and a Dagger in the other using the Attack action and a Bonus Action, but you don't add your Strength or Dexterity modifier to the damage roll of the Bonus Action unless that modifier is negative.\n\nThrown. If a weapon has the Thrown property, you can throw the weapon to make a ranged attack, and you can draw that weapon as part of the attack. If the weapon is a Melee weapon, use the same ability modifier for the attack and damage rolls that you use for a melee attack with that weapon."
  },
  {
   "id": "dart",
   "name": "Dart",
   "category": "Ranged Weapons",
   "itemType": "weapon",
-  "cost": "5 gp",
+  "cost": "5 cp",
   "weight": 0.25,
   "damage": "1d4",
   "damageType": "piercing",
@@ -465,24 +773,34 @@
   "properties": [
    "Finesse",
    "Thrown",
+   "Range 20/60",
    "Mastery: Vex"
-  ]
+  ],
+  "description": "Finesse. When making an attack with a Finesse weapon, use your choice of your Strength or Dexterity modifier for the attack and damage rolls. You must use the same modifier for both rolls.\n\nThrown. If a weapon has the Thrown property, you can throw the weapon to make a ranged attack, and you can draw that weapon as part of the attack. If the weapon is a Melee weapon, use the same ability modifier for the attack and damage rolls that you use for a melee attack with that weapon."
  },
  {
-  "id": "dice",
-  "name": "Dice",
-  "category": "Gaming Sets",
-  "itemType": "tool",
+  "id": "diamond",
+  "name": "Diamond",
+  "category": "Treasure",
+  "itemType": "treasure",
+  "cost": "5000 gp",
+  "description": "A blue white, canary, pink, brown, or blue gemstone."
+ },
+ {
+  "id": "dice-set",
+  "name": "Dice Set",
+  "category": "Adventuring Gear",
+  "itemType": "gear",
   "cost": "1 sp",
-  "weight": 0
+  "description": "Ability: Wisdom\nUtilize: Discern whether someone is cheating (DC 10), or win the game (DC 20)"
  },
  {
-  "id": "diplomat-pack",
+  "id": "diplomat-s-pack",
   "name": "Diplomat's Pack",
   "category": "Adventuring Gear",
   "itemType": "gear",
   "cost": "39 gp",
-  "weight": 20,
+  "weight": 39,
   "description": "A Diplomat's Pack contains the following items: Chest, Fine Clothes, Ink, 5 Ink Pens, Lamp, 2 Map or Scroll Cases, 4 flasks of Oil, 5 sheets of Paper, 5 sheets of Parchment, Perfume, and Tinderbox."
  },
  {
@@ -491,34 +809,37 @@
   "category": "Adventuring Gear",
   "itemType": "tool",
   "cost": "25 gp",
-  "weight": 3
+  "weight": 3,
+  "description": "Ability: Charisma\nUtilize: Apply makeup (DC 10)\nCraft: Costume"
  },
  {
-  "id": "dragonchess",
-  "name": "Dragonchess",
-  "category": "Gaming Sets",
-  "itemType": "tool",
+  "id": "dragonchess-set",
+  "name": "Dragonchess Set",
+  "category": "Adventuring Gear",
+  "itemType": "gear",
   "cost": "1 gp",
-  "weight": 0
+  "description": "Ability: Wisdom\nUtilize: Discern whether someone is cheating (DC 10), or win the game (DC 20)"
  },
  {
   "id": "drum",
   "name": "Drum",
-  "category": "Musical Instruments",
-  "itemType": "tool",
+  "category": "Adventuring Gear",
+  "itemType": "gear",
   "cost": "6 gp",
-  "weight": 3
+  "weight": 3,
+  "description": "Ability: Charisma\nUtilize: Play a known tune (DC 10), or improvise a song (DC 15)"
  },
  {
   "id": "dulcimer",
   "name": "Dulcimer",
-  "category": "Musical Instruments",
-  "itemType": "tool",
+  "category": "Adventuring Gear",
+  "itemType": "gear",
   "cost": "25 gp",
-  "weight": 10
+  "weight": 10,
+  "description": "Ability: Charisma\nUtilize: Play a known tune (DC 10), or improvise a song (DC 15)"
  },
  {
-  "id": "dungeoneer-pack",
+  "id": "dungeoneer-s-pack",
   "name": "Dungeoneer's Pack",
   "category": "Adventuring Gear",
   "itemType": "gear",
@@ -527,34 +848,105 @@
   "description": "A Dungeoneer's Pack contains the following items: Backpack, Caltrops, Crowbar, 2 flasks of Oil, 10 days of Rations, Rope, Tinderbox, 10 Torches, and Waterskin."
  },
  {
-  "id": "emblem",
-  "name": "Emblem",
+  "id": "dynamite-stick",
+  "name": "Dynamite Stick",
+  "category": "Adventuring Gear",
+  "itemType": "gear",
+  "weight": 1,
+  "description": "An an action, you can light a Dynamite Stick and throw it at a point up to 60 feet away, where it explodes. Each creature in a 5-foot-radius Sphere centered on that point makes a DC 12 Dexterity saving throw, taking 3d6 Force damage on a failed save or half as much damage on a successful one.\nIt takes 1 minute to bind two or more Dynamite Sticks together so they explode at the same time. Each stick after the first increases the damage by 1d6 (to a maximum of 10d6) and the effect's radius by 5 feet (to a maximum of 20 feet).\nIt takes 1 minute to rig dynamite with a longer fuse so it explodes after a longer period of time, such as 1 minute or 10 minutes."
+ },
+ {
+  "id": "electrum-piece-ep",
+  "name": "Electrum Piece (EP)",
+  "category": "Treasure",
+  "itemType": "treasure",
+  "weight": 0.02,
+  "description": "Characters often find coins on their adventures and can spend those coins in shops, inns, and other businesses. Coins come in different denominations based on the relative worth of t heir material. The Coin Values table lists coins and how much they're worth relative to the Gold Piece, which is the game's main coin. For example, 100 Copper Pieces are worth 1 Gold Piece.\nA coin weighs about a third of an ounce, so fifty coins weigh a pound.\n\nCoin | Value in GP\nCopper Piece (CP) | 1/100\nSilver Piece (SP) | 1/10\nElectrum Piece (EP) | 1/2\nGold Piece (GP) | 1\nPlatinum Piece (PP) | 10"
+ },
+ {
+  "id": "elephant",
+  "name": "Elephant",
+  "category": "Adventuring Gear",
+  "itemType": "gear",
+  "cost": "200 gp"
+ },
+ {
+  "id": "emblem-holy-symbol",
+  "name": "Emblem (holy symbol)",
   "category": "Adventuring Gear",
   "itemType": "gear",
   "cost": "5 gp",
-  "weight": 0,
-  "description": "A Holy Symbol takes one of the forms in the Holy Symbol table and is bejeweled or painted to channel divine magic. A Cleric or Paladin can use a Holy Symbol as a Spellcasting Focus.\nThe table indicates whether a Holy Symbol needs to be held, worn, or borne on fabric (such as a tabard or banner) or a Shield."
+  "description": "A Holy Symbol takes one of the forms in the Holy Symbol table and is bejeweled or painted to channel divine magic. A Cleric or Paladin can use a Holy Symbol as a Spellcasting Focus.\nFor an Emblem to be an effective Holy Symbol, it must be borne on fabric (such as a tabard or banner) or a Shield."
  },
  {
-  "id": "entertainers-pack",
+  "id": "emerald",
+  "name": "Emerald",
+  "category": "Treasure",
+  "itemType": "treasure",
+  "cost": "1000 gp",
+  "description": "A deep bright green gemstone."
+ },
+ {
+  "id": "energy-cell",
+  "name": "Energy Cell",
+  "category": "Ammunition",
+  "itemType": "gear",
+  "weight": 0.5
+ },
+ {
+  "id": "entertainer-s-pack",
   "name": "Entertainer's Pack",
   "category": "Adventuring Gear",
   "itemType": "gear",
-  "cost": "40 gp"
+  "cost": "40 gp",
+  "weight": 58.5,
+  "description": "An Entertainer's Pack contains the following items: Backpack, Bedroll, Bell, Bullseye Lantern, 3 Costumes, Mirror, 8 flasks of Oil, 9 days of Rations, Tinderbox, and Waterskin."
  },
  {
-  "id": "explorers-pack",
+  "id": "essence-of-ether",
+  "name": "Essence of Ether",
+  "category": "Adventuring Gear",
+  "itemType": "gear",
+  "cost": "300 gp",
+  "description": "A creature subjected to Essence of Ether must succeed on a DC 15 Constitution saving throw or have the Poisoned condition for 8 hours. The creature also has the Unconscious condition while Poisoned in this way. The creature wakes up if it takes damage or if another creature takes an action to shake it awake."
+ },
+ {
+  "id": "explorer-s-pack",
   "name": "Explorer's Pack",
   "category": "Adventuring Gear",
   "itemType": "gear",
   "cost": "10 gp",
   "weight": 55,
-  "description": "An Explorer’s Pack contains the following items: Backpack, Bedroll, 2 flasks of Oil, 10 days of Rations, Rope, Tinderbox, 10 Torches, and Waterskin."
+  "description": "An Explorer's Pack contains the following items: Backpack, Bedroll, 2 flasks of Oil, 10 days of Rations, Rope, Tinderbox, 10 Torches, and Waterskin."
+ },
+ {
+  "id": "eye-agate",
+  "name": "Eye Agate",
+  "category": "Treasure",
+  "itemType": "treasure",
+  "cost": "10 gp",
+  "description": "A circles of gray, white, brown, blue, or green gemstone."
+ },
+ {
+  "id": "feed-per-day",
+  "name": "Feed (per day)",
+  "category": "Adventuring Gear",
+  "itemType": "gear",
+  "cost": "5 cp",
+  "weight": 10
+ },
+ {
+  "id": "fire-opal",
+  "name": "Fire Opal",
+  "category": "Treasure",
+  "itemType": "treasure",
+  "cost": "1000 gp",
+  "description": "A fiery red gemstone."
  },
  {
   "id": "flail",
   "name": "Flail",
-  "category": "Martial Melee Weapons",
+  "category": "Melee Weapons",
   "itemType": "weapon",
   "cost": "10 gp",
   "weight": 2,
@@ -577,23 +969,49 @@
  {
   "id": "flute",
   "name": "Flute",
-  "category": "Musical Instruments",
-  "itemType": "tool",
+  "category": "Adventuring Gear",
+  "itemType": "gear",
   "cost": "2 gp",
-  "weight": 1
+  "weight": 1,
+  "description": "Ability: Charisma\nUtilize: Play a known tune (DC 10), or improvise a song (DC 15)"
  },
  {
   "id": "forgery-kit",
   "name": "Forgery Kit",
-  "category": "Other Tools",
+  "category": "Adventuring Gear",
   "itemType": "tool",
   "cost": "15 gp",
-  "weight": 5
+  "weight": 5,
+  "description": "Ability: Dexterity\nUtilize: Mimic 10 or fewer words of someone else's handwriting (DC 15), or duplicate a wax seal (DC 20)"
+ },
+ {
+  "id": "fragmentation-grenade",
+  "name": "Fragmentation Grenade",
+  "category": "Adventuring Gear",
+  "itemType": "gear",
+  "weight": 1,
+  "description": "As an action, you can either throw a grenade at a point up to 60 feet away or use a Grenade Launcher to propel the grenade to a point up to 1,000 feet away. The grenade explodes at that point, creating a particular effect in a 20-foot-radius Sphere.\nEach creature in the Sphere makes a DC 15 Dexterity saving throw, taking 17 (5d6) Piercing damage on a failed save or half as much damage on a successful one."
+ },
+ {
+  "id": "galley",
+  "name": "Galley",
+  "category": "Adventuring Gear",
+  "itemType": "gear",
+  "cost": "30000 gp",
+  "description": "Speed: 4 mph\nCrew: 80\nPassengers: -\nCargo (Tons): 150\nAC: 15\nHP: 500\nDamage Threshold: 20"
+ },
+ {
+  "id": "garnet",
+  "name": "Garnet",
+  "category": "Treasure",
+  "itemType": "treasure",
+  "cost": "100 gp",
+  "description": "A red, brown green, or violet gemstone."
  },
  {
   "id": "glaive",
   "name": "Glaive",
-  "category": "Martial Melee Weapons",
+  "category": "Melee Weapons",
   "itemType": "weapon",
   "cost": "20 gp",
   "weight": 6,
@@ -601,19 +1019,30 @@
   "damageType": "slashing",
   "range": "melee",
   "properties": [
+   "Martial",
    "Heavy",
    "Reach",
    "Two-Handed",
    "Mastery: Graze"
-  ]
+  ],
+  "description": "Heavy. You have Disadvantage on attack rolls with a Heavy weapon if it's a Melee weapon and your Strength score isn't at least 13 or if it's a Ranged weapon and  your Dexterity score isn't at least 13.\n\nReach. A Reach weapon adds 5 feet to your reach when you attack with it, as well as when determining your reach for Opportunity Attacks with it.\n\nTwo-Handed. A Two-Handed weapon requires two hands when you attack with it."
  },
  {
-  "id": "glassblowers-tools",
+  "id": "glassblower-s-tools",
   "name": "Glassblower's Tools",
-  "category": "Artisan's Tools",
+  "category": "Adventuring Gear",
   "itemType": "tool",
   "cost": "30 gp",
-  "weight": 5
+  "weight": 5,
+  "description": "Ability: Intelligence\nUtilize: Discern what a glass object held in the past 24 hours (DC 15)\nCraft: Glass Bottle, Magnifying Glass, Spyglass, Vial"
+ },
+ {
+  "id": "gold-piece-gp",
+  "name": "Gold Piece (GP)",
+  "category": "Treasure",
+  "itemType": "treasure",
+  "weight": 0.02,
+  "description": "Characters often find coins on their adventures and can spend those coins in shops, inns, and other businesses. Coins come in different denominations based on the relative worth of t heir material. The Coin Values table lists coins and how much they're worth relative to the Gold Piece, which is the game's main coin. For example, 100 Copper Pieces are worth 1 Gold Piece.\nA coin weighs about a third of an ounce, so fifty coins weigh a pound.\n\nCoin | Value in GP\nCopper Piece (CP) | 1/100\nSilver Piece (SP) | 1/10\nElectrum Piece (EP) | 1/2\nGold Piece (GP) | 1\nPlatinum Piece (PP) | 10"
  },
  {
   "id": "grappling-hook",
@@ -627,7 +1056,7 @@
  {
   "id": "greataxe",
   "name": "Greataxe",
-  "category": "Martial Melee Weapons",
+  "category": "Melee Weapons",
   "itemType": "weapon",
   "cost": "30 gp",
   "weight": 7,
@@ -635,10 +1064,12 @@
   "damageType": "slashing",
   "range": "melee",
   "properties": [
+   "Martial",
    "Heavy",
    "Two-Handed",
    "Mastery: Cleave"
-  ]
+  ],
+  "description": "Heavy. You have Disadvantage on attack rolls with a Heavy weapon if it's a Melee weapon and your Strength score isn't at least 13 or if it's a Ranged weapon and  your Dexterity score isn't at least 13.\n\nTwo-Handed. A Two-Handed weapon requires two hands when you attack with it."
  },
  {
   "id": "greatclub",
@@ -653,12 +1084,13 @@
   "properties": [
    "Two-Handed",
    "Mastery: Push"
-  ]
+  ],
+  "description": "Two-Handed. A Two-Handed weapon requires two hands when you attack with it."
  },
  {
   "id": "greatsword",
   "name": "Greatsword",
-  "category": "Martial Melee Weapons",
+  "category": "Melee Weapons",
   "itemType": "weapon",
   "cost": "50 gp",
   "weight": 6,
@@ -666,15 +1098,43 @@
   "damageType": "slashing",
   "range": "melee",
   "properties": [
+   "Martial",
    "Heavy",
    "Two-Handed",
    "Mastery: Graze"
-  ]
+  ],
+  "description": "Heavy. You have Disadvantage on attack rolls with a Heavy weapon if it's a Melee weapon and your Strength score isn't at least 13 or if it's a Ranged weapon and  your Dexterity score isn't at least 13.\n\nTwo-Handed. A Two-Handed weapon requires two hands when you attack with it."
+ },
+ {
+  "id": "grenade-launcher",
+  "name": "Grenade Launcher",
+  "category": "Adventuring Gear",
+  "itemType": "gear",
+  "weight": 7,
+  "description": "As an action, you can either throw a grenade at a point up to 60 feet away or use a Grenade Launcher to propel the grenade to a point up to 1,000 feet away. The grenade explodes at that point, creating a particular effect in a 20-foot-radius Sphere."
+ },
+ {
+  "id": "gunpowder-keg",
+  "name": "Gunpowder (keg)",
+  "category": "Adventuring Gear",
+  "itemType": "gear",
+  "cost": "250 gp",
+  "weight": 20,
+  "description": "Setting fire to a keg full of Gunpowder causes it to explode. When a keg explodes, each creature in a 10-foot-radius Sphere centered on the keg makes a DC 12 Dexterity saving throw, taking 24 (7d6) Fire damage on a failed save or half as much damage on a successful one."
+ },
+ {
+  "id": "gunpowder-powder-horn",
+  "name": "Gunpowder (powder horn)",
+  "category": "Adventuring Gear",
+  "itemType": "gear",
+  "cost": "35 gp",
+  "weight": 2,
+  "description": "Setting fire to a powder horn full of Gunpowder causes it to explode. When a powder horn explodes, each creature in a 10-foot-radius Sphere centered on the powder horn makes a DC 12 Dexterity saving throw, taking 10 (3d6) Fire damage on a failed save or half as much damage on a successful one."
  },
  {
   "id": "halberd",
   "name": "Halberd",
-  "category": "Martial Melee Weapons",
+  "category": "Melee Weapons",
   "itemType": "weapon",
   "cost": "20 gp",
   "weight": 6,
@@ -682,16 +1142,18 @@
   "damageType": "slashing",
   "range": "melee",
   "properties": [
+   "Martial",
    "Heavy",
    "Reach",
    "Two-Handed",
    "Mastery: Cleave"
-  ]
+  ],
+  "description": "Heavy. You have Disadvantage on attack rolls with a Heavy weapon if it's a Melee weapon and your Strength score isn't at least 13 or if it's a Ranged weapon and  your Dexterity score isn't at least 13.\n\nReach. A Reach weapon adds 5 feet to your reach when you attack with it, as well as when determining your reach for Opportunity Attacks with it.\n\nTwo-Handed. A Two-Handed weapon requires two hands when you attack with it."
  },
  {
   "id": "half-plate-armor",
-  "name": "Half-Plate Armor",
-  "category": "Armor",
+  "name": "Half Plate Armor",
+  "category": "Medium Armor",
   "itemType": "armor",
   "cost": "750 gp",
   "weight": 40,
@@ -703,19 +1165,22 @@
  {
   "id": "hand-crossbow",
   "name": "Hand Crossbow",
-  "category": "Martial Ranged Weapons",
+  "category": "Ranged Weapons",
   "itemType": "weapon",
-  "cost": "25 gp",
-  "weight": 2,
+  "cost": "75 gp",
+  "weight": 3,
   "damage": "1d6",
   "damageType": "piercing",
   "range": "ranged",
   "properties": [
+   "Martial",
    "Ammunition",
    "Light",
    "Loading",
+   "Range 30/120",
    "Mastery: Vex"
-  ]
+  ],
+  "description": "Ammunition. You can use a weapon that has the Ammunition property to make a ranged attack only if you have ammunition to fire from it. The type of ammunition required is specified with the weapon's range. Each attack expends one piece of ammunition. Drawing the ammunition is part of the attack (you need a free hand to load a one-handed weapon). After a fight, you can spend 1 minute to recover half the ammunition (round down) you used in the fight; the rest is lost.\n\nLight. When you take the Attack action on your turn and. attack with a Light weapon, you can make one extra attack as a Bonus Action later on the same turn. That extra attack must be made with a different Light weapon, and you don't add your ability modifier to the extra attack's damage unless that modifier is negative. For example, you can attack with a Shortsword in one hand and a Dagger in the other using the Attack action and a Bonus Action, but you don't add your Strength or Dexterity modifier to the damage roll of the Bonus Action unless that modifier is negative.\n\nLoading. You can fire only one piece of ammunition from a Loading weapon when you use an action, a Bonus Action, or a Reaction to fire it, regardless of the number of attacks you can normally make."
  },
  {
   "id": "handaxe",
@@ -730,14 +1195,16 @@
   "properties": [
    "Light",
    "Thrown",
+   "Range 20/60",
    "Mastery: Vex"
-  ]
+  ],
+  "description": "Light. When you take the Attack action on your turn and. attack with a Light weapon, you can make one extra attack as a Bonus Action later on the same turn. That extra attack must be made with a different Light weapon, and you don't add your ability modifier to the extra attack's damage unless that modifier is negative. For example, you can attack with a Shortsword in one hand and a Dagger in the other using the Attack action and a Bonus Action, but you don't add your Strength or Dexterity modifier to the damage roll of the Bonus Action unless that modifier is negative.\n\nThrown. If a weapon has the Thrown property, you can throw the weapon to make a ranged attack, and you can draw that weapon as part of the attack. If the weapon is a Melee weapon, use the same ability modifier for the attack and damage rolls that you use for a melee attack with that weapon."
  },
  {
-  "id": "healers-kit",
+  "id": "healer-s-kit",
   "name": "Healer's Kit",
   "category": "Adventuring Gear",
-  "itemType": "gear",
+  "itemType": "tool",
   "cost": "5 gp",
   "weight": 3,
   "description": "A Healer's Kit has ten uses. As a Utilize action, you can expend one of its uses to stabilize an Unconscious creature that has 0 Hit Points without needing to make a Wisdom (Medicine) check."
@@ -745,7 +1212,7 @@
  {
   "id": "heavy-crossbow",
   "name": "Heavy Crossbow",
-  "category": "Martial Ranged Weapons",
+  "category": "Ranged Weapons",
   "itemType": "weapon",
   "cost": "50 gp",
   "weight": 18,
@@ -753,25 +1220,37 @@
   "damageType": "piercing",
   "range": "ranged",
   "properties": [
+   "Martial",
    "Ammunition",
    "Heavy",
    "Loading",
    "Two-Handed",
+   "Range 100/400",
    "Mastery: Push"
-  ]
+  ],
+  "description": "Ammunition. You can use a weapon that has the Ammunition property to make a ranged attack only if you have ammunition to fire from it. The type of ammunition required is specified with the weapon's range. Each attack expends one piece of ammunition. Drawing the ammunition is part of the attack (you need a free hand to load a one-handed weapon). After a fight, you can spend 1 minute to recover half the ammunition (round down) you used in the fight; the rest is lost.\n\nHeavy. You have Disadvantage on attack rolls with a Heavy weapon if it's a Melee weapon and your Strength score isn't at least 13 or if it's a Ranged weapon and  your Dexterity score isn't at least 13.\n\nLoading. You can fire only one piece of ammunition from a Loading weapon when you use an action, a Bonus Action, or a Reaction to fire it, regardless of the number of attacks you can normally make.\n\nTwo-Handed. A Two-Handed weapon requires two hands when you attack with it."
+ },
+ {
+  "id": "hematite",
+  "name": "Hematite",
+  "category": "Treasure",
+  "itemType": "treasure",
+  "cost": "10 gp",
+  "description": "A gray black gemstone."
  },
  {
   "id": "herbalism-kit",
   "name": "Herbalism Kit",
-  "category": "Other Tools",
+  "category": "Adventuring Gear",
   "itemType": "tool",
   "cost": "5 gp",
-  "weight": 3
+  "weight": 3,
+  "description": "Ability: Intelligence\nUtilize: Identify a plant (DC 10)\nCraft: Antitoxin, Candle, Healer's Kit, Potion of Healing"
  },
  {
   "id": "hide-armor",
   "name": "Hide Armor",
-  "category": "Armor",
+  "category": "Medium Armor",
   "itemType": "armor",
   "cost": "10 gp",
   "weight": 12,
@@ -791,10 +1270,44 @@
  {
   "id": "horn",
   "name": "Horn",
-  "category": "Musical Instruments",
-  "itemType": "tool",
+  "category": "Adventuring Gear",
+  "itemType": "gear",
   "cost": "3 gp",
-  "weight": 2
+  "weight": 2,
+  "description": "Ability: Charisma\nUtilize: Play a known tune (DC 10), or improvise a song (DC 15)"
+ },
+ {
+  "id": "horse-draft",
+  "name": "Horse, Draft",
+  "category": "Adventuring Gear",
+  "itemType": "gear",
+  "cost": "50 gp"
+ },
+ {
+  "id": "horse-riding",
+  "name": "Horse, Riding",
+  "category": "Adventuring Gear",
+  "itemType": "gear",
+  "cost": "75 gp"
+ },
+ {
+  "id": "hunting-rifle",
+  "name": "Hunting Rifle",
+  "category": "Ranged Weapons",
+  "itemType": "weapon",
+  "weight": 8,
+  "damage": "2d10",
+  "damageType": "piercing",
+  "range": "ranged",
+  "properties": [
+   "Martial",
+   "Ammunition",
+   "Loading",
+   "Two-Handed",
+   "Range 80/240",
+   "Mastery: Slow"
+  ],
+  "description": "Ammunition. You can use a weapon that has the Ammunition property to make a ranged attack only if you have ammunition to fire from it. The type of ammunition required is specified with the weapon's range. Each attack expends one piece of ammunition. Drawing the ammunition is part of the attack (you need a free hand to load a one-handed weapon). After a fight, you can spend 1 minute to recover half the ammunition (round down) you used in the fight; the rest is lost.\n\nLoading. You can fire only one piece of ammunition from a Loading weapon when you use an action, a Bonus Action, or a Reaction to fire it, regardless of the number of attacks you can normally make.\n\nTwo-Handed. A Two-Handed weapon requires two hands when you attack with it."
  },
  {
   "id": "hunting-trap",
@@ -811,7 +1324,6 @@
   "category": "Adventuring Gear",
   "itemType": "gear",
   "cost": "10 gp",
-  "weight": 0,
   "description": "Ink comes in a 1-ounce bottle, which provides enough ink to write about 500 pages."
  },
  {
@@ -820,31 +1332,65 @@
   "category": "Adventuring Gear",
   "itemType": "gear",
   "cost": "2 cp",
-  "weight": 0,
   "description": "Using Ink, an Ink Pen is used to write or draw."
+ },
+ {
+  "id": "jacinth",
+  "name": "Jacinth",
+  "category": "Treasure",
+  "itemType": "treasure",
+  "cost": "5000 gp",
+  "description": "A fiery orange gemstone."
+ },
+ {
+  "id": "jade",
+  "name": "Jade",
+  "category": "Treasure",
+  "itemType": "treasure",
+  "cost": "100 gp",
+  "description": "A light green, deep green, or white gemstone."
+ },
+ {
+  "id": "jasper",
+  "name": "Jasper",
+  "category": "Treasure",
+  "itemType": "treasure",
+  "cost": "50 gp",
+  "description": "A blue, black, or brown gemstone."
  },
  {
   "id": "javelin",
   "name": "Javelin",
   "category": "Melee Weapons",
   "itemType": "weapon",
-  "cost": "5 gp",
+  "cost": "5 sp",
   "weight": 2,
   "damage": "1d6",
   "damageType": "piercing",
   "range": "melee",
   "properties": [
    "Thrown",
+   "Range 30/120",
    "Mastery: Slow"
-  ]
+  ],
+  "description": "Thrown. If a weapon has the Thrown property, you can throw the weapon to make a ranged attack, and you can draw that weapon as part of the attack. If the weapon is a Melee weapon, use the same ability modifier for the attack and damage rolls that you use for a melee attack with that weapon."
  },
  {
-  "id": "jewelers-tools",
+  "id": "jet",
+  "name": "Jet",
+  "category": "Treasure",
+  "itemType": "treasure",
+  "cost": "100 gp",
+  "description": "A deep black gemstone."
+ },
+ {
+  "id": "jeweler-s-tools",
   "name": "Jeweler's Tools",
-  "category": "Artisan's Tools",
+  "category": "Adventuring Gear",
   "itemType": "tool",
   "cost": "25 gp",
-  "weight": 2
+  "weight": 2,
+  "description": "Ability: Intelligence\nUtilize: Discern a gem's value (DC 15)\nCraft: Arcane Focus, Holy Symbol"
  },
  {
   "id": "jug",
@@ -856,13 +1402,21 @@
   "description": "A Jug holds up to 1 gallon."
  },
  {
+  "id": "keelboat",
+  "name": "Keelboat",
+  "category": "Adventuring Gear",
+  "itemType": "gear",
+  "cost": "3000 gp",
+  "description": "Speed: 1 mph\nCrew: 1\nPassengers: 6\nCargo (Tons): 1/2\nAC: 15\nHP: 100\nDamage Threshold: 10"
+ },
+ {
   "id": "ladder",
   "name": "Ladder",
   "category": "Adventuring Gear",
   "itemType": "gear",
   "cost": "1 sp",
   "weight": 25,
-  "description": "A Ladder is 10 feet tall. You must climb to move up or down it. Lamp (5 SP)"
+  "description": "A Ladder is 10 feet tall. You must climb to move up or down it."
  },
  {
   "id": "lamp",
@@ -871,12 +1425,12 @@
   "itemType": "gear",
   "cost": "5 sp",
   "weight": 1,
-  "description": "A Lamp burns Oil as fuel to cast Bright Light in a 15- foot radius and Dim Light for an additional 30 feet"
+  "description": "A Lamp burns Oil as fuel to cast Bright Light in a 15-foot radius and Dim Light for an additional 30 feet."
  },
  {
   "id": "lance",
   "name": "Lance",
-  "category": "Martial Melee Weapons",
+  "category": "Melee Weapons",
   "itemType": "weapon",
   "cost": "10 gp",
   "weight": 6,
@@ -884,11 +1438,13 @@
   "damageType": "piercing",
   "range": "melee",
   "properties": [
+   "Martial",
    "Heavy",
    "Reach",
    "Two-Handed",
    "Mastery: Topple"
-  ]
+  ],
+  "description": "A Lance requires two hands to wield when you aren't mounted.\n\nHeavy. You have Disadvantage on attack rolls with a Heavy weapon if it's a Melee weapon and your Strength score isn't at least 13 or if it's a Ranged weapon and  your Dexterity score isn't at least 13.\n\nReach. A Reach weapon adds 5 feet to your reach when you attack with it, as well as when determining your reach for Opportunity Attacks with it.\n\nTwo-Handed. A Two-Handed weapon requires two hands when you attack with it."
  },
  {
   "id": "lantern-bullseye",
@@ -909,9 +1465,54 @@
   "description": "A Hooded Lantern burns Oil as fuel to cast Bright Light in a 30-foot radius and Dim Light for an additional 30 feet. As a Bonus Action, you can lower the hood, reducing the light to Dim Light in a 5-foot radius, or raise it again."
  },
  {
+  "id": "lapis-lazuli",
+  "name": "Lapis Lazuli",
+  "category": "Treasure",
+  "itemType": "treasure",
+  "cost": "10 gp",
+  "description": "A light and dark blue with yellow flecks gemstone."
+ },
+ {
+  "id": "laser-pistol",
+  "name": "Laser Pistol",
+  "category": "Ranged Weapons",
+  "itemType": "weapon",
+  "weight": 2,
+  "damage": "3d6",
+  "damageType": "radiant",
+  "range": "ranged",
+  "properties": [
+   "Martial",
+   "Ammunition",
+   "Loading",
+   "Range 40/120",
+   "Mastery: Vex"
+  ],
+  "description": "Ammunition. You can use a weapon that has the Ammunition property to make a ranged attack only if you have ammunition to fire from it. The type of ammunition required is specified with the weapon's range. Each attack expends one piece of ammunition. Drawing the ammunition is part of the attack (you need a free hand to load a one-handed weapon). After a fight, you can spend 1 minute to recover half the ammunition (round down) you used in the fight; the rest is lost.\n\nLoading. You can fire only one piece of ammunition from a Loading weapon when you use an action, a Bonus Action, or a Reaction to fire it, regardless of the number of attacks you can normally make."
+ },
+ {
+  "id": "laser-rifle",
+  "name": "Laser Rifle",
+  "category": "Ranged Weapons",
+  "itemType": "weapon",
+  "weight": 7,
+  "damage": "3d8",
+  "damageType": "radiant",
+  "range": "ranged",
+  "properties": [
+   "Martial",
+   "Ammunition",
+   "Loading",
+   "Two-Handed",
+   "Range 100/300",
+   "Mastery: Slow"
+  ],
+  "description": "Ammunition. You can use a weapon that has the Ammunition property to make a ranged attack only if you have ammunition to fire from it. The type of ammunition required is specified with the weapon's range. Each attack expends one piece of ammunition. Drawing the ammunition is part of the attack (you need a free hand to load a one-handed weapon). After a fight, you can spend 1 minute to recover half the ammunition (round down) you used in the fight; the rest is lost.\n\nLoading. You can fire only one piece of ammunition from a Loading weapon when you use an action, a Bonus Action, or a Reaction to fire it, regardless of the number of attacks you can normally make.\n\nTwo-Handed. A Two-Handed weapon requires two hands when you attack with it."
+ },
+ {
   "id": "leather-armor",
   "name": "Leather Armor",
-  "category": "Armor",
+  "category": "Light Armor",
   "itemType": "armor",
   "cost": "10 gp",
   "weight": 10,
@@ -919,12 +1520,13 @@
   "acDexBonus": true
  },
  {
-  "id": "leatherworkers-tools",
+  "id": "leatherworker-s-tools",
   "name": "Leatherworker's Tools",
-  "category": "Artisan's Tools",
+  "category": "Adventuring Gear",
   "itemType": "tool",
   "cost": "5 gp",
-  "weight": 5
+  "weight": 5,
+  "description": "Ability: Dexterity\nUtilize: Add a design to a leather item (DC 10)\nCraft: Sling, Whip, Hide Armor, Leather Armor, Studded Leather Armor, Backpack, Crossbow Bolt Case, Map or Scroll Case, Parchment, Pouch, Quiver, Waterskin"
  },
  {
   "id": "light-crossbow",
@@ -940,8 +1542,10 @@
    "Ammunition",
    "Loading",
    "Two-Handed",
+   "Range 80/320",
    "Mastery: Slow"
-  ]
+  ],
+  "description": "Ammunition. You can use a weapon that has the Ammunition property to make a ranged attack only if you have ammunition to fire from it. The type of ammunition required is specified with the weapon's range. Each attack expends one piece of ammunition. Drawing the ammunition is part of the attack (you need a free hand to load a one-handed weapon). After a fight, you can spend 1 minute to recover half the ammunition (round down) you used in the fight; the rest is lost.\n\nLoading. You can fire only one piece of ammunition from a Loading weapon when you use an action, a Bonus Action, or a Reaction to fire it, regardless of the number of attacks you can normally make.\n\nTwo-Handed. A Two-Handed weapon requires two hands when you attack with it."
  },
  {
   "id": "light-hammer",
@@ -956,8 +1560,10 @@
   "properties": [
    "Light",
    "Thrown",
+   "Range 20/60",
    "Mastery: Nick"
-  ]
+  ],
+  "description": "Light. When you take the Attack action on your turn and. attack with a Light weapon, you can make one extra attack as a Bonus Action later on the same turn. That extra attack must be made with a different Light weapon, and you don't add your ability modifier to the extra attack's damage unless that modifier is negative. For example, you can attack with a Shortsword in one hand and a Dagger in the other using the Attack action and a Bonus Action, but you don't add your Strength or Dexterity modifier to the damage roll of the Bonus Action unless that modifier is negative.\n\nThrown. If a weapon has the Thrown property, you can throw the weapon to make a ranged attack, and you can draw that weapon as part of the attack. If the weapon is a Melee weapon, use the same ability modifier for the attack and damage rolls that you use for a melee attack with that weapon."
  },
  {
   "id": "lock",
@@ -969,26 +1575,45 @@
   "description": "A Lock comes with a key. Without the key, a creature can use Thieves' Tools to pick this Lock with a successful DC 15 Dexterity (Sleight of Hand) check."
  },
  {
+  "id": "lolth-s-sting",
+  "name": "Lolth's Sting",
+  "category": "Adventuring Gear",
+  "itemType": "gear",
+  "cost": "200 gp",
+  "description": "A creature subjected to Lolth's Sting must succeed on a DC 13 Constitution saving throw or have the Poisoned condition for 1 hour. If the creature fails the save by 5 or more, the creature also has the Unconscious condition while Poisoned in this way. The creature wakes up if it takes damage or if another creature takes an action to shake it awake."
+ },
+ {
   "id": "longbow",
   "name": "Longbow",
-  "category": "Martial Ranged Weapons",
+  "category": "Ranged Weapons",
   "itemType": "weapon",
-  "cost": "5 gp",
+  "cost": "50 gp",
   "weight": 2,
   "damage": "1d8",
   "damageType": "piercing",
   "range": "ranged",
   "properties": [
+   "Martial",
    "Ammunition",
    "Heavy",
    "Two-Handed",
+   "Range 150/600",
    "Mastery: Slow"
-  ]
+  ],
+  "description": "Ammunition. You can use a weapon that has the Ammunition property to make a ranged attack only if you have ammunition to fire from it. The type of ammunition required is specified with the weapon's range. Each attack expends one piece of ammunition. Drawing the ammunition is part of the attack (you need a free hand to load a one-handed weapon). After a fight, you can spend 1 minute to recover half the ammunition (round down) you used in the fight; the rest is lost.\n\nHeavy. You have Disadvantage on attack rolls with a Heavy weapon if it's a Melee weapon and your Strength score isn't at least 13 or if it's a Ranged weapon and  your Dexterity score isn't at least 13.\n\nTwo-Handed. A Two-Handed weapon requires two hands when you attack with it."
+ },
+ {
+  "id": "longship",
+  "name": "Longship",
+  "category": "Adventuring Gear",
+  "itemType": "gear",
+  "cost": "10000 gp",
+  "description": "Speed: 3 mph\nCrew: 40\nPassengers: 150\nCargo (Tons): 10\nAC: 15\nHP: 300\nDamage Threshold: 15"
  },
  {
   "id": "longsword",
   "name": "Longsword",
-  "category": "Martial Melee Weapons",
+  "category": "Melee Weapons",
   "itemType": "weapon",
   "cost": "15 gp",
   "weight": 3,
@@ -996,25 +1621,29 @@
   "damageType": "slashing",
   "range": "melee",
   "properties": [
+   "Martial",
    "Versatile (1d10)",
    "Mastery: Sap"
-  ]
+  ],
+  "description": "Versatile. A Versatile weapon can be used with one or two hands. A damage value in parentheses appears with the property. The weapon deals that damage when used with two hands to make a melee attack."
  },
  {
   "id": "lute",
   "name": "Lute",
-  "category": "Musical Instruments",
-  "itemType": "tool",
+  "category": "Adventuring Gear",
+  "itemType": "gear",
   "cost": "35 gp",
-  "weight": 2
+  "weight": 2,
+  "description": "Ability: Charisma\nUtilize: Play a known tune (DC 10), or improvise a song (DC 15)"
  },
  {
   "id": "lyre",
   "name": "Lyre",
-  "category": "Musical Instruments",
-  "itemType": "tool",
+  "category": "Adventuring Gear",
+  "itemType": "gear",
   "cost": "30 gp",
-  "weight": 2
+  "weight": 2,
+  "description": "Ability: Charisma\nUtilize: Play a known tune (DC 10), or improvise a song (DC 15)"
  },
  {
   "id": "mace",
@@ -1022,7 +1651,7 @@
   "category": "Melee Weapons",
   "itemType": "weapon",
   "cost": "5 gp",
-  "weight": 2,
+  "weight": 4,
   "damage": "1d6",
   "damageType": "bludgeoning",
   "range": "melee",
@@ -1036,8 +1665,23 @@
   "category": "Adventuring Gear",
   "itemType": "gear",
   "cost": "100 gp",
-  "weight": 0,
   "description": "A Magnifying Glass grants Advantage on any ability check made to appraise or inspect a highly detailed item. Lighting a fire with a Magnifying Glass requires light as bright as sunlight to focus, tinder to ignite, and about 5 minutes for the fire to ignite."
+ },
+ {
+  "id": "malachite",
+  "name": "Malachite",
+  "category": "Treasure",
+  "itemType": "treasure",
+  "cost": "10 gp",
+  "description": "A striated light and dark green gemstone."
+ },
+ {
+  "id": "malice",
+  "name": "Malice",
+  "category": "Adventuring Gear",
+  "itemType": "gear",
+  "cost": "250 gp",
+  "description": "A creature subjected to Malice must succeed on a DC 15 Constitution saving throw or have the Poisoned condition for 1 hour. The creature also has the Blinded condition while Poisoned in this way."
  },
  {
   "id": "manacles",
@@ -1054,21 +1698,28 @@
   "category": "Adventuring Gear",
   "itemType": "gear",
   "cost": "1 gp",
-  "weight": 0,
   "description": "If you consult an accurate Map, you gain a +5 bonus to Wisdom (Survival) checks you make to find your way in the place represented on it."
  },
  {
-  "id": "masons-tools",
+  "id": "mason-s-tools",
   "name": "Mason's Tools",
-  "category": "Artisan's Tools",
+  "category": "Adventuring Gear",
   "itemType": "tool",
   "cost": "10 gp",
-  "weight": 8
+  "weight": 8,
+  "description": "Ability: Strength\nUtilize: Chisel a symbol or hole in stone (DC 10)\nCraft: Block and Tackle"
+ },
+ {
+  "id": "mastiff",
+  "name": "Mastiff",
+  "category": "Adventuring Gear",
+  "itemType": "gear",
+  "cost": "25 gp"
  },
  {
   "id": "maul",
   "name": "Maul",
-  "category": "Martial Melee Weapons",
+  "category": "Melee Weapons",
   "itemType": "weapon",
   "cost": "10 gp",
   "weight": 10,
@@ -1076,10 +1727,20 @@
   "damageType": "bludgeoning",
   "range": "melee",
   "properties": [
+   "Martial",
    "Heavy",
    "Two-Handed",
    "Mastery: Topple"
-  ]
+  ],
+  "description": "Heavy. You have Disadvantage on attack rolls with a Heavy weapon if it's a Melee weapon and your Strength score isn't at least 13 or if it's a Ranged weapon and  your Dexterity score isn't at least 13.\n\nTwo-Handed. A Two-Handed weapon requires two hands when you attack with it."
+ },
+ {
+  "id": "midnight-tears",
+  "name": "Midnight Tears",
+  "category": "Adventuring Gear",
+  "itemType": "gear",
+  "cost": "1500 gp",
+  "description": "A creature that ingests Midnight Tears suffers no effect until the stroke of midnight. Any effect that ends the Poisoned condition neutralizes this poison. If the poison hasn't been neutralized before midnight, the creature makes a DC 17 Constitution saving throw, taking 31 (9d6) Poison damage on a failed save or half as much damage on a successful one."
  },
  {
   "id": "mirror",
@@ -1091,9 +1752,17 @@
   "description": "A handheld steel Mirror is useful for personal cosmetics but also for peeking around corners and reflecting light as a signal."
  },
  {
+  "id": "moonstone",
+  "name": "Moonstone",
+  "category": "Treasure",
+  "itemType": "treasure",
+  "cost": "50 gp",
+  "description": "A white with pale-blue glow gemstone."
+ },
+ {
   "id": "morningstar",
   "name": "Morningstar",
-  "category": "Martial Melee Weapons",
+  "category": "Melee Weapons",
   "itemType": "weapon",
   "cost": "15 gp",
   "weight": 4,
@@ -1105,9 +1774,24 @@
   ]
  },
  {
+  "id": "moss-agate",
+  "name": "Moss Agate",
+  "category": "Treasure",
+  "itemType": "treasure",
+  "cost": "10 gp",
+  "description": "A pink or yellow white with mossy gray or green markings gemstone."
+ },
+ {
+  "id": "mule",
+  "name": "Mule",
+  "category": "Adventuring Gear",
+  "itemType": "gear",
+  "cost": "8 gp"
+ },
+ {
   "id": "musket",
   "name": "Musket",
-  "category": "Martial Ranged Weapons",
+  "category": "Ranged Weapons",
   "itemType": "weapon",
   "cost": "500 gp",
   "weight": 10,
@@ -1115,27 +1799,32 @@
   "damageType": "piercing",
   "range": "ranged",
   "properties": [
+   "Martial",
    "Ammunition",
    "Loading",
    "Two-Handed",
+   "Range 40/120",
    "Mastery: Slow"
-  ]
+  ],
+  "description": "Ammunition. You can use a weapon that has the Ammunition property to make a ranged attack only if you have ammunition to fire from it. The type of ammunition required is specified with the weapon's range. Each attack expends one piece of ammunition. Drawing the ammunition is part of the attack (you need a free hand to load a one-handed weapon). After a fight, you can spend 1 minute to recover half the ammunition (round down) you used in the fight; the rest is lost.\n\nLoading. You can fire only one piece of ammunition from a Loading weapon when you use an action, a Bonus Action, or a Reaction to fire it, regardless of the number of attacks you can normally make.\n\nTwo-Handed. A Two-Handed weapon requires two hands when you attack with it."
  },
  {
-  "id": "navigators-tools",
+  "id": "navigator-s-tools",
   "name": "Navigator's Tools",
-  "category": "Other Tools",
+  "category": "Adventuring Gear",
   "itemType": "tool",
   "cost": "25 gp",
-  "weight": 2
+  "weight": 2,
+  "description": "Ability: Wisdom\nUtilize: Plot a course (DC 10), or determine position by stargazing (DC 15)"
  },
  {
-  "id": "needles",
-  "name": "Needles",
+  "id": "needles-50",
+  "name": "Needles (50)",
   "category": "Ammunition",
   "itemType": "gear",
   "cost": "1 gp",
-  "weight": 1
+  "weight": 1,
+  "description": "Blowgun needles are used with a weapon that has the ammunition property to make a ranged attack. Each time you attack with the weapon, you expend one piece of ammunition. Drawing the ammunition from a quiver, case, or other container is part of the attack (you need a free hand to load a one-handed weapon). At the end of the battle, you can recover half your expended ammunition by taking a minute to search the battlefield.\nNeedles are typically stored in a Pouch (bought separately)."
  },
  {
   "id": "net",
@@ -1147,26 +1836,59 @@
   "description": "When you take the Attack action, you can replace one of your attacks with throwing a Net. Target a creature you can see within 15 feet of yourself. The target must succeed on a Dexterity saving throw (DC 8 plus your Dexterity modifier and Proficiency Bonus) or have the Restrained condition until it escapes. The target succeeds automatically if it is Huge or larger.\nTo escape, the target or a creature within 5 feet of it must take an action to make a DC 10 Strength (Athletics) check, freeing the Restrained creature on a success. Destroying the Net (AC 10; 5 HP; Immunity to Bludgeoning, Poison, and Psychic damage) also frees the target, ending the effect."
  },
  {
+  "id": "obsidian",
+  "name": "Obsidian",
+  "category": "Treasure",
+  "itemType": "treasure",
+  "cost": "10 gp",
+  "description": "A black gemstone."
+ },
+ {
   "id": "oil",
   "name": "Oil",
   "category": "Adventuring Gear",
   "itemType": "gear",
   "cost": "1 sp",
   "weight": 1,
-  "description": "You can douse a creature, object, or space with Oil or use it as fuel, as detailed below.\n**Dousing a Creature or an Object.** When you take the Attack action, you can replace one of your attacks with throwing an Oil flask. Target one creature or object within 20 feet of yourself. The target must succeed on a Dexterity saving throw (DC 8 plus your Dexterity modifier and Proficiency Bonus) or be covered in oil. If the target takes Fire damage before the oil dries (after 1 minute), the target takes an extra 5 Fire damage from burning oil.\n**Dousing a Space.** You can take the Utilize action to pour an Oil flask on level ground to cover a 5-foot-square area within 5 feet of yourself. If lit, the oil burns until the end of the turn 2 rounds from when the oil was lit (or 12 seconds) and deals 5 Fire damage to any creature that enters the area or ends its turn there. A creature can take this damage only once per turn.\n**Fuel.**  Oil serves as fuel for Lamps and Lanterns. Once lit, a flask of Oil burns for 6 hours in a Lamp or Lantern. That duration doesn't need to be consecutive; you can extinguish the burning Oil (as a Utilize action) and rekindle it again until it has burned for a total of 6 hours"
+  "description": "You can douse a creature, object, or space with Oil or use it as fuel, as detailed below.\nDousing a Creature or an Object. When you take the Attack action, you can replace one of your attacks with throwing an Oil flask. Target one creature or object within 20 feet of yourself. The target must succeed on a Dexterity saving throw (DC 8 plus your Dexterity modifier and Proficiency Bonus) or be covered in oil. If the target takes Fire damage before the oil dries (after 1 minute), the target takes an extra 5 Fire damage from burning oil.\nDousing a Space. You can take the Utilize action to pour an Oil flask on level ground to cover a 5-foot-square area within 5 feet of yourself. If lit, the oil burns until the end of the turn 2 rounds from when the oil was lit (or 12 seconds) and deals 5 Fire damage to any creature that enters the area or ends its turn there. A creature can take this damage only once per turn.\nFuel. Oil serves as fuel for Lamps and Lanterns. Once lit, a flask of Oil burns for 6 hours in a Lamp or Lantern. That duration doesn't need to be consecutive; you can extinguish the burning Oil (as a Utilize action) and rekindle it again until it has burned for a total of 6 hours."
  },
  {
-  "id": "orb",
-  "name": "Orb",
-  "category": "Arcane Foci",
+  "id": "oil-of-taggit",
+  "name": "Oil of Taggit",
+  "category": "Adventuring Gear",
+  "itemType": "gear",
+  "cost": "400 gp",
+  "description": "A creature subjected to Oil of Taggit must succeed on a DC 13 Constitution saving throw or have the Poisoned condition for 24 hours. The creature also has the Unconscious condition while Poisoned in this way. It wakes up if it takes damage."
+ },
+ {
+  "id": "onyx",
+  "name": "Onyx",
+  "category": "Treasure",
+  "itemType": "treasure",
+  "cost": "50 gp",
+  "description": "A bands of black and white, or pure black or white gemstone."
+ },
+ {
+  "id": "opal",
+  "name": "Opal",
+  "category": "Treasure",
+  "itemType": "treasure",
+  "cost": "1000 gp",
+  "description": "A pale blue with green and golden mottling gemstone."
+ },
+ {
+  "id": "orb-focus",
+  "name": "Orb (focus)",
+  "category": "Adventuring Gear",
   "itemType": "gear",
   "cost": "20 gp",
-  "weight": 3
+  "weight": 3,
+  "description": "An Arcane Focus takes one of the forms in the Arcane Focuses table and is bejeweled or carved to channel arcane magic. A Sorcerer, Warlock, or Wizard can use such an item as a Spellcasting Focus."
  },
  {
   "id": "padded-armor",
   "name": "Padded Armor",
-  "category": "Armor",
+  "category": "Light Armor",
   "itemType": "armor",
   "cost": "5 gp",
   "weight": 8,
@@ -1175,20 +1897,30 @@
   "stealthDisadvantage": true
  },
  {
-  "id": "painters-supplies",
+  "id": "painter-s-supplies",
   "name": "Painter's Supplies",
-  "category": "Artisan's Tools",
+  "category": "Adventuring Gear",
   "itemType": "tool",
   "cost": "10 gp",
-  "weight": 5
+  "weight": 5,
+  "description": "Ability: Wisdom\nUtilize: Paint a recognizable image of something you've seen (DC 10)\nCraft: Druidic Focus, Holy Symbol"
+ },
+ {
+  "id": "pale-tincture",
+  "name": "Pale Tincture",
+  "category": "Adventuring Gear",
+  "itemType": "gear",
+  "cost": "250 gp",
+  "description": "A creature subjected to Pale Tincture must succeed on a DC 16 Constitution saving throw or take 3 (1d6) Poison damage and have the Poisoned condition. The Poisoned creature repeats the save every 24 hours, taking 3 (1d6) Poison damage on a failed save. The damage the poison deals can't be healed by any means while the creature remains Poisoned. After seven successful saves against the poison, the creature is no longer Poisoned."
  },
  {
   "id": "pan-flute",
-  "name": "Pan flute",
-  "category": "Musical Instruments",
-  "itemType": "tool",
+  "name": "Pan Flute",
+  "category": "Adventuring Gear",
+  "itemType": "gear",
   "cost": "12 gp",
-  "weight": 2
+  "weight": 2,
+  "description": "Ability: Charisma\nUtilize: Play a known tune (DC 10), or improvise a song (DC 15)"
  },
  {
   "id": "paper",
@@ -1196,7 +1928,6 @@
   "category": "Adventuring Gear",
   "itemType": "gear",
   "cost": "2 sp",
-  "weight": 0,
   "description": "One sheet of Paper can hold about 250 handwritten words."
  },
  {
@@ -1204,9 +1935,16 @@
   "name": "Parchment",
   "category": "Adventuring Gear",
   "itemType": "gear",
-  "cost": "3 gp",
-  "weight": 0,
+  "cost": "1 sp",
   "description": "One sheet of Parchment can hold about 250 handwritten words."
+ },
+ {
+  "id": "pearl",
+  "name": "Pearl",
+  "category": "Treasure",
+  "itemType": "treasure",
+  "cost": "100 gp",
+  "description": "A lustrous white, yellow, or pink gemstone."
  },
  {
   "id": "perfume",
@@ -1214,30 +1952,39 @@
   "category": "Adventuring Gear",
   "itemType": "gear",
   "cost": "5 gp",
-  "weight": 0,
   "description": "Perfume comes in a 4-ounce vial. For 1 hour after applying Perfume to yourself, you have Advantage on Charisma (Persuasion) checks made to influence an Indifferent Humanoid within 5 feet of yourself."
+ },
+ {
+  "id": "peridot",
+  "name": "Peridot",
+  "category": "Treasure",
+  "itemType": "treasure",
+  "cost": "500 gp",
+  "description": "A rich olive green gemstone."
  },
  {
   "id": "pike",
   "name": "Pike",
-  "category": "Martial Melee Weapons",
+  "category": "Melee Weapons",
   "itemType": "weapon",
   "cost": "5 gp",
-  "weight": 6,
+  "weight": 18,
   "damage": "1d10",
   "damageType": "piercing",
   "range": "melee",
   "properties": [
+   "Martial",
    "Heavy",
    "Reach",
    "Two-Handed",
    "Mastery: Push"
-  ]
+  ],
+  "description": "Heavy. You have Disadvantage on attack rolls with a Heavy weapon if it's a Melee weapon and your Strength score isn't at least 13 or if it's a Ranged weapon and  your Dexterity score isn't at least 13.\n\nReach. A Reach weapon adds 5 feet to your reach when you attack with it, as well as when determining your reach for Opportunity Attacks with it.\n\nTwo-Handed. A Two-Handed weapon requires two hands when you attack with it."
  },
  {
   "id": "pistol",
   "name": "Pistol",
-  "category": "Martial Ranged Weapons",
+  "category": "Ranged Weapons",
   "itemType": "weapon",
   "cost": "250 gp",
   "weight": 3,
@@ -1245,30 +1992,40 @@
   "damageType": "piercing",
   "range": "ranged",
   "properties": [
+   "Martial",
    "Ammunition",
    "Loading",
+   "Range 30/90",
    "Mastery: Vex"
-  ]
+  ],
+  "description": "Ammunition. You can use a weapon that has the Ammunition property to make a ranged attack only if you have ammunition to fire from it. The type of ammunition required is specified with the weapon's range. Each attack expends one piece of ammunition. Drawing the ammunition is part of the attack (you need a free hand to load a one-handed weapon). After a fight, you can spend 1 minute to recover half the ammunition (round down) you used in the fight; the rest is lost.\n\nLoading. You can fire only one piece of ammunition from a Loading weapon when you use an action, a Bonus Action, or a Reaction to fire it, regardless of the number of attacks you can normally make."
  },
  {
   "id": "plate-armor",
   "name": "Plate Armor",
-  "category": "Armor",
+  "category": "Heavy Armor",
   "itemType": "armor",
   "cost": "1500 gp",
   "weight": 65,
   "acBase": 18,
-  "acDexBonus": false,
   "strMin": 15,
   "stealthDisadvantage": true
  },
  {
+  "id": "platinum-piece-pp",
+  "name": "Platinum Piece (PP)",
+  "category": "Treasure",
+  "itemType": "treasure",
+  "weight": 0.02,
+  "description": "Characters often find coins on their adventures and can spend those coins in shops, inns, and other businesses. Coins come in different denominations based on the relative worth of t heir material. The Coin Values table lists coins and how much they're worth relative to the Gold Piece, which is the game's main coin. For example, 100 Copper Pieces are worth 1 Gold Piece.\nA coin weighs about a third of an ounce, so fifty coins weigh a pound.\n\nCoin | Value in GP\nCopper Piece (CP) | 1/100\nSilver Piece (SP) | 1/10\nElectrum Piece (EP) | 1/2\nGold Piece (GP) | 1\nPlatinum Piece (PP) | 10"
+ },
+ {
   "id": "playing-cards",
   "name": "Playing Cards",
-  "category": "Gaming Sets",
-  "itemType": "tool",
+  "category": "Adventuring Gear",
+  "itemType": "gear",
   "cost": "5 sp",
-  "weight": 0
+  "description": "Ability: Wisdom\nUtilize: Discern whether someone is cheating (DC 10), or win the game (DC 20)"
  },
  {
   "id": "poison-basic",
@@ -1276,16 +2033,16 @@
   "category": "Adventuring Gear",
   "itemType": "gear",
   "cost": "100 gp",
-  "weight": 0,
   "description": "As a Bonus Action, you can use a vial of Basic Poison to coat one weapon or up to three pieces of ammunition. A creature that takes Piercing or Slashing damage from the poisoned weapon or ammunition takes an extra 1d4 Poison damage. Once applied, the poison retains potency for 1 minute or until its damage is dealt, whichever comes first."
  },
  {
-  "id": "poisoners-kit",
+  "id": "poisoner-s-kit",
   "name": "Poisoner's Kit",
-  "category": "Other Tools",
+  "category": "Adventuring Gear",
   "itemType": "tool",
-  "cost": "5 gp",
-  "weight": 2
+  "cost": "50 gp",
+  "weight": 2,
+  "description": "Ability: Intelligence\nUtilize: Detect a poisoned object (DC 10)\nCraft: Basic Poison"
  },
  {
   "id": "pole",
@@ -1297,6 +2054,13 @@
   "description": "A Pole is 10 feet long. You can use it to touch something up to 10 feet away. If you must make a Strength (Athletics) check as part of a High or Long Jump, you can use the Pole to vault, giving yourself Advantage on the check."
  },
  {
+  "id": "pony",
+  "name": "Pony",
+  "category": "Adventuring Gear",
+  "itemType": "gear",
+  "cost": "30 gp"
+ },
+ {
   "id": "pot-iron",
   "name": "Pot, Iron",
   "category": "Adventuring Gear",
@@ -1306,21 +2070,13 @@
   "description": "An Iron Pot holds up to 1 gallon."
  },
  {
-  "id": "potion-of-healing",
-  "name": "Potion of Healing",
-  "category": "Adventuring Gear",
-  "itemType": "gear",
-  "cost": "50 gp",
-  "weight": 0.5,
-  "description": "This potion is a magic item. As a Bonus Action, you can drink it or administer it to another creature within 5 feet of yourself. The creature that drinks the magical red fluid in this vial regains 2d4 + 2 Hit Points."
- },
- {
-  "id": "potters-tools",
+  "id": "potter-s-tools",
   "name": "Potter's Tools",
-  "category": "Artisan's Tools",
+  "category": "Adventuring Gear",
   "itemType": "tool",
   "cost": "10 gp",
-  "weight": 3
+  "weight": 3,
+  "description": "Ability: Intelligence\nUtilize: Discern what a ceramic object held in the past 24 hours (DC 15)\nCraft: Jug, Lamp"
  },
  {
   "id": "pouch",
@@ -1332,7 +2088,7 @@
   "description": "A Pouch holds up to 6 pounds within one-fifth of a cubic foot."
  },
  {
-  "id": "priests-pack",
+  "id": "priest-s-pack",
   "name": "Priest's Pack",
   "category": "Adventuring Gear",
   "itemType": "gear",
@@ -1341,9 +2097,33 @@
   "description": "A Priest's Pack contains the following items: Backpack, Blanket, Holy Water, Lamp, 7 days of Rations, Robe, and Tinderbox."
  },
  {
+  "id": "psychic-blade",
+  "name": "Psychic Blade",
+  "category": "Melee Weapons",
+  "itemType": "weapon",
+  "damage": "1d6",
+  "damageType": "psychic",
+  "range": "melee",
+  "properties": [
+   "Finesse",
+   "Thrown",
+   "Range 20/60",
+   "Mastery: Vex"
+  ],
+  "description": "Finesse. When making an attack with a Finesse weapon, use your choice of your Strength or Dexterity modifier for the attack and damage rolls. You must use the same modifier for both rolls.\n\nThrown. If a weapon has the Thrown property, you can throw the weapon to make a ranged attack, and you can draw that weapon as part of the attack. If the weapon is a Melee weapon, use the same ability modifier for the attack and damage rolls that you use for a melee attack with that weapon."
+ },
+ {
+  "id": "purple-worm-poison",
+  "name": "Purple Worm Poison",
+  "category": "Adventuring Gear",
+  "itemType": "gear",
+  "cost": "2000 gp",
+  "description": "A creature subjected to Purple Worm Poison makes a DC 21 Constitution saving throw, taking 35 (10d6) Poison damage on a failed save or half as much damage on a successful one."
+ },
+ {
   "id": "quarterstaff",
   "name": "Quarterstaff",
-  "category": "Arcane Foci",
+  "category": "Melee Weapons",
   "itemType": "weapon",
   "cost": "2 sp",
   "weight": 4,
@@ -1353,7 +2133,16 @@
   "properties": [
    "Versatile (1d8)",
    "Mastery: Topple"
-  ]
+  ],
+  "description": "Versatile. A Versatile weapon can be used with one or two hands. A damage value in parentheses appears with the property. The weapon deals that damage when used with two hands to make a melee attack."
+ },
+ {
+  "id": "quartz",
+  "name": "Quartz",
+  "category": "Treasure",
+  "itemType": "treasure",
+  "cost": "50 gp",
+  "description": "A white, smoky gray, or yellow gemstone."
  },
  {
   "id": "quiver",
@@ -1376,7 +2165,7 @@
  {
   "id": "rapier",
   "name": "Rapier",
-  "category": "Martial Melee Weapons",
+  "category": "Melee Weapons",
   "itemType": "weapon",
   "cost": "25 gp",
   "weight": 2,
@@ -1384,9 +2173,11 @@
   "damageType": "piercing",
   "range": "melee",
   "properties": [
+   "Martial",
    "Finesse",
    "Mastery: Vex"
-  ]
+  ],
+  "description": "Finesse. When making an attack with a Finesse weapon, use your choice of your Strength or Dexterity modifier for the attack and damage rolls. You must use the same modifier for both rolls."
  },
  {
   "id": "rations",
@@ -1395,26 +2186,51 @@
   "itemType": "gear",
   "cost": "5 sp",
   "weight": 2,
-  "description": "Rations consist of travel-ready food, including jerky, dried fruit, hardtack, and nuts. See \"Malnutrition\" in \"Rules Glossary\" for the risks of not eating."
+  "description": "Rations consist of travel-ready food, including jerky, dried fruit, hardtack, and nuts. See \"Malnutrition\" for the risks of not eating."
  },
  {
-  "id": "reliquary",
-  "name": "Reliquary",
+  "id": "reliquary-holy-symbol",
+  "name": "Reliquary (holy symbol)",
   "category": "Adventuring Gear",
   "itemType": "gear",
   "cost": "5 gp",
   "weight": 2,
-  "description": "A Holy Symbol takes one of the forms in the Holy Symbol table and is bejeweled or painted to channel divine magic. A Cleric or Paladin can use a Holy Symbol as a Spellcasting Focus.\nThe table indicates whether a Holy Symbol needs to be held, worn, or borne on fabric (such as a tabard or banner) or a Shield."
+  "description": "A Holy Symbol takes one of the forms in the Holy Symbol table and is bejeweled or painted to channel divine magic. A Cleric or Paladin can use a Holy Symbol as a Spellcasting Focus.\nFor a Reliquary to be an effective Holy Symbol, it must be held."
+ },
+ {
+  "id": "revolver",
+  "name": "Revolver",
+  "category": "Ranged Weapons",
+  "itemType": "weapon",
+  "weight": 3,
+  "damage": "2d8",
+  "damageType": "piercing",
+  "range": "ranged",
+  "properties": [
+   "Martial",
+   "Ammunition",
+   "Loading",
+   "Range 40/120",
+   "Mastery: Sap"
+  ],
+  "description": "Ammunition. You can use a weapon that has the Ammunition property to make a ranged attack only if you have ammunition to fire from it. The type of ammunition required is specified with the weapon's range. Each attack expends one piece of ammunition. Drawing the ammunition is part of the attack (you need a free hand to load a one-handed weapon). After a fight, you can spend 1 minute to recover half the ammunition (round down) you used in the fight; the rest is lost.\n\nLoading. You can fire only one piece of ammunition from a Loading weapon when you use an action, a Bonus Action, or a Reaction to fire it, regardless of the number of attacks you can normally make."
+ },
+ {
+  "id": "rhodochrosite",
+  "name": "Rhodochrosite",
+  "category": "Treasure",
+  "itemType": "treasure",
+  "cost": "10 gp",
+  "description": "A light pink gemstone."
  },
  {
   "id": "ring-mail",
   "name": "Ring Mail",
-  "category": "Armor",
+  "category": "Heavy Armor",
   "itemType": "armor",
   "cost": "30 gp",
   "weight": 40,
   "acBase": 14,
-  "acDexBonus": false,
   "stealthDisadvantage": true
  },
  {
@@ -1423,16 +2239,17 @@
   "category": "Adventuring Gear",
   "itemType": "gear",
   "cost": "1 gp",
-  "weight": 1,
+  "weight": 4,
   "description": "A Robe has vocational or ceremonial significance. Some events and locations admit only people wearing a Robe bearing certain colors or symbols."
  },
  {
-  "id": "rod",
-  "name": "Rod",
-  "category": "Arcane Foci",
+  "id": "rod-focus",
+  "name": "Rod (focus)",
+  "category": "Adventuring Gear",
   "itemType": "gear",
   "cost": "10 gp",
-  "weight": 2
+  "weight": 2,
+  "description": "An Arcane Focus takes one of the forms in the Arcane Focuses table and is bejeweled or carved to channel arcane magic. A Sorcerer, Warlock, or Wizard can use such an item as a Spellcasting Focus."
  },
  {
   "id": "rope",
@@ -1441,7 +2258,23 @@
   "itemType": "gear",
   "cost": "1 gp",
   "weight": 5,
-  "description": "As a Utilize action, you can tie a knot with Rope if you succeed on a DC 10 Dexterity (Sleight of Hand) check. The Rope can be burst with a successful DC 20 Strength (Athletics) check.\n You can bind an unwilling creature with the Rope only if the creature has the Grappled, Incapacitated, or Restrained condition. If the creature's legs are bound, the creature has the Restrained condition until it escapes. Escaping the Rope requires the creature to make a successful DC 15 Dexterity (Acrobatics) check as an action."
+  "description": "As a Utilize action, you can tie a knot with Rope if you succeed on a DC 10 Dexterity (Sleight of Hand) check. The Rope can be burst with a successful DC 20 Strength (Athletics) check.\nYou can bind an unwilling creature with the Rope only if the creature has the Grappled, Incapacitated, or Restrained condition. If the creature's legs are bound, the creature has the Restrained condition until it escapes. Escaping the Rope requires the creature to make a successful DC 15 Dexterity (Acrobatics) check as an action."
+ },
+ {
+  "id": "rowboat",
+  "name": "Rowboat",
+  "category": "Adventuring Gear",
+  "itemType": "gear",
+  "cost": "50 gp",
+  "description": "Speed: 1 1/2 mph\nCrew: 1\nPassengers: 3\nCargo (Tons): -\nAC: 11\nHP: 50\nDamage Threshold: -"
+ },
+ {
+  "id": "ruby",
+  "name": "Ruby",
+  "category": "Treasure",
+  "itemType": "treasure",
+  "cost": "5000 gp",
+  "description": "A clear red to deep crimson gemstone."
  },
  {
   "id": "sack",
@@ -1449,13 +2282,56 @@
   "category": "Adventuring Gear",
   "itemType": "gear",
   "cost": "1 cp",
-  "weight": 1,
+  "weight": 0.5,
   "description": "A Sack holds up to 30 pounds within 1 cubic foot."
+ },
+ {
+  "id": "saddle-exotic",
+  "name": "Saddle, Exotic",
+  "category": "Adventuring Gear",
+  "itemType": "gear",
+  "cost": "60 gp",
+  "weight": 40,
+  "description": "A saddle comes with a bit, a bridle, reins, and any other equipment needed to use the saddle. An Exotic Saddle is required for riding an aquatic or a flying mount."
+ },
+ {
+  "id": "saddle-military",
+  "name": "Saddle, Military",
+  "category": "Adventuring Gear",
+  "itemType": "gear",
+  "cost": "20 gp",
+  "weight": 30,
+  "description": "A saddle comes with a bit, a bridle, reins, and any other equipment needed to use the saddle. A Military Saddle gives Advantage on any ability check you make to remain mounted."
+ },
+ {
+  "id": "saddle-riding",
+  "name": "Saddle, Riding",
+  "category": "Adventuring Gear",
+  "itemType": "gear",
+  "cost": "10 gp",
+  "weight": 25,
+  "description": "A saddle comes with a bit, a bridle, reins, and any other equipment needed to use the saddle."
+ },
+ {
+  "id": "sailing-ship",
+  "name": "Sailing Ship",
+  "category": "Adventuring Gear",
+  "itemType": "gear",
+  "cost": "10000 gp",
+  "description": "Speed: 2 mph\nCrew: 20\nPassengers: 20\nCargo (Tons): 100\nAC: 15\nHP: 300\nDamage Threshold: 15"
+ },
+ {
+  "id": "sardonyx",
+  "name": "Sardonyx",
+  "category": "Treasure",
+  "itemType": "treasure",
+  "cost": "50 gp",
+  "description": "A bands of red and white gemstone."
  },
  {
   "id": "scale-mail",
   "name": "Scale Mail",
-  "category": "Armor",
+  "category": "Medium Armor",
   "itemType": "armor",
   "cost": "50 gp",
   "weight": 45,
@@ -1465,18 +2341,18 @@
   "stealthDisadvantage": true
  },
  {
-  "id": "scholars-pack",
+  "id": "scholar-s-pack",
   "name": "Scholar's Pack",
   "category": "Adventuring Gear",
   "itemType": "gear",
   "cost": "40 gp",
   "weight": 22,
-  "description": "A Scholar's Pack contains the following items: Backpack, Blanket, Book, Ink, Ink Pen, Lamp, 10 flasks of Oil, 10 sheets of Parchment, and Tinderbox."
+  "description": "A Scholar's Pack contains the following items: Backpack, Book, Ink, Ink Pen, Lamp, 10 flasks of Oil, 10 sheets of Parchment, and Tinderbox."
  },
  {
   "id": "scimitar",
   "name": "Scimitar",
-  "category": "Martial Melee Weapons",
+  "category": "Melee Weapons",
   "itemType": "weapon",
   "cost": "25 gp",
   "weight": 3,
@@ -1484,28 +2360,56 @@
   "damageType": "slashing",
   "range": "melee",
   "properties": [
+   "Martial",
    "Finesse",
    "Light",
    "Mastery: Nick"
-  ]
+  ],
+  "description": "Finesse. When making an attack with a Finesse weapon, use your choice of your Strength or Dexterity modifier for the attack and damage rolls. You must use the same modifier for both rolls.\n\nLight. When you take the Attack action on your turn and. attack with a Light weapon, you can make one extra attack as a Bonus Action later on the same turn. That extra attack must be made with a different Light weapon, and you don't add your ability modifier to the extra attack's damage unless that modifier is negative. For example, you can attack with a Shortsword in one hand and a Dagger in the other using the Attack action and a Bonus Action, but you don't add your Strength or Dexterity modifier to the damage roll of the Bonus Action unless that modifier is negative."
+ },
+ {
+  "id": "semiautomatic-pistol",
+  "name": "Semiautomatic Pistol",
+  "category": "Ranged Weapons",
+  "itemType": "weapon",
+  "weight": 3,
+  "damage": "2d6",
+  "damageType": "piercing",
+  "range": "ranged",
+  "properties": [
+   "Martial",
+   "Ammunition",
+   "Loading",
+   "Range 50/150",
+   "Mastery: Vex"
+  ],
+  "description": "Ammunition. You can use a weapon that has the Ammunition property to make a ranged attack only if you have ammunition to fire from it. The type of ammunition required is specified with the weapon's range. Each attack expends one piece of ammunition. Drawing the ammunition is part of the attack (you need a free hand to load a one-handed weapon). After a fight, you can spend 1 minute to recover half the ammunition (round down) you used in the fight; the rest is lost.\n\nLoading. You can fire only one piece of ammunition from a Loading weapon when you use an action, a Bonus Action, or a Reaction to fire it, regardless of the number of attacks you can normally make."
+ },
+ {
+  "id": "serpent-venom",
+  "name": "Serpent Venom",
+  "category": "Adventuring Gear",
+  "itemType": "gear",
+  "cost": "200 gp",
+  "description": "A creature subjected to Serpent Venom must succeed on a DC 11 Constitution saving throw, taking 10 (3d6) Poison damage on a failed save or half as much damage on a successful one."
  },
  {
   "id": "shawm",
   "name": "Shawm",
-  "category": "Musical Instruments",
-  "itemType": "tool",
+  "category": "Adventuring Gear",
+  "itemType": "gear",
   "cost": "2 gp",
-  "weight": 1
+  "weight": 1,
+  "description": "Ability: Charisma\nUtilize: Play a known tune (DC 10), or improvise a song (DC 15)"
  },
  {
   "id": "shield",
   "name": "Shield",
-  "category": "Armor",
+  "category": "Shields",
   "itemType": "armor",
   "cost": "10 gp",
   "weight": 6,
-  "acBase": 2,
-  "acDexBonus": false
+  "acBase": 2
  },
  {
   "id": "shortbow",
@@ -1520,13 +2424,15 @@
   "properties": [
    "Ammunition",
    "Two-Handed",
+   "Range 80/320",
    "Mastery: Vex"
-  ]
+  ],
+  "description": "Ammunition. You can use a weapon that has the Ammunition property to make a ranged attack only if you have ammunition to fire from it. The type of ammunition required is specified with the weapon's range. Each attack expends one piece of ammunition. Drawing the ammunition is part of the attack (you need a free hand to load a one-handed weapon). After a fight, you can spend 1 minute to recover half the ammunition (round down) you used in the fight; the rest is lost.\n\nTwo-Handed. A Two-Handed weapon requires two hands when you attack with it."
  },
  {
   "id": "shortsword",
   "name": "Shortsword",
-  "category": "Martial Melee Weapons",
+  "category": "Melee Weapons",
   "itemType": "weapon",
   "cost": "10 gp",
   "weight": 2,
@@ -1534,10 +2440,31 @@
   "damageType": "piercing",
   "range": "melee",
   "properties": [
+   "Martial",
    "Finesse",
    "Light",
    "Mastery: Vex"
-  ]
+  ],
+  "description": "Finesse. When making an attack with a Finesse weapon, use your choice of your Strength or Dexterity modifier for the attack and damage rolls. You must use the same modifier for both rolls.\n\nLight. When you take the Attack action on your turn and. attack with a Light weapon, you can make one extra attack as a Bonus Action later on the same turn. That extra attack must be made with a different Light weapon, and you don't add your ability modifier to the extra attack's damage unless that modifier is negative. For example, you can attack with a Shortsword in one hand and a Dagger in the other using the Attack action and a Bonus Action, but you don't add your Strength or Dexterity modifier to the damage roll of the Bonus Action unless that modifier is negative."
+ },
+ {
+  "id": "shotgun",
+  "name": "Shotgun",
+  "category": "Ranged Weapons",
+  "itemType": "weapon",
+  "weight": 7,
+  "damage": "2d8",
+  "damageType": "piercing",
+  "range": "ranged",
+  "properties": [
+   "Martial",
+   "Ammunition",
+   "Loading",
+   "Two-Handed",
+   "Range 30/90",
+   "Mastery: Push"
+  ],
+  "description": "Ammunition. You can use a weapon that has the Ammunition property to make a ranged attack only if you have ammunition to fire from it. The type of ammunition required is specified with the weapon's range. Each attack expends one piece of ammunition. Drawing the ammunition is part of the attack (you need a free hand to load a one-handed weapon). After a fight, you can spend 1 minute to recover half the ammunition (round down) you used in the fight; the rest is lost.\n\nLoading. You can fire only one piece of ammunition from a Loading weapon when you use an action, a Bonus Action, or a Reaction to fire it, regardless of the number of attacks you can normally make.\n\nTwo-Handed. A Two-Handed weapon requires two hands when you attack with it."
  },
  {
   "id": "shovel",
@@ -1561,7 +2488,8 @@
   "properties": [
    "Light",
    "Mastery: Nick"
-  ]
+  ],
+  "description": "Light. When you take the Attack action on your turn and. attack with a Light weapon, you can make one extra attack as a Bonus Action later on the same turn. That extra attack must be made with a different Light weapon, and you don't add your ability modifier to the extra attack's damage unless that modifier is negative. For example, you can attack with a Shortsword in one hand and a Dagger in the other using the Attack action and a Bonus Action, but you don't add your Strength or Dexterity modifier to the damage roll of the Bonus Action unless that modifier is negative."
  },
  {
   "id": "signal-whistle",
@@ -1569,8 +2497,23 @@
   "category": "Adventuring Gear",
   "itemType": "gear",
   "cost": "5 cp",
-  "weight": 0,
   "description": "When blown as a Utilize action, a Signal Whistle produces a sound that can be heard up to 600 feet away."
+ },
+ {
+  "id": "silver-piece-sp",
+  "name": "Silver Piece (SP)",
+  "category": "Treasure",
+  "itemType": "treasure",
+  "weight": 0.02,
+  "description": "Characters often find coins on their adventures and can spend those coins in shops, inns, and other businesses. Coins come in different denominations based on the relative worth of t heir material. The Coin Values table lists coins and how much they're worth relative to the Gold Piece, which is the game's main coin. For example, 100 Copper Pieces are worth 1 Gold Piece.\nA coin weighs about a third of an ounce, so fifty coins weigh a pound.\n\nCoin | Value in GP\nCopper Piece (CP) | 1/100\nSilver Piece (SP) | 1/10\nElectrum Piece (EP) | 1/2\nGold Piece (GP) | 1\nPlatinum Piece (PP) | 10"
+ },
+ {
+  "id": "sled",
+  "name": "Sled",
+  "category": "Adventuring Gear",
+  "itemType": "gear",
+  "cost": "20 gp",
+  "weight": 300
  },
  {
   "id": "sling",
@@ -1578,65 +2521,51 @@
   "category": "Ranged Weapons",
   "itemType": "weapon",
   "cost": "1 sp",
-  "weight": 0,
   "damage": "1d4",
-  "damageType": "piercing",
+  "damageType": "bludgeoning",
   "range": "ranged",
   "properties": [
    "Ammunition",
+   "Range 30/120",
    "Mastery: Slow"
-  ]
+  ],
+  "description": "Ammunition. You can use a weapon that has the Ammunition property to make a ranged attack only if you have ammunition to fire from it. The type of ammunition required is specified with the weapon's range. Each attack expends one piece of ammunition. Drawing the ammunition is part of the attack (you need a free hand to load a one-handed weapon). After a fight, you can spend 1 minute to recover half the ammunition (round down) you used in the fight; the rest is lost."
  },
  {
-  "id": "smiths-tools",
+  "id": "smith-s-tools",
   "name": "Smith's Tools",
-  "category": "Artisan's Tools",
+  "category": "Adventuring Gear",
   "itemType": "tool",
   "cost": "20 gp",
-  "weight": 8
+  "weight": 8,
+  "description": "Ability: Strength\nUtilize: Pry open a door or container (DC 20)\nCraft: Any Melee weapon (except Club, Greatclub, Quarterstaff, and Whip), Medium armor (except Hide), Heavy armor, Ball Bearings, Bucket, Caltrops, Chain, Crowbar, Firearm Bullets, Grappling Hook, Iron Pot, Iron Spikes, Sling Bullets"
+ },
+ {
+  "id": "smoke-grenade",
+  "name": "Smoke Grenade",
+  "category": "Adventuring Gear",
+  "itemType": "gear",
+  "cost": "50 gp",
+  "weight": 2,
+  "description": "As an action, you can either throw a grenade at a point up to 60 feet away or use a Grenade Launcher to propel the grenade to a point up to 1,000 feet away. The grenade explodes at that point, creating a particular effect in a 20-foot-radius Sphere.\nThe area of the Sphere is Heavily Obscured by smoke for 1 minute. A strong wind (such as the Gust of Wind spell) disperses the smoke."
  },
  {
   "id": "spear",
   "name": "Spear",
   "category": "Melee Weapons",
   "itemType": "weapon",
-  "cost": "5 gp",
-  "weight": 2,
+  "cost": "1 gp",
+  "weight": 3,
   "damage": "1d6",
   "damageType": "piercing",
   "range": "melee",
   "properties": [
    "Thrown",
    "Versatile (1d8)",
+   "Range 20/60",
    "Mastery: Sap"
-  ]
- },
- {
-  "id": "spell-scroll-cantrip",
-  "name": "Spell Scroll, Cantrip",
-  "category": "Adventuring Gear",
-  "itemType": "gear",
-  "cost": "30 gp",
-  "weight": 0,
-  "description": "A *Spell Scroll* (Cantrip) or *Spell Scroll* (Level 1) is a magic item that bears the words of a cantrip or level 1 spell, respectively, determined by the scroll's creator. If the spell is on your class's spell list, you can read the scroll and cast the spell using its normal casting time and without providing any Material components.\nIf the spell requires a saving throw or an attack roll, the spell save DC is 13, and the attack bonus is +5. The scroll disintegrates when the casting is completed."
- },
- {
-  "id": "spell-scroll-level-1",
-  "name": "Spell Scroll, Level 1",
-  "category": "Adventuring Gear",
-  "itemType": "gear",
-  "cost": "50 gp",
-  "weight": 0,
-  "description": "A *Spell Scroll* (Cantrip) or *Spell Scroll* (Level 1) is a magic item that bears the words of a cantrip or level 1 spell, respectively, determined by the scroll's creator. If the spell is on your class's spell list, you can read the scroll and cast the spell using its normal casting time and without providing any Material components.\nIf the spell requires a saving throw or an attack roll, the spell save DC is 13, and the attack bonus is +5. The scroll disintegrates when the casting is completed."
- },
- {
-  "id": "spellbook",
-  "name": "Spellbook",
-  "category": "Adventuring Gear",
-  "itemType": "gear",
-  "cost": "50 gp",
-  "weight": 3,
-  "description": "Essential for wizards, a spellbook is a leather-bound tome with 100 blank vellum pages suitable for recording spells."
+  ],
+  "description": "Thrown. If a weapon has the Thrown property, you can throw the weapon to make a ranged attack, and you can draw that weapon as part of the attack. If the weapon is a Melee weapon, use the same ability modifier for the attack and damage rolls that you use for a melee attack with that weapon.\n\nVersatile. A Versatile weapon can be used with one or two hands. A damage value in parentheses appears with the property. The weapon deals that damage when used with two hands to make a melee attack."
  },
  {
   "id": "spikes-iron",
@@ -1644,28 +2573,35 @@
   "category": "Adventuring Gear",
   "itemType": "gear",
   "cost": "1 gp",
-  "weight": 2,
+  "weight": 5,
   "description": "Iron Spikes come in bundles of ten. As a Utilize action, you can use a blunt object, such as a Light Hammer, to hammer a spike into wood, earth, or a similar material. You can do so to jam a door shut or to then tie a Rope or Chain to the Spike."
+ },
+ {
+  "id": "spinel",
+  "name": "Spinel",
+  "category": "Treasure",
+  "itemType": "treasure",
+  "cost": "100 gp",
+  "description": "A red, red brown, or deep green gemstone."
  },
  {
   "id": "splint-armor",
   "name": "Splint Armor",
-  "category": "Armor",
+  "category": "Heavy Armor",
   "itemType": "armor",
   "cost": "200 gp",
   "weight": 60,
   "acBase": 17,
-  "acDexBonus": false,
   "strMin": 15,
   "stealthDisadvantage": true
  },
  {
-  "id": "sprig-of-mistletoe",
-  "name": "Sprig of Mistletoe",
-  "category": "Druidic Foci",
+  "id": "sprig-of-mistletoe-druidic-focus",
+  "name": "Sprig of Mistletoe (druidic focus)",
+  "category": "Adventuring Gear",
   "itemType": "gear",
   "cost": "1 gp",
-  "weight": 0
+  "description": "A Druidic Focus takes one of the forms in the Druidic focuses table and is carved, tied with ribbon, or painted to channel primal magic. A Druid or Ranger can use such an object as a Spellcasting Focus."
  },
  {
   "id": "spyglass",
@@ -1677,12 +2613,50 @@
   "description": "Objects viewed through a Spyglass are magnified to twice their size."
  },
  {
-  "id": "staff",
-  "name": "Staff",
-  "category": "Arcane Foci",
+  "id": "stabling-per-day",
+  "name": "Stabling (per day)",
+  "category": "Adventuring Gear",
   "itemType": "gear",
+  "cost": "5 cp"
+ },
+ {
+  "id": "staff-focus",
+  "name": "Staff (focus)",
+  "category": "Melee Weapons",
+  "itemType": "weapon",
   "cost": "5 gp",
-  "weight": 4
+  "weight": 4,
+  "damage": "1d6",
+  "damageType": "bludgeoning",
+  "range": "melee",
+  "properties": [
+   "Versatile (1d8)"
+  ],
+  "description": "An Arcane Focus takes one of the forms in the Arcane Focuses table and is bejeweled or carved to channel arcane magic. A Sorcerer, Warlock, or Wizard can use such an item as a Spellcasting Focus.\n\nVersatile. A Versatile weapon can be used with one or two hands. A damage value in parentheses appears with the property. The weapon deals that damage when used with two hands to make a melee attack."
+ },
+ {
+  "id": "star-rose-quartz",
+  "name": "Star rose quartz",
+  "category": "Treasure",
+  "itemType": "treasure",
+  "cost": "50 gp",
+  "description": "A rosy stone with white star-shaped center gemstone."
+ },
+ {
+  "id": "star-ruby",
+  "name": "Star Ruby",
+  "category": "Treasure",
+  "itemType": "treasure",
+  "cost": "1000 gp",
+  "description": "A ruby with white star-shaped center gemstone."
+ },
+ {
+  "id": "star-sapphire",
+  "name": "Star Sapphire",
+  "category": "Treasure",
+  "itemType": "treasure",
+  "cost": "1000 gp",
+  "description": "A blue sapphire with white star-shaped center gemstone."
  },
  {
   "id": "string",
@@ -1690,13 +2664,12 @@
   "category": "Adventuring Gear",
   "itemType": "gear",
   "cost": "1 sp",
-  "weight": 0,
   "description": "String is 10 feet long. You can tie a knot in it as a Utilize action."
  },
  {
   "id": "studded-leather-armor",
   "name": "Studded Leather Armor",
-  "category": "Armor",
+  "category": "Light Armor",
   "itemType": "armor",
   "cost": "45 gp",
   "weight": 13,
@@ -1715,18 +2688,27 @@
  {
   "id": "thieves-tools",
   "name": "Thieves' Tools",
-  "category": "Other Tools",
+  "category": "Adventuring Gear",
   "itemType": "tool",
   "cost": "25 gp",
-  "weight": 1
+  "weight": 1,
+  "description": "Ability: Dexterity\nUtilize: Pick a lock (DC 15), or disarm a trap (DC 15)"
  },
  {
-  "id": "three-dragon-ante",
-  "name": "Three-Dragon Ante",
-  "category": "Gaming Sets",
-  "itemType": "tool",
+  "id": "three-dragon-ante-set",
+  "name": "Three-Dragon Ante Set",
+  "category": "Adventuring Gear",
+  "itemType": "gear",
   "cost": "1 gp",
-  "weight": 0
+  "description": "Ability: Wisdom\nUtilize: Discern whether someone is cheating (DC 10), or win the game (DC 20)"
+ },
+ {
+  "id": "tiger-eye",
+  "name": "Tiger Eye",
+  "category": "Treasure",
+  "itemType": "treasure",
+  "cost": "10 gp",
+  "description": "A brown with golden center gemstone."
  },
  {
   "id": "tinderbox",
@@ -1735,15 +2717,24 @@
   "itemType": "gear",
   "cost": "5 sp",
   "weight": 1,
-  "description": "A Tinderbox is a small container holding flint, fire steel, and tinder (usually dry cloth soaked in light oil) used to kindle a fire. Using it to light a Candle, Lamp, Lantern, or Torch—or anything else with exposed fuel—takes a Bonus Action. Lighting any other fire takes 1 minute."
+  "description": "A Tinderbox is a small container holding flint, fire steel, and tinder (usually dry cloth soaked in light oil) used to kindle a fire. Using it to light a Candle, Lamp, Lantern, or Torch-or anything else with exposed fuel-takes a Bonus Action. Lighting any other fire takes 1 minute."
  },
  {
-  "id": "tinkers-tools",
+  "id": "tinker-s-tools",
   "name": "Tinker's Tools",
-  "category": "Artisan's Tools",
+  "category": "Adventuring Gear",
   "itemType": "tool",
   "cost": "50 gp",
-  "weight": 10
+  "weight": 10,
+  "description": "Ability: Dexterity\nUtilize: Assemble a Tiny item composed of scrap, which falls apart in 1 minute (DC 20)\nCraft: Musket, Pistol, Bell, Bullseye Lantern, Flask, Hooded Lantern, Hunting Trap, Lock, Manacles, Mirror, Shovel, Signal Whistle, Tinderbox"
+ },
+ {
+  "id": "topaz",
+  "name": "Topaz",
+  "category": "Treasure",
+  "itemType": "treasure",
+  "cost": "500 gp",
+  "description": "A golden yellow gemstone."
  },
  {
   "id": "torch",
@@ -1755,20 +2746,62 @@
   "description": "A Torch burns for 1 hour, casting Bright Light in a 20-foot radius and Dim Light for an additional 20 feet. When you take the Attack action, you can attack with the Torch, using it as a Simple Melee weapon. On a hit, the target takes 1 Fire damage."
  },
  {
+  "id": "torpor",
+  "name": "Torpor",
+  "category": "Adventuring Gear",
+  "itemType": "gear",
+  "cost": "600 gp",
+  "description": "A creature subjected to Torpor poison must succeed on a DC 15 Constitution saving throw or have the Poisoned condition for 4d6 hours. The creature's Speed is halved while the creature is Poisoned in this way."
+ },
+ {
+  "id": "tourmaline",
+  "name": "Tourmaline",
+  "category": "Treasure",
+  "itemType": "treasure",
+  "cost": "100 gp",
+  "description": "A pale green, blue, brown, or red gemstone."
+ },
+ {
   "id": "trident",
   "name": "Trident",
-  "category": "Martial Melee Weapons",
+  "category": "Melee Weapons",
   "itemType": "weapon",
   "cost": "5 gp",
   "weight": 4,
-  "damage": "1d6",
+  "damage": "1d8",
   "damageType": "piercing",
   "range": "melee",
   "properties": [
+   "Martial",
    "Thrown",
-   "Versatile (1d8)",
+   "Versatile (1d10)",
+   "Range 20/60",
    "Mastery: Topple"
-  ]
+  ],
+  "description": "Thrown. If a weapon has the Thrown property, you can throw the weapon to make a ranged attack, and you can draw that weapon as part of the attack. If the weapon is a Melee weapon, use the same ability modifier for the attack and damage rolls that you use for a melee attack with that weapon.\n\nVersatile. A Versatile weapon can be used with one or two hands. A damage value in parentheses appears with the property. The weapon deals that damage when used with two hands to make a melee attack."
+ },
+ {
+  "id": "trinket",
+  "name": "Trinket",
+  "category": "Adventuring Gear",
+  "itemType": "gear",
+  "description": "When you make your character, you can roll once on the Trinkets table to gain a Tiny trinket, a simple item lightly touched by mystery. The DM might also use this table. It can help stock a room in a dungeon or fill a creature's pockets.\n\n1d100 | Trinket\n01 | A mummified goblin hand\n02 | A crystal that faintly glows in moonlight\n03 | A gold coin minted in an unknown land\n04 | A diary written in a language you don't know\n05 | A brass ring that never tarnishes\n06 | An old chess piece made from glass\n07 | A pair of knucklebone dice, each with a skull symbol on the side that would normally show six pips\n08 | A small idol depicting a nightmarish creature that gives you unsettling dreams when you sleep near it\n09 | A lock of someone's hair\n10 | The deed for a parcel of land in a realm unknown to you\n11 | A 1-ounce block made from an unknown material\n12 | A small cloth doll skewered with needles\n13 | A tooth from an unknown beast\n14 | An enormous scale, perhaps from a dragon\n15 | A bright-green feather\n16 | An old divination card bearing your likeness\n17 | A glass orb filled with moving smoke\n18 | A 1-pound egg with a bright-red shell\n19 | A pipe that blows bubbles\n20 | A glass jar containing a bit of flesh floating in pickling fluid\n21 | A gnome-crafted music box that plays a song you dimly remember from your childhood\n22 | A wooden statuette of a smug halfling\n23 | A brass orb etched with strange runes\n24 | A multicolored stone disk\n25 | A silver icon of a raven\n26 | A bag containing forty-seven teeth, one of which is rotten\n27 | A shard of obsidian that always feels warm to the touch\n28 | A dragon's talon strung on a leather necklace\n29 | A pair of old socks\n30 | A blank book whose pages refuse to hold ink, chalk, graphite, or any other marking\n31 | A silver badge that is a five-pointed star\n32 | A knife that belonged to a relative\n33 | A glass vial filled with nail clippings\n34 | A rectangular metal device with two tiny metal cups on one end that throws sparks when wet\n35 | A white, sequined glove sized for a human\n36 | A vest with one hundred tiny pockets\n37 | A weightless stone\n38 | A sketch of a goblin\n39 | An empty glass vial that smells of perfume\n40 | A gemstone that looks like a lump of coal when examined by anyone but you\n41 | A scrap of cloth from an old banner\n42 | A rank insignia from a lost legionnaire\n43 | A silver bell without a clapper\n44 | A mechanical canary inside a lamp\n45 | A miniature chest carved to look like it has numerous feet on the bottom\n46 | A dead sprite inside a clear glass bottle\n47 | A metal can that has no opening but sounds as if it is filled with liquid, sand, spiders, or broken glass (your choice)\n48 | A glass orb filled with water, in which swims a clockwork goldfish\n49 | A silver spoon with an M engraved on the handle\n50 | A whistle made from gold-colored wood\n51 | A dead scarab beetle the size of your hand\n52 | Two toy soldiers, one missing a head\n53 | A small box filled with different-sized buttons\n54 | A candle that can't be lit\n55 | A miniature cage with no door\n56 | An old key\n57 | An indecipherable treasure map\n58 | A hilt from a broken sword\n59 | A rabbit's foot\n60 | A glass eye\n61 | A cameo of a hideous person\n62 | A silver skull the size of a coin\n63 | An alabaster mask\n64 | A cone of sticky black incense that stinks\n65 | A nightcap that gives you pleasant dreams when you wear it\n66 | A single caltrop made from bone\n67 | A gold monocle frame without the lens\n68 | A 1-inch cube, each side a different color\n69 | A crystal doorknob\n70 | A packet filled with pink dust\n71 | A fragment of a beautiful song, written as musical notes on two pieces of parchment\n72 | A silver teardrop earring containing a real teardrop\n73 | An eggshell painted with scenes of misery in disturbing detail\n74 | A fan that, when unfolded, shows a sleepy cat\n75 | A set of bone pipes\n76 | A four-leaf clover pressed inside a book discussing manners and etiquette\n77 | A sheet of parchment upon which is drawn a mechanical contraption\n78 | An ornate scabbard that fits no blade you have found\n79 | An invitation to a party where a murder happened\n80 | A bronze pentacle with an etching of a rat's head in its center\n81 | A purple handkerchief embroidered with the name of an archmage\n82 | Half a floor plan for a temple, a castle, or another structure\n83 | A bit of folded cloth that, when unfolded, turns into a stylish cap\n84 | A receipt of deposit at a bank in a far-off city\n85 | A diary with seven missing pages\n86 | An empty silver snuffbox bearing the inscription \"dreams\" on its lid\n87 | An iron holy symbol devoted to an unknown god\n88 | A book about a legendary hero's rise and fall, with the last chapter missing\n89 | A vial of dragon blood\n90 | An ancient arrow of elven design\n91 | A needle that never bends\n92 | An ornate brooch of dwarven design\n93 | An empty wine bottle bearing a pretty label that says, \"The Wizard of Wines Winery, Red Dragon Crush, 331422-W\"\n94 | A mosaic tile with a multicolored, glazed surface\n95 | A petrified mouse\n96 | A black pirate flag adorned with a dragon's skull and crossbones\n97 | A tiny mechanical crab or spider that moves about when it's not being observed\n98 | A glass jar containing lard with a label that reads, \"Griffon Grease\"\n99 | A wooden box with a ceramic bottom that holds a living worm with a head on each end of its body\n100 | A metal urn containing the ashes of a hero"
+ },
+ {
+  "id": "truth-serum",
+  "name": "Truth Serum",
+  "category": "Adventuring Gear",
+  "itemType": "gear",
+  "cost": "150 gp",
+  "description": "A creature subjected to Truth Serum must succeed on a DC 11 Constitution saving throw or have the Poisoned condition for 1 hour. The Poisoned creature can't knowingly communicate a lie."
+ },
+ {
+  "id": "turquoise",
+  "name": "Turquoise",
+  "category": "Treasure",
+  "itemType": "treasure",
+  "cost": "10 gp",
+  "description": "A light blue green gemstone."
  },
  {
   "id": "vial",
@@ -1776,29 +2809,38 @@
   "category": "Adventuring Gear",
   "itemType": "gear",
   "cost": "1 gp",
-  "weight": 0,
   "description": "A Vial holds up to 4 ounces."
  },
  {
   "id": "viol",
   "name": "Viol",
-  "category": "Musical Instruments",
-  "itemType": "tool",
+  "category": "Adventuring Gear",
+  "itemType": "gear",
   "cost": "30 gp",
-  "weight": 2
+  "weight": 1,
+  "description": "Ability: Charisma\nUtilize: Play a known tune (DC 10), or improvise a song (DC 15)"
  },
  {
-  "id": "wand",
-  "name": "Wand",
-  "category": "Arcane Foci",
+  "id": "wagon",
+  "name": "Wagon",
+  "category": "Adventuring Gear",
+  "itemType": "gear",
+  "cost": "35 gp",
+  "weight": 400
+ },
+ {
+  "id": "wand-focus",
+  "name": "Wand (focus)",
+  "category": "Adventuring Gear",
   "itemType": "gear",
   "cost": "10 gp",
-  "weight": 1
+  "weight": 1,
+  "description": "An Arcane Focus takes one of the forms in the Arcane Focuses table and is bejeweled or carved to channel arcane magic. A Sorcerer, Warlock, or Wizard can use such an item as a Spellcasting Focus."
  },
  {
   "id": "war-pick",
   "name": "War Pick",
-  "category": "Martial Melee Weapons",
+  "category": "Melee Weapons",
   "itemType": "weapon",
   "cost": "5 gp",
   "weight": 2,
@@ -1806,14 +2848,16 @@
   "damageType": "piercing",
   "range": "melee",
   "properties": [
+   "Martial",
    "Versatile (1d10)",
    "Mastery: Sap"
-  ]
+  ],
+  "description": "Versatile. A Versatile weapon can be used with one or two hands. A damage value in parentheses appears with the property. The weapon deals that damage when used with two hands to make a melee attack."
  },
  {
   "id": "warhammer",
   "name": "Warhammer",
-  "category": "Martial Melee Weapons",
+  "category": "Melee Weapons",
   "itemType": "weapon",
   "cost": "15 gp",
   "weight": 5,
@@ -1821,9 +2865,26 @@
   "damageType": "bludgeoning",
   "range": "melee",
   "properties": [
+   "Martial",
    "Versatile (1d10)",
    "Mastery: Push"
-  ]
+  ],
+  "description": "Versatile. A Versatile weapon can be used with one or two hands. A damage value in parentheses appears with the property. The weapon deals that damage when used with two hands to make a melee attack."
+ },
+ {
+  "id": "warhorse",
+  "name": "Warhorse",
+  "category": "Adventuring Gear",
+  "itemType": "gear",
+  "cost": "400 gp"
+ },
+ {
+  "id": "warship",
+  "name": "Warship",
+  "category": "Adventuring Gear",
+  "itemType": "gear",
+  "cost": "25000 gp",
+  "description": "Speed: 2 1/2 mph\nCrew: 60\nPassengers: 60\nCargo (Tons): 200\nAC: 15\nHP: 500\nDamage Threshold: 20"
  },
  {
   "id": "waterskin",
@@ -1832,20 +2893,21 @@
   "itemType": "gear",
   "cost": "2 sp",
   "weight": 5,
-  "description": "A Waterskin holds up to 4 pints. If you don't drink sufficient water, you risk dehydration (see “Rules Glossary”)."
+  "description": "A Waterskin holds up to 4 pints. If you don't drink sufficient water, you risk dehydration."
  },
  {
-  "id": "weavers-tools",
+  "id": "weaver-s-tools",
   "name": "Weaver's Tools",
-  "category": "Artisan's Tools",
+  "category": "Adventuring Gear",
   "itemType": "tool",
   "cost": "1 gp",
-  "weight": 5
+  "weight": 5,
+  "description": "Ability: Dexterity\nUtilize: Mend a tear in clothing (DC 10), or sew a Tiny design (DC 10)\nCraft: Padded Armor, Basket, Bedroll, Blanket, Fine Clothes, Net, Robe, Rope, Sack, String, Tent, Traveler's Clothes"
  },
  {
   "id": "whip",
   "name": "Whip",
-  "category": "Martial Melee Weapons",
+  "category": "Melee Weapons",
   "itemType": "weapon",
   "cost": "2 gp",
   "weight": 3,
@@ -1853,25 +2915,68 @@
   "damageType": "slashing",
   "range": "melee",
   "properties": [
+   "Martial",
    "Finesse",
    "Reach",
    "Mastery: Slow"
-  ]
+  ],
+  "description": "Finesse. When making an attack with a Finesse weapon, use your choice of your Strength or Dexterity modifier for the attack and damage rolls. You must use the same modifier for both rolls.\n\nReach. A Reach weapon adds 5 feet to your reach when you attack with it, as well as when determining your reach for Opportunity Attacks with it."
  },
  {
-  "id": "woodcarvers-tools",
+  "id": "woodcarver-s-tools",
   "name": "Woodcarver's Tools",
-  "category": "Artisan's Tools",
+  "category": "Adventuring Gear",
   "itemType": "tool",
   "cost": "1 gp",
-  "weight": 5
+  "weight": 5,
+  "description": "Ability: Dexterity\nUtilize: Carve a pattern in wood (DC 10)\nCraft: Club, Greatclub, Quarterstaff, Ranged weapons (except Pistol, Musket, and  Sling), Arcane Focus, Arrows, Bolts, Druidic Focus, Ink Pen, Needles"
  },
  {
-  "id": "yew-wand",
-  "name": "Yew Wand",
-  "category": "Druidic Foci",
+  "id": "wooden-staff-druidic-focus",
+  "name": "Wooden Staff (druidic focus)",
+  "category": "Melee Weapons",
+  "itemType": "weapon",
+  "cost": "5 gp",
+  "weight": 4,
+  "damage": "1d6",
+  "damageType": "bludgeoning",
+  "range": "melee",
+  "properties": [
+   "Versatile (1d8)"
+  ],
+  "description": "A Druidic Focus takes one of the forms in the Druidic focuses table and is carved, tied with ribbon, or painted to channel primal magic. A Druid or Ranger can use such an object as a Spellcasting Focus.\n\nVersatile. A Versatile weapon can be used with one or two hands. A damage value in parentheses appears with the property. The weapon deals that damage when used with two hands to make a melee attack."
+ },
+ {
+  "id": "wyvern-poison",
+  "name": "Wyvern Poison",
+  "category": "Adventuring Gear",
+  "itemType": "gear",
+  "cost": "1200 gp",
+  "description": "A creature subjected to Wyvern Poison makes a DC 14 Constitution saving throw, taking 24 (7d6) Poison damage on a failed save or half as much damage on a successful one."
+ },
+ {
+  "id": "yellow-sapphire",
+  "name": "Yellow Sapphire",
+  "category": "Treasure",
+  "itemType": "treasure",
+  "cost": "1000 gp",
+  "description": "A fiery yellow or yellow green gemstone."
+ },
+ {
+  "id": "yew-wand-druidic-focus",
+  "name": "Yew Wand (druidic focus)",
+  "category": "Adventuring Gear",
   "itemType": "gear",
   "cost": "10 gp",
-  "weight": 1
+  "weight": 1,
+  "description": "A Druidic Focus takes one of the forms in the Druidic focuses table and is carved, tied with ribbon, or painted to channel primal magic. A Druid or Ranger can use such an object as a Spellcasting Focus."
+ },
+ {
+  "id": "zircon",
+  "name": "Zircon",
+  "category": "Treasure",
+  "itemType": "treasure",
+  "cost": "50 gp",
+  "description": "A pale blue green gemstone."
  }
 ]

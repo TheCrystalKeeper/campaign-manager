@@ -5,6 +5,7 @@
  */
 
 import type {
+  CompendiumBackground,
   CompendiumClass,
   CompendiumEquipment,
   CompendiumFeat,
@@ -359,6 +360,25 @@ export function featureRowFromFeat(feat: CompendiumFeat): FeatureEntry {
 }
 
 // ---------------------------------------------------------------------------
+// Background autofill
+// ---------------------------------------------------------------------------
+
+export type BackgroundPickOptions = {
+  /** false = just set the background name; true = also grant its skill proficiencies. */
+  autofill: boolean;
+  sheet: CharacterSheet;
+};
+
+export function backgroundAutofillPatch(bg: CompendiumBackground, opts: BackgroundPickOptions): Partial<CharacterSheet> {
+  const patch: Partial<CharacterSheet> = { background: cap(bg.name, NAME_CAP) };
+  if (!opts.autofill) return patch;
+  const skillProfs = { ...opts.sheet.skillProfs };
+  for (const id of bg.skills) skillProfs[id] = Math.max(1, skillProfs[id] ?? 0);
+  patch.skillProfs = skillProfs;
+  return patch;
+}
+
+// ---------------------------------------------------------------------------
 // Monster → NPC sheet
 // ---------------------------------------------------------------------------
 
@@ -434,7 +454,7 @@ function buildMonsterPatch(m: CompendiumMonster, descCap: number): Partial<Chara
     alignment: m.alignment ? cap(m.alignment, SHORT_CAP) : "",
     cr: cap(m.cr, SHORT_CAP),
     ...(m.xp != null ? { xp: m.xp } : {}),
-    source: "SRD 5.2.1",
+    source: cap(m.source ?? "Monster Manual 2024", SHORT_CAP),
     ac: m.ac,
     hp: { current: m.hp, max: m.hp },
     hitDice: { current: count, max: count, die: m.hitDie ?? "d8" },

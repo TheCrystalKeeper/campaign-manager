@@ -8,7 +8,7 @@ import {
 import { CompendiumPickerModal } from "./CompendiumPickerModal";
 
 /// <summary>
-/// DM-only SRD item browser with two tabs — mundane Equipment and Magic Items —
+/// DM-only compendium item browser with two tabs — mundane Equipment and Magic Items —
 /// rendered as two picker configs behind one tab state. The host supplies what a
 /// pick does (append an inventory row, or create a catalog item), so the same
 /// modal serves the Items catalog and sheet Inventory pages. Multi-pick.
@@ -48,7 +48,7 @@ export function SrdItemPickerModal({
   if (tab === "equipment") {
     return (
       <CompendiumPickerModal<CompendiumEquipment>
-        title="Add items from the SRD"
+        title="Add items from the compendium"
         load={loadEquipment}
         columns={[
           { label: "Category", render: (e) => e.category },
@@ -103,7 +103,7 @@ export function SrdItemPickerModal({
 
   return (
     <CompendiumPickerModal<CompendiumMagicItem>
-      title="Add items from the SRD"
+      title="Add items from the compendium"
       load={loadMagicItems}
       columns={[
         { label: "Category", render: (m) => m.category },

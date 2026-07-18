@@ -36,7 +36,7 @@ const nextName = (prefix: string, taken: string[]) => {
 export function ItemsPanel({ state, dm, openItemSheet, dropItemAt }: ItemsPanelProps) {
   const [srdPickerOpen, setSrdPickerOpen] = useState(false);
 
-  /** SRD pick → a new catalog item (create + fill, ordered messages). */
+  /** Compendium pick → a new catalog item (create + fill, ordered messages). */
   const importSrdItem = (patch: Partial<ItemRecord> & { name: string }) => {
     const itemId = newId("item");
     dm.createItem(itemId, patch.name);
@@ -95,8 +95,8 @@ export function ItemsPanel({ state, dm, openItemSheet, dropItemAt }: ItemsPanelP
       rows={rows}
       createLabel="Create Item"
       extraCreate={{
-        label: "Add from SRD",
-        title: "Import items from the 5e SRD compendium",
+        label: "Add from compendium",
+        title: "Import items from the compendium",
         icon: <BookOpen size={15} strokeWidth={2.2} />,
         onClick: () => setSrdPickerOpen(true),
       }}

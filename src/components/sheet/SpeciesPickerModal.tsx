@@ -5,7 +5,7 @@ import { CompendiumPickerModal } from "../CompendiumPickerModal";
 import type { SheetEdit } from "./context";
 
 /// <summary>
-/// SRD species picker (2024's term for race), opened from the species chip.
+/// Compendium species picker (2024's term for race), opened from the species chip.
 /// Default = name only; "Autofill basics" also sets size/speed and appends the
 /// species' traits as Species Features rows (skipping ones already present).
 /// </summary>

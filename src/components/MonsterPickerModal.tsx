@@ -13,7 +13,7 @@ const ABILITY_ROW: Array<[string, string]> = [
 ];
 
 /// <summary>
-/// DM-only SRD monster browser — picking one creates a fully-filled NPC sheet
+/// DM-only compendium monster browser — picking one creates a fully-filled NPC sheet
 /// (the host wires the create). CR and type filters; preview shows a compact
 /// stat block.
 /// </summary>
@@ -29,7 +29,7 @@ export function MonsterPickerModal({
 
   return (
     <CompendiumPickerModal<CompendiumMonster>
-      title="Create NPC from an SRD monster"
+      title="Create NPC from a compendium monster"
       load={loadMonsters}
       columns={[
         { label: "CR", render: (m) => m.cr },

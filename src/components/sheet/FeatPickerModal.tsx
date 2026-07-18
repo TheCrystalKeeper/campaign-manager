@@ -9,10 +9,14 @@ const CATEGORY_LABEL: Record<string, string> = {
   general: "General",
   "fighting-style": "Fighting Style",
   "epic-boon": "Epic Boon",
+  maneuver: "Maneuver",
+  metamagic: "Metamagic",
+  invocation: "Invocation",
 };
 
 /// <summary>
-/// SRD feat picker — multi-pick; each Add appends a Feats row to the sheet's
+/// Feat picker (feats plus Battle Master maneuvers, Metamagic, and Eldritch
+/// Invocations) — multi-pick; each Add appends a Feats row to the sheet's
 /// features list (players use it on their own sheet, the DM anywhere).
 /// </summary>
 export function FeatPickerModal({ sheet, onClose }: { sheet: SheetEdit; onClose: () => void }) {

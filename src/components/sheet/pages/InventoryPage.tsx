@@ -139,10 +139,10 @@ export function InventoryPage({ sheet }: { sheet: SheetEdit }) {
           <button
             type="button"
             className="btn-ghost"
-            title="Browse the full SRD item list (DM only)"
+            title="Browse the full compendium item list (DM only)"
             onClick={() => setSrdPickerOpen(true)}
           >
-            ＋ From SRD
+            ＋ From compendium
           </button>
         </div>
       ) : null}

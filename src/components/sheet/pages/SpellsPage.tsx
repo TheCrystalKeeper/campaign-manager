@@ -182,10 +182,10 @@ export function SpellsPage({ sheet }: { sheet: SheetEdit }) {
             <button
               type="button"
               className="btn-ghost"
-              title="Browse the full SRD spell list (DM only)"
+              title="Browse the full compendium spell list (DM only)"
               onClick={() => setSrdPickerOpen(true)}
             >
-              ＋ From SRD
+              ＋ From compendium
             </button>
           ) : null}
         </div>

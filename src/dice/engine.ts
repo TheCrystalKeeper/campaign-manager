@@ -127,8 +127,12 @@ interface RollInstance {
   k0: number;
   mode: RollMode;
   local: boolean;
-  /** Whole roll is coins — used to give impacts a metallic ring instead of a clack. */
+  /** Whole roll is coins — the metallic-ring fallback for legacy tracks whose impacts carry
+   * no die id, so a per-impact coin test isn't possible. Modern tracks use `coinIds`. */
   coin: boolean;
+  /** Ids of the coins in this roll: an impact whose die is in here rings instead of clacks,
+   * so a coin sounds like a coin even when thrown alongside dice. */
+  coinIds: Set<string>;
   track: DiceTrack | null;
   trackStart: number | null;
   nextImpact: number;
@@ -1063,6 +1067,7 @@ export class DiceEngine {
       mode,
       local,
       coin: dice.length > 0 && dice.every((d) => d.spec.kind === "coin"),
+      coinIds: new Set(dice.filter((d) => d.spec.kind === "coin").map((d) => d.spec.id)),
       track: null,
       trackStart: null,
       nextImpact: 0,
@@ -1138,7 +1143,12 @@ export class DiceEngine {
     if (f > last) f = last;
     this.applyTrackFrame(roll, f);
     while (roll.nextImpact < track.impacts.length && track.impacts[roll.nextImpact].frame <= f) {
-      this.callbacks.onImpact?.(track.impacts[roll.nextImpact].strength, roll.coin);
+      const impact = track.impacts[roll.nextImpact];
+      // Ring for a coin's own impact, clack for a die — decided per impact so a coin thrown
+      // alongside dice still sounds like a coin. Legacy tracks (no die id) fall back to the
+      // whole-roll flag.
+      const isCoin = impact.die !== undefined ? roll.coinIds.has(impact.die) : roll.coin;
+      this.callbacks.onImpact?.(impact.strength, isCoin);
       roll.nextImpact += 1;
     }
     if (f >= last) {
