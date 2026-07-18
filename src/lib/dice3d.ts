@@ -84,6 +84,10 @@ export interface DieFrames {
 export interface DiceImpact {
   frame: number;
   strength: number;
+  /** Id of the die that struck. Lets playback key a coin's grow/shrink arc to its OWN
+   * landing rather than the roll's first impact (a die that lands well before the coin).
+   * Optional: legacy tracks predate it. */
+  die?: string;
 }
 
 /**

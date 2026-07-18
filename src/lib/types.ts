@@ -1323,6 +1323,12 @@ export type GameState = {
    */
   showAllTokenHp: boolean;
   /**
+   * DM master switch: when on, the on-board token tray (the top-center strip of PC/NPC portrait
+   * chips) is hidden for everyone — the DM included. Off by default. Purely a display toggle; it
+   * changes nothing about who's on the board or what they can see.
+   */
+  hideTokenTray: boolean;
+  /**
    * Whether new image uploads are downscaled + re-encoded to WebP on the client before they're
    * stored (portraits/tokens ≤1024px, maps ≤2560px). On by default: much smaller files — faster
    * to load/decode and far easier on the 10 GB storage budget. Only affects NEW uploads.
@@ -1533,6 +1539,7 @@ export type ClientMessage =
   | { type: "SET_OPTIMIZE_UPLOADS"; enabled: boolean }
   | { type: "SET_PLAYERS_CAN_POINT"; enabled: boolean }
   | { type: "SET_SHOW_ALL_TOKEN_HP"; enabled: boolean }
+  | { type: "SET_HIDE_TOKEN_TRAY"; enabled: boolean }
   /** Replace a scene's whole wall set — bulk ops only (clear all / paste). Granular edits below. */
   | { type: "SET_WALLS"; sceneId: string; walls: Wall[] }
   | { type: "ADD_WALL"; sceneId: string; wall: Wall }
@@ -2891,6 +2898,7 @@ export function normalizeGameState(state: GameState & LegacyGameStateFields): Ga
     playersCanPoint: state.playersCanPoint !== false,
     // Off by default: only an explicit `true` turns it on (undefined ⇒ off).
     showAllTokenHp: state.showAllTokenHp === true,
+    hideTokenTray: state.hideTokenTray === true,
     optimizeUploads: state.optimizeUploads !== false,
     uiOverride: normalizeUiOverride(state.uiOverride),
     tokenShapeDefaults: normalizeTokenShapeDefaults(state.tokenShapeDefaults),
@@ -2949,6 +2957,7 @@ export function createInitialState(roomId: string): GameState {
     playersCanMove: true,
     playersCanPoint: true,
     showAllTokenHp: false,
+    hideTokenTray: false,
     optimizeUploads: true,
     uiOverride: null,
     tokenShapeDefaults: { ...DEFAULT_TOKEN_SHAPES },

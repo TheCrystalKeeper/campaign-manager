@@ -654,11 +654,11 @@ export class DiceEngine {
   }
 
   private buildReleaseStates(roll: RollInstance, vx: number, vz: number): DieThrowState[] {
-    // A coin isn't thrown across the table — it's flicked up in place. Reinterpret the
-    // flick entirely (see buildCoinFlipStates) when the whole roll is coins.
-    if (roll.dice.every((d) => d.spec.kind === "coin")) {
-      return this.buildCoinFlipStates(roll, vx, vz);
-    }
+    // Per-die launch: a coin is never thrown across the table — it's flicked straight up in
+    // place (see coinFlipState) so its fake-depth arc reads as a real flip. A die is thrown
+    // forward to tumble. Deciding per die (not once for the whole roll) means a coin thrown
+    // alongside dice still flips properly instead of inheriting the die's flat forward toss,
+    // whose near-instant, low apex is what made the coin's arc balloon and snap.
     const cap = 16;
     const cvx = clamp(vx, -cap, cap);
     const cvz = clamp(vz, -cap, cap);
@@ -671,6 +671,9 @@ export class DiceEngine {
     const axisX = speed > 0.01 ? cvz / speed : 0;
     const axisZ = speed > 0.01 ? -cvx / speed : 0;
     return roll.dice.map((d) => {
+      if (d.spec.kind === "coin") {
+        return this.coinFlipState(d, vx, vz);
+      }
       const p = d.mesh.position;
       const q = d.mesh.quaternion;
       const lin: Vec3 = [cvx + (Math.random() - 0.5) * 2, 1.5, cvz + (Math.random() - 0.5) * 2];
@@ -686,15 +689,15 @@ export class DiceEngine {
   }
 
   /// <summary>
-  /// Coin flip launch. The flick's speed — measured by the same release-velocity sampling
-  /// as a die throw — is reinterpreted: its MAGNITUDE drives the vertical pop and the
-  /// end-over-end spin (harder flick → higher, spinnier), while horizontal travel is
-  /// clamped near zero with a hair of forward bias, so the coin lands flat just ahead of
-  /// the flick instead of sailing across the board. Spin is about the world X axis
-  /// (toward/away from the viewer) so the H/T caps alternate up and the flip reads clearly.
-  /// The coin's floaty hang time comes from a reduced gravity scale in presimulate().
+  /// Coin flip launch for one coin. The flick's speed — measured by the same release-velocity
+  /// sampling as a die throw — is reinterpreted: its MAGNITUDE drives the vertical pop and the
+  /// end-over-end spin (harder flick → higher, spinnier), while horizontal travel is clamped
+  /// near zero with a hair of forward bias, so the coin lands flat just ahead of the flick
+  /// instead of sailing across the board. Spin is about the world X axis (toward/away from the
+  /// viewer) so the H/T caps alternate up and the flip reads clearly. The coin's floaty hang
+  /// time comes from a reduced gravity scale in presimulate().
   /// </summary>
-  private buildCoinFlipStates(roll: RollInstance, vx: number, vz: number): DieThrowState[] {
+  private coinFlipState(d: DieInstance, vx: number, vz: number): DieThrowState {
     const flick = Math.hypot(clamp(vx, -16, 16), clamp(vz, -16, 16));
     const pop = clamp(5 + flick * 0.45, 6, 9); // vertical launch — drives the grow/lift arc
     const spin = clamp(16 + flick * 1.4, 18, 40); // end-over-end rate scales with the flick
@@ -706,22 +709,20 @@ export class DiceEngine {
     // sideways momentum and topples to a face. Kept small so it still reads as a clean
     // vertical flip, not a chaotic tumble.
     const nudge = () => (Math.random() - 0.5) * 1.1;
-    return roll.dice.map((d) => {
-      const p = d.mesh.position;
-      // Start the flip DEAD-FLAT (caps up/down), preserving only the held yaw. The held
-      // coin merely wobbles near-flat (see animateDrag), but we still zero the tilt at
-      // release so every end-over-end flip begins on a face and lands on a face — the
-      // surest cure for edge landings. This is orientation only; the value is server-picked.
-      const yaw = new THREE.Euler().setFromQuaternion(d.mesh.quaternion, "YXZ").y;
-      const flat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, yaw, 0, "YXZ"));
-      return {
-        id: d.spec.id,
-        p: [p.x, p.y, p.z] as Vec3,
-        q: [flat.x, flat.y, flat.z, flat.w] as Quat,
-        lin: [driftX + nudge(), pop, driftZ + nudge()] as Vec3,
-        ang: [spin + jitter(), jitter() * 1.6, jitter()] as Vec3,
-      };
-    });
+    const p = d.mesh.position;
+    // Start the flip DEAD-FLAT (caps up/down), preserving only the held yaw. The held
+    // coin merely wobbles near-flat (see animateDrag), but we still zero the tilt at
+    // release so every end-over-end flip begins on a face and lands on a face — the
+    // surest cure for edge landings. This is orientation only; the value is server-picked.
+    const yaw = new THREE.Euler().setFromQuaternion(d.mesh.quaternion, "YXZ").y;
+    const flat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, yaw, 0, "YXZ"));
+    return {
+      id: d.spec.id,
+      p: [p.x, p.y, p.z] as Vec3,
+      q: [flat.x, flat.y, flat.z, flat.w] as Quat,
+      lin: [driftX + nudge(), pop, driftZ + nudge()] as Vec3,
+      ang: [spin + jitter(), jitter() * 1.6, jitter()] as Vec3,
+    };
   }
 
   private releaseVelocity(samples: { t: number; x: number; z: number }[]): { vx: number; vz: number } {
@@ -837,7 +838,11 @@ export class DiceEngine {
         const v = bodies[idx].linvel();
         const speed = Math.hypot(v.x, v.y, v.z);
         if (speed > 0.8) {
-          impacts.push({ frame: Math.floor(step / recordEvery), strength: Math.min(speed / 18, 1) });
+          impacts.push({
+            frame: Math.floor(step / recordEvery),
+            strength: Math.min(speed / 18, 1),
+            die: specs[idx].id,
+          });
         }
       });
 
@@ -893,20 +898,40 @@ export class DiceEngine {
       const die = this.createDie(spec);
       die.samples = byId.get(spec.id) ?? [];
       if (spec.kind === "coin") {
-        // The arc peaks at the coin's real peak-height frame and ends at its FIRST floor
-        // contact (the frame it visibly hits the board). Center-Y is unreliable for the END
-        // (a spinning coin lands edge-on, center still high, then flops flat), so the end
-        // uses the first recorded impact (one coin ⇒ impacts[0] is its landing).
+        // Fake-depth arc timing. It peaks at the coin's real peak-height frame; the apex loop
+        // also yields the coin's resting height (its final sample) for the landing test below.
+        const samples = die.samples ?? [];
+        const coinY = (fr: number) => samples[fr * 7 + 1];
         let apex = 0;
         let maxY = -Infinity;
-        for (let fr = 0; fr * 7 + 1 < die.samples.length; fr += 1) {
-          const y = die.samples[fr * 7 + 1];
+        let lastFrame = 0;
+        for (let fr = 0; fr * 7 + 1 < samples.length; fr += 1) {
+          lastFrame = fr;
+          const y = coinY(fr);
           if (y > maxY) {
             maxY = y;
             apex = fr;
           }
         }
-        const landFrame = track.impacts.length > 0 ? track.impacts[0].frame : track.frames - 1;
+        const restY = samples.length >= 7 ? coinY(lastFrame) : 0;
+        // Landing = this coin's first floor contact after the apex: its first recorded impact
+        // that (a) belongs to THIS coin — the roll's first impact, or a neighbour's, would be
+        // some die landing while the floaty coin is still airborne, which collapses the fall
+        // to one frame and snaps the coin back to size — and (b) catches the coin already near
+        // the felt (bottom 30% of the flight), so a mid-descent clip against another falling
+        // die, coin still high, isn't mistaken for touchdown (that would end the shrink early,
+        // mid-air). Center-Y alone can't time first contact (a coin lands edge-on, center
+        // still high, then flops flat), hence the impact. Fallbacks cover legacy tracks with
+        // no die id (a lone coin — impacts[0] is its landing).
+        const nearFloorY = restY + (maxY - restY) * 0.3;
+        const landImpact =
+          track.impacts.find(
+            (im) => im.die === spec.id && im.frame > apex && coinY(im.frame) <= nearFloorY,
+          ) ??
+          track.impacts.find((im) => im.die === spec.id && im.frame > apex) ??
+          track.impacts.find((im) => im.die === spec.id) ??
+          track.impacts[0];
+        const landFrame = landImpact ? landImpact.frame : track.frames - 1;
         die.coinApexFrame = Math.max(1, apex);
         die.coinLandFrame = Math.max(die.coinApexFrame + 1, landFrame);
       }

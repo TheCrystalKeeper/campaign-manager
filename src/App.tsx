@@ -1003,6 +1003,7 @@ export default function App() {
       <div className="dice-arena" ref={dice.containerRef} />
 
       <div className="overlay">
+        {!state.hideTokenTray ? (
         <FloatingCluster
           anchor="top-center"
           plain
@@ -1061,6 +1062,7 @@ export default function App() {
             );
           })}
         </FloatingCluster>
+        ) : null}
 
         {isDm && onBoard ? (
           <div className="page-switcher">

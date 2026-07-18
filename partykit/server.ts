@@ -2090,6 +2090,15 @@ export default class GameServer implements Party.Server {
         }
         break;
       }
+      case "SET_HIDE_TOKEN_TRAY": {
+        const enabled = Boolean(parsed.enabled);
+        if (this.state.hideTokenTray !== enabled) {
+          this.state.hideTokenTray = enabled;
+          this.logEvent(`Token tray ${enabled ? "hidden" : "shown"} by the DM.`);
+          void this.broadcastState();
+        }
+        break;
+      }
       case "SET_UI_OVERRIDE": {
         // DM-forced theme+accent for every client (null = players choose their own).
         const next = parsed.override === null ? null : normalizeUiOverride(parsed.override);

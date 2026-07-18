@@ -552,6 +552,12 @@ export function SettingsPanel({ ctx }: { ctx: PanelContext }) {
             onToggle={(on) => room.send({ type: "SET_SHOW_ALL_TOKEN_HP", enabled: on })}
           />
           <ToggleRow
+            label="Hide token tray"
+            hint="Hide the strip of party/NPC portrait chips at the top of the board for everyone — you included. Off (default) = the tray shows. Doesn't change who's on the board."
+            on={state.hideTokenTray}
+            onToggle={(on) => room.send({ type: "SET_HIDE_TOKEN_TRAY", enabled: on })}
+          />
+          <ToggleRow
             label="Reduce visual effects"
             hint="Turn off the fancy decorative effects (textured panels, notch frames, modal blur, crystal glow) for a lighter, faster render on slower machines. This device only — doesn't affect other players."
             on={fxLite}
