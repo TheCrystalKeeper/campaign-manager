@@ -2000,10 +2000,10 @@ export const SHEET_ROW_CAPS = {
   pills: 40,
 } as const;
 
-const NAME_CAP = 120;
-const DESC_CAP = 1000;
-const SHORT_CAP = 40;
-const PILL_CAP = 60;
+export const NAME_CAP = 120;
+export const DESC_CAP = 1000;
+export const SHORT_CAP = 40;
+export const PILL_CAP = 60;
 const BIO_CAP = 5000;
 
 /// <summary>
