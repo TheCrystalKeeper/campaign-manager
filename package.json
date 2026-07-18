@@ -8,7 +8,8 @@
     "build": "tsc -p tsconfig.json && vite build",
     "preview": "vite preview",
     "partykit:dev": "partykit dev --port 1999",
-    "partykit:deploy": "partykit deploy"
+    "partykit:deploy": "partykit deploy",
+    "compendium": "node scripts/build-compendium.mjs"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250710.0",

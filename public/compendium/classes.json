@@ -1,0 +1,705 @@
+[
+ {
+  "id": "barbarian",
+  "name": "Barbarian",
+  "hitDie": 12,
+  "primaryAbility": "Strength",
+  "saves": [
+   "str",
+   "con"
+  ],
+  "armorProfs": [
+   "Light Armor",
+   "Medium Armor",
+   "Shields"
+  ],
+  "weaponProfs": [
+   "Simple Weapons",
+   "Martial Weapons"
+  ],
+  "skillChoices": {
+   "choose": 2,
+   "from": [
+    "skill-animal-handling",
+    "skill-athletics",
+    "skill-intimidation",
+    "skill-nature",
+    "skill-perception",
+    "skill-survival"
+   ]
+  },
+  "subclassIds": [
+   "path-of-the-berserker"
+  ],
+  "subclassLevel": 3,
+  "multiclass": {
+   "prereqs": [
+    {
+     "abilityIds": [
+      "str"
+     ],
+     "min": 13,
+     "mode": "and"
+    }
+   ],
+   "armorProfs": [
+    "Shields"
+   ],
+   "weaponProfs": [
+    "Martial Weapons"
+   ]
+  }
+ },
+ {
+  "id": "bard",
+  "name": "Bard",
+  "hitDie": 8,
+  "primaryAbility": "Charisma",
+  "saves": [
+   "dex",
+   "cha"
+  ],
+  "armorProfs": [
+   "Light Armor"
+  ],
+  "weaponProfs": [
+   "Simple Weapons"
+  ],
+  "skillChoices": {
+   "choose": 3,
+   "from": [
+    "skill-acrobatics",
+    "skill-animal-handling",
+    "skill-arcana",
+    "skill-athletics",
+    "skill-deception",
+    "skill-history",
+    "skill-insight",
+    "skill-intimidation",
+    "skill-investigation",
+    "skill-medicine",
+    "skill-nature",
+    "skill-perception",
+    "skill-performance",
+    "skill-persuasion",
+    "skill-religion",
+    "skill-sleight-of-hand",
+    "skill-stealth",
+    "skill-survival"
+   ]
+  },
+  "spellcasting": {
+   "abilityId": "cha",
+   "casterType": "full"
+  },
+  "subclassIds": [
+   "college-of-lore"
+  ],
+  "subclassLevel": 3,
+  "multiclass": {
+   "prereqs": [
+    {
+     "abilityIds": [
+      "cha"
+     ],
+     "min": 13,
+     "mode": "and"
+    }
+   ],
+   "armorProfs": [
+    "Light Armor"
+   ],
+   "skillChoice": {
+    "choose": 1,
+    "from": [
+     "skill-acrobatics",
+     "skill-animal-handling",
+     "skill-arcana",
+     "skill-athletics",
+     "skill-deception",
+     "skill-history",
+     "skill-insight",
+     "skill-intimidation",
+     "skill-investigation",
+     "skill-medicine",
+     "skill-nature",
+     "skill-perception",
+     "skill-performance",
+     "skill-persuasion",
+     "skill-religion",
+     "skill-sleight-of-hand",
+     "skill-stealth",
+     "skill-survival"
+    ]
+   }
+  }
+ },
+ {
+  "id": "cleric",
+  "name": "Cleric",
+  "hitDie": 8,
+  "primaryAbility": "Wisdom",
+  "saves": [
+   "wis",
+   "cha"
+  ],
+  "armorProfs": [
+   "Light Armor",
+   "Medium Armor",
+   "Shields"
+  ],
+  "weaponProfs": [
+   "Simple Weapons"
+  ],
+  "skillChoices": {
+   "choose": 2,
+   "from": [
+    "skill-history",
+    "skill-insight",
+    "skill-medicine",
+    "skill-persuasion",
+    "skill-religion"
+   ]
+  },
+  "spellcasting": {
+   "abilityId": "wis",
+   "casterType": "full"
+  },
+  "subclassIds": [
+   "life-domain"
+  ],
+  "subclassLevel": 3,
+  "multiclass": {
+   "prereqs": [
+    {
+     "abilityIds": [
+      "wis"
+     ],
+     "min": 13,
+     "mode": "and"
+    }
+   ],
+   "armorProfs": [
+    "Light Armor",
+    "Medium Armor",
+    "Shields"
+   ]
+  }
+ },
+ {
+  "id": "druid",
+  "name": "Druid",
+  "hitDie": 8,
+  "primaryAbility": "Wisdom",
+  "saves": [
+   "int",
+   "wis"
+  ],
+  "armorProfs": [
+   "Light Armor",
+   "Shields"
+  ],
+  "weaponProfs": [
+   "Simple Weapons"
+  ],
+  "toolProfs": [
+   "Herbalism Kit"
+  ],
+  "skillChoices": {
+   "choose": 2,
+   "from": [
+    "skill-arcana",
+    "skill-animal-handling",
+    "skill-insight",
+    "skill-medicine",
+    "skill-nature",
+    "skill-perception",
+    "skill-religion",
+    "skill-survival"
+   ]
+  },
+  "spellcasting": {
+   "abilityId": "wis",
+   "casterType": "full"
+  },
+  "subclassIds": [
+   "circle-of-the-land"
+  ],
+  "subclassLevel": 3,
+  "multiclass": {
+   "prereqs": [
+    {
+     "abilityIds": [
+      "wis"
+     ],
+     "min": 13,
+     "mode": "and"
+    }
+   ],
+   "armorProfs": [
+    "Light Armor",
+    "Shields"
+   ]
+  }
+ },
+ {
+  "id": "fighter",
+  "name": "Fighter",
+  "hitDie": 10,
+  "primaryAbility": "Strength or Dexterity",
+  "saves": [
+   "str",
+   "con"
+  ],
+  "armorProfs": [
+   "All armor",
+   "Shields"
+  ],
+  "weaponProfs": [
+   "Simple Weapons",
+   "Martial Weapons"
+  ],
+  "skillChoices": {
+   "choose": 2,
+   "from": [
+    "skill-acrobatics",
+    "skill-animal-handling",
+    "skill-athletics",
+    "skill-history",
+    "skill-insight",
+    "skill-intimidation",
+    "skill-perception",
+    "skill-survival"
+   ]
+  },
+  "subclassIds": [
+   "champion"
+  ],
+  "subclassLevel": 3,
+  "multiclass": {
+   "prereqs": [
+    {
+     "abilityIds": [
+      "str",
+      "dex"
+     ],
+     "min": 13,
+     "mode": "or"
+    }
+   ],
+   "armorProfs": [
+    "Light Armor",
+    "Medium Armor",
+    "Shields"
+   ],
+   "weaponProfs": [
+    "Martial Weapons"
+   ]
+  }
+ },
+ {
+  "id": "monk",
+  "name": "Monk",
+  "hitDie": 8,
+  "primaryAbility": "Dexterity and Wisdom",
+  "saves": [
+   "str",
+   "dex"
+  ],
+  "weaponProfs": [
+   "Simple Weapons",
+   "Scimitars",
+   "Shortswords",
+   "Hand crossbows"
+  ],
+  "skillChoices": {
+   "choose": 2,
+   "from": [
+    "skill-acrobatics",
+    "skill-athletics",
+    "skill-history",
+    "skill-insight",
+    "skill-religion",
+    "skill-stealth"
+   ]
+  },
+  "subclassIds": [
+   "warrior-of-the-open-hand"
+  ],
+  "subclassLevel": 3,
+  "multiclass": {
+   "prereqs": [
+    {
+     "abilityIds": [
+      "dex"
+     ],
+     "min": 13,
+     "mode": "and"
+    },
+    {
+     "abilityIds": [
+      "wis"
+     ],
+     "min": 13,
+     "mode": "and"
+    }
+   ]
+  }
+ },
+ {
+  "id": "paladin",
+  "name": "Paladin",
+  "hitDie": 10,
+  "primaryAbility": "Strength and Charisma",
+  "saves": [
+   "wis",
+   "cha"
+  ],
+  "armorProfs": [
+   "All armor",
+   "Shields"
+  ],
+  "weaponProfs": [
+   "Simple Weapons",
+   "Martial Weapons"
+  ],
+  "skillChoices": {
+   "choose": 2,
+   "from": [
+    "skill-athletics",
+    "skill-insight",
+    "skill-intimidation",
+    "skill-medicine",
+    "skill-persuasion",
+    "skill-religion"
+   ]
+  },
+  "spellcasting": {
+   "abilityId": "cha",
+   "casterType": "half"
+  },
+  "subclassIds": [
+   "oath-of-devotion"
+  ],
+  "subclassLevel": 3,
+  "multiclass": {
+   "prereqs": [
+    {
+     "abilityIds": [
+      "str"
+     ],
+     "min": 13,
+     "mode": "and"
+    },
+    {
+     "abilityIds": [
+      "cha"
+     ],
+     "min": 13,
+     "mode": "and"
+    }
+   ],
+   "armorProfs": [
+    "Light Armor",
+    "Medium Armor",
+    "Shields"
+   ],
+   "weaponProfs": [
+    "Martial Weapons"
+   ]
+  }
+ },
+ {
+  "id": "ranger",
+  "name": "Ranger",
+  "hitDie": 10,
+  "primaryAbility": "Dexterity and Wisdom",
+  "saves": [
+   "str",
+   "dex"
+  ],
+  "armorProfs": [
+   "Light Armor",
+   "Medium Armor",
+   "Shields"
+  ],
+  "weaponProfs": [
+   "Simple Weapons",
+   "Martial Weapons"
+  ],
+  "skillChoices": {
+   "choose": 3,
+   "from": [
+    "skill-animal-handling",
+    "skill-athletics",
+    "skill-insight",
+    "skill-investigation",
+    "skill-nature",
+    "skill-perception",
+    "skill-stealth",
+    "skill-survival"
+   ]
+  },
+  "spellcasting": {
+   "abilityId": "wis",
+   "casterType": "half"
+  },
+  "subclassIds": [
+   "hunter"
+  ],
+  "subclassLevel": 3,
+  "multiclass": {
+   "prereqs": [
+    {
+     "abilityIds": [
+      "dex"
+     ],
+     "min": 13,
+     "mode": "and"
+    },
+    {
+     "abilityIds": [
+      "wis"
+     ],
+     "min": 13,
+     "mode": "and"
+    }
+   ],
+   "armorProfs": [
+    "Light Armor",
+    "Medium Armor",
+    "Shields"
+   ],
+   "weaponProfs": [
+    "Martial Weapons"
+   ],
+   "skillChoice": {
+    "choose": 1,
+    "from": [
+     "skill-animal-handling",
+     "skill-athletics",
+     "skill-insight",
+     "skill-investigation",
+     "skill-nature",
+     "skill-perception",
+     "skill-stealth",
+     "skill-survival"
+    ]
+   }
+  }
+ },
+ {
+  "id": "rogue",
+  "name": "Rogue",
+  "hitDie": 8,
+  "primaryAbility": "Dexterity",
+  "saves": [
+   "dex",
+   "int"
+  ],
+  "armorProfs": [
+   "Light Armor"
+  ],
+  "weaponProfs": [
+   "Simple Weapons",
+   "Longswords",
+   "Rapiers",
+   "Scimitars",
+   "Shortswords",
+   "Whips",
+   "Hand crossbows"
+  ],
+  "toolProfs": [
+   "Tool: Thieves' Tools"
+  ],
+  "skillChoices": {
+   "choose": 4,
+   "from": [
+    "skill-acrobatics",
+    "skill-athletics",
+    "skill-deception",
+    "skill-insight",
+    "skill-intimidation",
+    "skill-investigation",
+    "skill-perception",
+    "skill-performance",
+    "skill-persuasion",
+    "skill-sleight-of-hand",
+    "skill-stealth"
+   ]
+  },
+  "subclassIds": [
+   "thief"
+  ],
+  "subclassLevel": 3,
+  "multiclass": {
+   "prereqs": [
+    {
+     "abilityIds": [
+      "dex"
+     ],
+     "min": 13,
+     "mode": "and"
+    }
+   ],
+   "armorProfs": [
+    "Light Armor"
+   ],
+   "toolProfs": [
+    "Tool: Thieves' Tools"
+   ],
+   "skillChoice": {
+    "choose": 1,
+    "from": [
+     "skill-acrobatics",
+     "skill-athletics",
+     "skill-deception",
+     "skill-insight",
+     "skill-intimidation",
+     "skill-investigation",
+     "skill-perception",
+     "skill-performance",
+     "skill-persuasion",
+     "skill-sleight-of-hand",
+     "skill-stealth"
+    ]
+   }
+  }
+ },
+ {
+  "id": "sorcerer",
+  "name": "Sorcerer",
+  "hitDie": 6,
+  "primaryAbility": "Charisma",
+  "saves": [
+   "con",
+   "cha"
+  ],
+  "weaponProfs": [
+   "Simple Weapons"
+  ],
+  "skillChoices": {
+   "choose": 2,
+   "from": [
+    "skill-arcana",
+    "skill-deception",
+    "skill-insight",
+    "skill-intimidation",
+    "skill-persuasion",
+    "skill-religion"
+   ]
+  },
+  "spellcasting": {
+   "abilityId": "cha",
+   "casterType": "full"
+  },
+  "subclassIds": [
+   "draconic-sorcery"
+  ],
+  "subclassLevel": 3,
+  "multiclass": {
+   "prereqs": [
+    {
+     "abilityIds": [
+      "cha"
+     ],
+     "min": 13,
+     "mode": "and"
+    }
+   ]
+  }
+ },
+ {
+  "id": "warlock",
+  "name": "Warlock",
+  "hitDie": 8,
+  "primaryAbility": "Charisma",
+  "saves": [
+   "wis",
+   "cha"
+  ],
+  "armorProfs": [
+   "Light Armor"
+  ],
+  "weaponProfs": [
+   "Simple Weapons"
+  ],
+  "skillChoices": {
+   "choose": 2,
+   "from": [
+    "skill-arcana",
+    "skill-deception",
+    "skill-history",
+    "skill-intimidation",
+    "skill-investigation",
+    "skill-nature",
+    "skill-religion"
+   ]
+  },
+  "spellcasting": {
+   "abilityId": "cha",
+   "casterType": "pact"
+  },
+  "subclassIds": [
+   "fiend-patron"
+  ],
+  "subclassLevel": 3,
+  "multiclass": {
+   "prereqs": [
+    {
+     "abilityIds": [
+      "cha"
+     ],
+     "min": 13,
+     "mode": "and"
+    }
+   ],
+   "armorProfs": [
+    "Light Armor"
+   ]
+  }
+ },
+ {
+  "id": "wizard",
+  "name": "Wizard",
+  "hitDie": 6,
+  "primaryAbility": "Intelligence",
+  "saves": [
+   "int",
+   "wis"
+  ],
+  "weaponProfs": [
+   "Simple Weapons"
+  ],
+  "skillChoices": {
+   "choose": 2,
+   "from": [
+    "skill-arcana",
+    "skill-history",
+    "skill-insight",
+    "skill-investigation",
+    "skill-medicine",
+    "skill-religion"
+   ]
+  },
+  "spellcasting": {
+   "abilityId": "int",
+   "casterType": "full"
+  },
+  "subclassIds": [
+   "evoker"
+  ],
+  "subclassLevel": 3,
+  "multiclass": {
+   "prereqs": [
+    {
+     "abilityIds": [
+      "int"
+     ],
+     "min": 13,
+     "mode": "and"
+    }
+   ]
+  }
+ }
+]
