@@ -3,6 +3,7 @@ import { loadSpells, type CompendiumSpell } from "../../lib/compendium";
 import { spellEntryFromCompendium } from "../../lib/compendiumMap";
 import { SHEET_ROW_CAPS } from "../../lib/types";
 import { CompendiumPickerModal } from "../CompendiumPickerModal";
+import { CompendiumDescription } from "../compendiumPreview";
 import type { SheetEdit } from "./context";
 
 const CASTER_CLASSES = ["bard", "cleric", "druid", "paladin", "ranger", "sorcerer", "warlock", "wizard"];
@@ -60,8 +61,10 @@ export function SpellPickerModal({ sheet, onClose }: { sheet: SheetEdit; onClose
             {s.concentration ? " (C)" : ""}
             {s.ritual ? " (R)" : ""}
           </p>
-          <p>{s.description}</p>
-          <p className="muted">Classes: {s.classes.map((c) => c[0].toUpperCase() + c.slice(1)).join(", ")}</p>
+          <CompendiumDescription text={s.description} />
+          <p className="muted">
+            <strong>Classes:</strong> {s.classes.map((c) => c[0].toUpperCase() + c.slice(1)).join(", ")}
+          </p>
         </div>
       )}
       multiPick

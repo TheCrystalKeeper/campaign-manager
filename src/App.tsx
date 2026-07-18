@@ -5,6 +5,7 @@ import { FloatingCluster } from "./components/FloatingCluster";
 import { FloatingWindow } from "./components/FloatingWindow";
 import { Dock, type DockAction } from "./components/Dock";
 import { ConfirmDeleteHost, CONFIRM_DELETES_KEY } from "./components/ConfirmDeleteDialog";
+import { ConfirmActionHost } from "./components/ConfirmActionDialog";
 import { DiceTray } from "./components/DiceTray";
 import { HandoutViewer } from "./components/HandoutsPanel";
 import { LogToasts } from "./components/LogToasts";
@@ -975,6 +976,7 @@ export default function App() {
   return (
     <div className="app">
       <ConfirmDeleteHost onDisableConfirms={() => setConfirmDeletesState(false)} />
+      <ConfirmActionHost />
       <MapCanvas
         state={state}
         sceneId={displayedSceneId ?? state.activeSceneId}

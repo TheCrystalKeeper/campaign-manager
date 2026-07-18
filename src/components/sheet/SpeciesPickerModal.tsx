@@ -1,28 +1,63 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { loadSpecies, type CompendiumSpecies } from "../../lib/compendium";
 import { speciesAutofillPatch } from "../../lib/compendiumMap";
+import { confirmAction } from "../ConfirmActionDialog";
 import { CompendiumPickerModal } from "../CompendiumPickerModal";
 import type { SheetEdit } from "./context";
 
+/** Reverse-map a `race` display string ("Elf (Drow)") to species + subspecies ids. */
+function matchSpecies(
+  species: CompendiumSpecies[],
+  race: string,
+): { speciesId?: string; subspeciesId?: string } {
+  const trimmed = race.trim();
+  if (!trimmed) return {};
+  const paren = /^(.*?)\s*\(([^)]+)\)\s*$/.exec(trimmed);
+  const baseName = (paren ? paren[1] : trimmed).trim().toLowerCase();
+  const subName = paren ? paren[2].trim().toLowerCase() : "";
+  const sp = species.find((s) => s.name.toLowerCase() === baseName);
+  if (!sp) return {};
+  const sub = subName
+    ? sp.subspecies?.find((ss) => ss.name.replace(/^.*?:\s*/, "").trim().toLowerCase() === subName)
+    : undefined;
+  return { speciesId: sp.id, subspeciesId: sub?.id };
+}
+
 /// <summary>
 /// Compendium species picker (2024's term for race), opened from the species chip.
-/// Default = name only; "Autofill basics" also sets size/speed and appends the
-/// species' traits as Species Features rows (skipping ones already present).
+/// Reopening pre-selects the current species, lineage, and "Autofill basics" state.
+/// Default = name only; "Autofill basics" also sets size/speed and REPLACES the
+/// species' feature rows — swapping species deletes the old set (confirmed first
+/// when any species features already exist).
 /// </summary>
 export function SpeciesPickerModal({ sheet, onClose }: { sheet: SheetEdit; onClose: () => void }) {
+  const [species, setSpecies] = useState<CompendiumSpecies[] | null>(null);
   const [current, setCurrent] = useState<CompendiumSpecies | null>(null);
   const [subspeciesId, setSubspeciesId] = useState("");
-  const [autofill, setAutofill] = useState(false);
+  const [autofill, setAutofill] = useState(sheet.value.speciesAutofill);
 
+  useEffect(() => {
+    void loadSpecies().then(setSpecies, () => setSpecies([]));
+  }, []);
+
+  // Wait for the species list so the pre-selection is stable at mount (loadSpecies
+  // is cached, so this only actually blocks the very first compendium open).
+  if (species === null) return null;
+  const initial = matchSpecies(species, sheet.value.race);
+
+  // Only clear the lineage when the highlighted species genuinely changes, so the
+  // pre-seeded lineage survives the modal's initial auto-select.
   const handleSelect = (sp: CompendiumSpecies | null) => {
+    if (sp?.id === current?.id) return;
     setCurrent(sp);
-    setSubspeciesId("");
+    setSubspeciesId(sp?.id === initial.speciesId ? initial.subspeciesId ?? "" : "");
   };
 
   return (
     <CompendiumPickerModal<CompendiumSpecies>
       title="Choose a species"
       load={loadSpecies}
+      initialSelectedId={initial.speciesId}
       columns={[
         { label: "Size", render: (s) => s.size },
         { label: "Speed", render: (s) => `${s.speed} ft.` },
@@ -57,21 +92,50 @@ export function SpeciesPickerModal({ sheet, onClose }: { sheet: SheetEdit; onClo
               </select>
             </label>
           ) : null}
-          <label title="Also set size and speed, and add the species' traits as feature rows">
+          <label title="Also set size and speed, and replace the species' feature rows">
             <input type="checkbox" checked={autofill} onChange={(e) => setAutofill(e.target.checked)} />
             Autofill basics
           </label>
         </div>
       }
       pickLabel="Set species"
-      onPick={(sp) => {
-        sheet.update(
-          speciesAutofillPatch(sp, {
-            subspeciesId: subspeciesId || undefined,
-            autofill,
-            sheet: sheet.value,
-          }),
-        );
+      onPick={async (sp) => {
+        const speciesRows = sheet.value.features.filter((f) => f.source === "species");
+        if (autofill && speciesRows.length) {
+          const n = speciesRows.length;
+          const plural = n === 1 ? "" : "s";
+          const them = n === 1 ? "it" : "them";
+          const rows = `the ${n} current species feature${plural} (including any you added by hand)`;
+          const newSub = sp.subspecies?.find((ss) => ss.id === subspeciesId)?.name;
+          const sameSpecies = initial.speciesId === sp.id;
+          const oldSub = sameSpecies
+            ? sp.subspecies?.find((ss) => ss.id === initial.subspeciesId)?.name
+            : undefined;
+          const lineageChanged = sameSpecies && (initial.subspeciesId ?? "") !== (subspeciesId || "");
+
+          // Word the warning for what's actually changing: a whole new species, a
+          // lineage swap within the same species (naming both, "no lineage" when blank),
+          // or a plain re-apply.
+          let title = "Replace species features?";
+          let confirmLabel = "Replace";
+          let body: string;
+          if (!sameSpecies) {
+            body = `Switching to ${sp.name} will remove ${rows} and replace ${them} with ${sp.name}'s features.`;
+          } else if (lineageChanged) {
+            title = "Change lineage?";
+            confirmLabel = "Change lineage";
+            body = `Changing your ${sp.name} lineage from ${oldSub ?? "no lineage"} to ${newSub ?? "no lineage"} will remove ${rows} and replace ${them} with the new set.`;
+          } else {
+            body = `Re-applying ${sp.name}${newSub ? ` (${newSub})` : ""} will remove ${rows} and replace ${them}.`;
+          }
+
+          const ok = await confirmAction({ title, body, confirmLabel, danger: true });
+          if (!ok) return false;
+        }
+        sheet.update({
+          ...speciesAutofillPatch(sp, { subspeciesId: subspeciesId || undefined, autofill, sheet: sheet.value }),
+          speciesAutofill: autofill,
+        });
       }}
       onClose={onClose}
     />

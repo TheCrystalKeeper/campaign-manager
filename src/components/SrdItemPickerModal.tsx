@@ -6,6 +6,7 @@ import {
   type CompendiumMagicItem,
 } from "../lib/compendium";
 import { CompendiumPickerModal } from "./CompendiumPickerModal";
+import { CompendiumDescription, PreviewLine } from "./compendiumPreview";
 
 /// <summary>
 /// DM-only compendium item browser with two tabs — mundane Equipment and Magic Items —
@@ -78,20 +79,20 @@ export function SrdItemPickerModal({
               {typeof e.weight === "number" ? ` · ${e.weight} lb` : ""}
             </p>
             {e.damage ? (
-              <p>
-                Damage: {e.damage} {e.damageType}
-              </p>
+              <PreviewLine label="Damage">
+                {e.damage} {e.damageType}
+              </PreviewLine>
             ) : null}
-            {e.properties?.length ? <p>Properties: {e.properties.join(", ")}</p> : null}
+            {e.properties?.length ? <PreviewLine label="Properties">{e.properties.join(", ")}</PreviewLine> : null}
             {e.acBase != null ? (
               <p>
-                AC {e.acBase}
+                <strong>AC {e.acBase}</strong>
                 {e.acDexBonus ? ` + Dex${e.acMaxBonus ? ` (max ${e.acMaxBonus})` : ""}` : ""}
                 {e.strMin ? ` · Str ${e.strMin}` : ""}
                 {e.stealthDisadvantage ? " · Stealth disadvantage" : ""}
               </p>
             ) : null}
-            {e.description ? <p>{e.description}</p> : null}
+            {e.description ? <CompendiumDescription text={e.description} /> : null}
           </div>
         )}
         multiPick
@@ -134,7 +135,7 @@ export function SrdItemPickerModal({
             {m.category} · {m.rarityText ?? m.rarity}
             {m.attunement ? " · requires attunement" : ""}
           </p>
-          <p>{m.description}</p>
+          <CompendiumDescription text={m.description} />
         </div>
       )}
       multiPick

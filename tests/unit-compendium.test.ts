@@ -142,6 +142,41 @@ const elf = species.find((s) => s.id === "elf")!;
       (drow.features ?? []).some((f) => f.name === "Darkvision" && /120/.test(f.description ?? "")));
 }
 
+// --- species autofill REPLACES prior species features ------------------------
+{
+  const sheet = createDefaultSheet("Replace");
+  sheet.features = [
+    { id: "s1", name: "Old Trait", source: "species", description: "old" },
+    { id: "s2", name: "Old Trait 2", source: "species", description: "old2" },
+    { id: "f1", name: "Alert", source: "feat", description: "feat" },
+    { id: "o1", name: "Note", source: "other", description: "note" },
+  ];
+  const patch = speciesAutofillPatch(elf, { autofill: true, sheet });
+  const rows = patch.features ?? [];
+  check("species replace: old species rows gone, new species set applied",
+    !rows.some((f) => /^Old Trait/.test(f.name)) &&
+      rows.filter((f) => f.source === "species").some((f) => f.name === "Fey Ancestry"));
+  check("species replace: non-species rows preserved (feat + other)",
+    rows.some((f) => f.source === "feat" && f.name === "Alert") &&
+      rows.some((f) => f.source === "other" && f.name === "Note"));
+  check("species autofill: creatureType set", (patch.creatureType ?? "").length > 0);
+  const namesOnly = speciesAutofillPatch(elf, { autofill: false, sheet });
+  check("species names-only: features untouched", namesOnly.features === undefined);
+}
+
+// --- persisted picker autofill flags -----------------------------------------
+{
+  const norm = normalizeCharacterSheet(
+    { ...createDefaultSheet("Flags"), speciesAutofill: true, classAutofill: true, backgroundAutofill: false },
+    "Flags",
+  );
+  check("normalize: autofill flags round-trip",
+    norm.speciesAutofill === true && norm.classAutofill === true && norm.backgroundAutofill === false);
+  const fresh = createDefaultSheet("Fresh");
+  check("default sheet: autofill flags default false",
+    fresh.speciesAutofill === false && fresh.classAutofill === false && fresh.backgroundAutofill === false);
+}
+
 // --- backgrounds -------------------------------------------------------------
 {
   const acolyte = backgrounds.find((b) => b.id === "acolyte")!;

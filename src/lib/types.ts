@@ -861,6 +861,14 @@ export type CharacterSheet = {
   background: string;
   /** Creature type line, e.g. "Humanoid" / "Construct". */
   creatureType: string;
+  /**
+   * Whether "Autofill basics" was last checked in each compendium picker. Persisted
+   * only to restore the checkbox state when the picker is reopened; the picked entry
+   * itself is reverse-mapped from the display fields above.
+   */
+  speciesAutofill: boolean;
+  classAutofill: boolean;
+  backgroundAutofill: boolean;
   /** Challenge rating (NPC). "" for PCs. */
   cr: string;
   /** Source ref, e.g. "MM pg. 19". */
@@ -1024,6 +1032,9 @@ export const SHEET_SECTION_FIELDS: Record<SheetSectionId, Array<keyof CharacterS
     "race",
     "background",
     "creatureType",
+    "speciesAutofill",
+    "classAutofill",
+    "backgroundAutofill",
     "cr",
     "source",
     "originalClass",
@@ -1842,6 +1853,9 @@ export function createDefaultSheet(name: string): CharacterSheet {
     race: "",
     background: "",
     creatureType: "",
+    speciesAutofill: false,
+    classAutofill: false,
+    backgroundAutofill: false,
     cr: "",
     source: "",
     originalClass: "",
@@ -2414,6 +2428,9 @@ export function normalizeCharacterSheet(
     race: sheet.race ?? sheet.species?.trim() ?? defaults.race,
     background: sheet.background ?? defaults.background,
     creatureType: sheet.creatureType ?? defaults.creatureType,
+    speciesAutofill: sheet.speciesAutofill === true,
+    classAutofill: sheet.classAutofill === true,
+    backgroundAutofill: sheet.backgroundAutofill === true,
     cr: sheet.cr ?? defaults.cr,
     source: sheet.source ?? defaults.source,
     originalClass: sheet.originalClass ?? defaults.originalClass,

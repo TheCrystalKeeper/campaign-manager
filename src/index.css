@@ -2349,13 +2349,17 @@ button.mod.roll-btn {
   padding: 0.18rem 0.55rem;
   font-size: 0.78rem;
 }
-/* Top create buttons: labeled + icon, side by side. */
+/* Top create buttons: labeled + icon. Wraps to a 2-column grid once there are
+   more than two (Actors: NPC/Player/compendium/folder) so labels stay legible
+   instead of being squeezed into illegible slivers. */
 .dir-toolbar {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.35rem;
 }
 .dir-create {
-  flex: 1;
+  flex: 1 1 calc(50% - 0.175rem);
+  min-width: 0;
   display: flex;
   align-items: center;
   justify-content: center;

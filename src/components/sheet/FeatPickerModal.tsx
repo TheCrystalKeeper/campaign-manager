@@ -2,6 +2,7 @@ import { loadFeats, type CompendiumFeat } from "../../lib/compendium";
 import { featureRowFromFeat } from "../../lib/compendiumMap";
 import { SHEET_ROW_CAPS } from "../../lib/types";
 import { CompendiumPickerModal } from "../CompendiumPickerModal";
+import { CompendiumDescription } from "../compendiumPreview";
 import type { SheetEdit } from "./context";
 
 const CATEGORY_LABEL: Record<string, string> = {
@@ -30,7 +31,7 @@ export function FeatPickerModal({ sheet, onClose }: { sheet: SheetEdit; onClose:
         <div>
           <h3>{f.name}</h3>
           <p className="cmp-tagline">{CATEGORY_LABEL[f.category] ?? f.category} feat</p>
-          <p>{f.description}</p>
+          <CompendiumDescription text={f.description} />
         </div>
       )}
       multiPick

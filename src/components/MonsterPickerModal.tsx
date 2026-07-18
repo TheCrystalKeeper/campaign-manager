@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { loadMonsters, type CompendiumMonster } from "../lib/compendium";
 import { CompendiumPickerModal } from "./CompendiumPickerModal";
+import { PreviewLine } from "./compendiumPreview";
 
 const CR_ORDER = ["0", "1/8", "1/4", "1/2", ...Array.from({ length: 30 }, (_, i) => String(i + 1))];
 const MONSTER_TYPES = [
@@ -74,8 +75,8 @@ export function MonsterPickerModal({
           <p>
             {ABILITY_ROW.map(([id, label]) => `${label} ${m.abilities[id] ?? 10}`).join(" · ")}
           </p>
-          {m.senses ? <p>Senses: {m.senses}</p> : null}
-          {m.languages ? <p>Languages: {m.languages}</p> : null}
+          {m.senses ? <PreviewLine label="Senses">{m.senses}</PreviewLine> : null}
+          {m.languages ? <PreviewLine label="Languages">{m.languages}</PreviewLine> : null}
           {(m.traits ?? []).map((t) => (
             <p key={t.name}>
               <strong>{t.name}.</strong> {t.description}

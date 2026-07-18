@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Search } from "lucide-react";
 import { COMPENDIUM_ATTRIBUTION, searchCompendium } from "../lib/compendium";
+import { isConfirmActionOpen } from "./ConfirmActionDialog";
 
 /// <summary>
 /// Shared "browse the compendium" picker: search box (+ optional filter controls),
@@ -25,6 +26,7 @@ export function CompendiumPickerModal<T extends { id: string; name: string }>({
   footer,
   pickLabel = "Add",
   multiPick = false,
+  initialSelectedId,
   onPick,
   onClose,
   onSelect,
@@ -43,7 +45,10 @@ export function CompendiumPickerModal<T extends { id: string; name: string }>({
   footer?: ReactNode;
   pickLabel?: string;
   multiPick?: boolean;
-  onPick: (row: T) => void;
+  /** Row to pre-highlight on open (e.g. the sheet's current choice). */
+  initialSelectedId?: string;
+  /** Return `false` to keep the modal open after a pick (e.g. a cancelled confirm). */
+  onPick: (row: T) => void | boolean | Promise<void | boolean>;
   onClose: () => void;
   /** Notifies the host when the highlighted row changes (drives footer state). */
   onSelect?: (row: T | null) => void;
@@ -51,9 +56,11 @@ export function CompendiumPickerModal<T extends { id: string; name: string }>({
   const [rows, setRows] = useState<T[] | null>(null);
   const [error, setError] = useState(false);
   const [query, setQuery] = useState("");
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(initialSelectedId ?? null);
   const [addedIds, setAddedIds] = useState<Set<string>>(new Set());
   const listRef = useRef<HTMLDivElement>(null);
+  // Guards the one-time onSelect for the pre-highlighted row once data loads.
+  const notifiedInitial = useRef(false);
 
   const fetchRows = () => {
     setError(false);
@@ -68,6 +75,8 @@ export function CompendiumPickerModal<T extends { id: string; name: string }>({
     // sheet window underneath also listens for Escape on window and must not close.
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
+        // A confirmAction dialog on top owns Escape — let it cancel itself first.
+        if (isConfirmActionOpen()) return;
         e.stopPropagation();
         onClose();
       }
@@ -88,17 +97,26 @@ export function CompendiumPickerModal<T extends { id: string; name: string }>({
     onSelect?.(row);
   };
 
-  // Keep the selection on a visible row as search/filters change.
+  // Keep the selection on a visible row as search/filters change, and notify the
+  // host once about a pre-selected (initialSelectedId) row after data loads.
   useEffect(() => {
-    if (selectedId && !visible.some((r) => r.id === selectedId)) select(visible[0] ?? null);
-    else if (!selectedId && visible.length) select(visible[0]);
+    if (!visible.length) return;
+    const current = selectedId ? visible.find((r) => r.id === selectedId) : null;
+    if (!current) {
+      select(visible[0]);
+    } else if (!notifiedInitial.current) {
+      notifiedInitial.current = true;
+      select(current);
+      listRef.current?.querySelector(`[data-row-id="${current.id}"]`)?.scrollIntoView({ block: "nearest" });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible]);
 
-  const pick = (row: T) => {
-    onPick(row);
+  const pick = async (row: T) => {
+    // onPick may veto the close (return false) — e.g. the user cancels a confirm.
+    const result = await onPick(row);
     if (!multiPick) {
-      onClose();
+      if (result !== false) onClose();
       return;
     }
     setAddedIds((prev) => new Set(prev).add(row.id));

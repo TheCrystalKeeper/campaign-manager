@@ -12,6 +12,7 @@ import {
 } from "../../lib/compendiumMap";
 import { DEFAULT_SHEET_TEMPLATE } from "../../lib/types";
 import { CompendiumPickerModal } from "../CompendiumPickerModal";
+import { PreviewLine } from "../compendiumPreview";
 import type { SheetEdit } from "./context";
 
 const SKILL_NAME: Record<string, string> = Object.fromEntries(
@@ -37,11 +38,11 @@ export function ClassPickerModal({
   forceAdd?: boolean;
   onClose: () => void;
 }) {
-  const [allClasses, setAllClasses] = useState<CompendiumClass[]>([]);
-  const [subclasses, setSubclasses] = useState<CompendiumSubclass[]>([]);
+  const [allClasses, setAllClasses] = useState<CompendiumClass[] | null>(null);
+  const [subclasses, setSubclasses] = useState<CompendiumSubclass[] | null>(null);
   const [current, setCurrent] = useState<CompendiumClass | null>(null);
   const [subclassId, setSubclassId] = useState("");
-  const [autofill, setAutofill] = useState(false);
+  const [autofill, setAutofill] = useState(sheet.value.classAutofill);
   const [chosenSkills, setChosenSkills] = useState<string[]>([]);
   const hasClass = Boolean(sheet.value.characterClass.trim());
   const [addMode, setAddMode] = useState(forceAdd);
@@ -51,10 +52,24 @@ export function ClassPickerModal({
     void loadClasses().then(setAllClasses, () => setAllClasses([]));
   }, []);
 
-  // Subclass + skill choices are per-class; reset them when the highlight moves.
+  // Wait for both lists so the pre-selection is stable at mount (both are cached).
+  if (allClasses === null || subclasses === null) return null;
+
+  // Reverse-map the sheet's current class/subclass so reopening pre-selects them.
+  // Skipped in add-mode: that flow is picking a NEW class to multiclass into.
+  const initialClassId = forceAdd
+    ? undefined
+    : allClasses.find((c) => c.name.toLowerCase() === sheet.value.characterClass.trim().toLowerCase())?.id;
+  const initialSubclassId = subclasses.find(
+    (sc) => sc.classId === initialClassId && sc.name.toLowerCase() === sheet.value.subclass.trim().toLowerCase(),
+  )?.id;
+
+  // Subclass + skill choices are per-class; reset them when the highlight genuinely
+  // changes, so the pre-seeded subclass survives the modal's initial auto-select.
   const handleSelect = (cls: CompendiumClass | null) => {
+    if (cls?.id === current?.id) return;
     setCurrent(cls);
-    setSubclassId("");
+    setSubclassId(cls?.id === initialClassId ? initialSubclassId ?? "" : "");
     setChosenSkills([]);
   };
 
@@ -85,6 +100,7 @@ export function ClassPickerModal({
     <CompendiumPickerModal<CompendiumClass>
       title={addMode ? "Add a class (multiclass)" : "Choose a class"}
       load={loadClasses}
+      initialSelectedId={initialClassId}
       columns={[
         { label: "Hit die", render: (c) => `d${c.hitDie}` },
         { label: "Saves", render: (c) => c.saves.map((s) => s.toUpperCase()).join(", ") },
@@ -101,20 +117,20 @@ export function ClassPickerModal({
             d{c.hitDie} hit die · {c.primaryAbility ?? "—"} primary ·{" "}
             {c.saves.map((s) => s.toUpperCase()).join("/")} saves
           </p>
-          {c.armorProfs?.length ? <p>Armor: {c.armorProfs.join(", ")}</p> : null}
-          {c.weaponProfs?.length ? <p>Weapons: {c.weaponProfs.join(", ")}</p> : null}
-          {c.toolProfs?.length ? <p>Tools: {c.toolProfs.join(", ")}</p> : null}
+          {c.armorProfs?.length ? <PreviewLine label="Armor">{c.armorProfs.join(", ")}</PreviewLine> : null}
+          {c.weaponProfs?.length ? <PreviewLine label="Weapons">{c.weaponProfs.join(", ")}</PreviewLine> : null}
+          {c.toolProfs?.length ? <PreviewLine label="Tools">{c.toolProfs.join(", ")}</PreviewLine> : null}
           {c.skillChoices ? (
-            <p>
-              Skills: choose {c.skillChoices.choose} from{" "}
+            <PreviewLine label="Skills">
+              choose {c.skillChoices.choose} from{" "}
               {c.skillChoices.from.map((id) => SKILL_NAME[id] ?? id).join(", ")}
-            </p>
+            </PreviewLine>
           ) : null}
           {c.spellcasting ? (
-            <p>
-              Spellcasting: {c.spellcasting.abilityId.toUpperCase()} (
+            <PreviewLine label="Spellcasting">
+              {c.spellcasting.abilityId.toUpperCase()} (
               {c.spellcasting.casterType === "pact" ? "pact magic" : `${c.spellcasting.casterType} caster`})
-            </p>
+            </PreviewLine>
           ) : null}
           <p className="muted">
             Subclass unlocks at level {c.subclassLevel}. Includes the four PHB subclasses for each class.
@@ -188,7 +204,10 @@ export function ClassPickerModal({
         sheet.update(
           addMode
             ? addMulticlassPatch(cls, { subclassName, autofill, chosenSkills, sheet: sheet.value })
-            : classAutofillPatch(cls, { subclassName, autofill, chosenSkills, sheet: sheet.value }),
+            : {
+                ...classAutofillPatch(cls, { subclassName, autofill, chosenSkills, sheet: sheet.value }),
+                classAutofill: autofill,
+              },
         );
       }}
       onClose={onClose}

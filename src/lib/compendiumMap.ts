@@ -339,14 +339,15 @@ export function speciesAutofillPatch(sp: CompendiumSpecies, opts: SpeciesPickOpt
   const sheet = opts.sheet;
   patch.size = cap(sp.size, SHORT_CAP);
   patch.speed = sp.speed;
-  if (!sheet.creatureType) patch.creatureType = cap(sp.creatureType, SHORT_CAP);
-  const newTraits = [...sp.traits, ...(sub?.traits ?? [])];
-  const existing = new Set(sheet.features.map((f) => f.name.toLowerCase()));
-  const rows = featureRowsFromTraits(
-    newTraits.filter((t) => !existing.has(t.name.trim().toLowerCase())),
-    "species",
+  // On autofill, the new species owns the creature type (switching species updates it).
+  patch.creatureType = cap(sp.creatureType, SHORT_CAP);
+  // Replace, don't append: drop all existing species features and lay down this
+  // species' full set, so switching species doesn't leave the old one's rows behind.
+  const newRows = featureRowsFromTraits([...sp.traits, ...(sub?.traits ?? [])], "species");
+  patch.features = [...sheet.features.filter((f) => f.source !== "species"), ...newRows].slice(
+    0,
+    SHEET_ROW_CAPS.features,
   );
-  if (rows.length) patch.features = [...sheet.features, ...rows].slice(0, SHEET_ROW_CAPS.features);
   return patch;
 }
 
