@@ -1,5 +1,17 @@
 # Plan: 5e SRD Compendium (2024 rules) — classes, spells, items, monsters
 
+> **Implementation status (2026-07-17): SHIPPED** — all steps landed (commits `6e455a4`..`d88bb02`),
+> verified by 42 unit checks + headless E2E (DM and player roles). Deliberate deviations from Step 8:
+> - **Hit dice (spec §5)**: kept the single pooled tracker instead of per-class pools — per-die
+>   spending would ripple through the REST message protocol and short-rest UI. The manage-classes
+>   modal shows the true breakdown ("3d10 + 2d6"); short-rest healing rolls the first class's die.
+>   The `classes` array makes real pools a contained follow-up if wanted.
+> - **Pact slots**: computed separately from warlock levels (per spec §7) but merged into the one
+>   per-level slot tracker for display; automatic short-rest pact recharge stays single-class-warlock.
+> - Prereq warnings are informational only (no persistent enforce toggle yet).
+> - Pre-existing unrelated failure: `unit-render-crisp` ("scale beyond max zoom clamps to the max
+>   bucket") fails on the base commit too — not introduced by this work.
+
 ## Context
 
 The character sheet has no way to pick a class: `characterClass` is free text with **no editing UI anywhere** — it's only displayed read-only in [SheetHeader.tsx:35-37](src/components/sheet/SheetHeader.tsx#L35-L37) and the class-chip in [FeaturesPage.tsx:127-131](src/components/sheet/pages/FeaturesPage.tsx#L127-L131). The "search box" the user saw under the class is the generic RowTable row-filter (filters the character's own feature rows — empty for a new character), not a class search. There is no 5e reference content in the app at all; every spell/item/feature is hand-typed.
