@@ -1,22 +1,41 @@
 import { Field } from "../atoms";
 import type { SheetEdit } from "../context";
+import { useTextareaSize } from "../useTextareaSize";
 
-/** A labeled multiline text block. */
+/** A labeled multiline text block. Its resized height is remembered per sheet+field. */
 function TextBlock({
   label,
   value,
   disabled,
+  roomId,
+  sheetId,
+  field,
+  rows = 3,
+  className,
   onChange,
 }: {
   label: string;
   value: string;
   disabled?: boolean;
+  roomId: string;
+  sheetId: string;
+  field: string;
+  rows?: number;
+  className?: string;
   onChange: (value: string) => void;
 }) {
+  const ref = useTextareaSize(roomId, sheetId, field);
   return (
     <div className="bio-block">
       <label>{label}</label>
-      <textarea value={value} disabled={disabled} rows={3} onChange={(e) => onChange(e.target.value)} />
+      <textarea
+        ref={ref}
+        className={className}
+        value={value}
+        disabled={disabled}
+        rows={rows}
+        onChange={(e) => onChange(e.target.value)}
+      />
     </div>
   );
 }
@@ -26,7 +45,7 @@ function TextBlock({
  * weight/age), ideals/bonds/flaws + personality/appearance, and the full biography text.
  */
 export function BiographyPage({ sheet }: { sheet: SheetEdit }) {
-  const { value, canEdit, update } = sheet;
+  const { value, id, roomId, canEdit, update } = sheet;
   return (
     <div className="sheet-page bio-page">
       <div className="bio-details sheet-section">
@@ -43,24 +62,27 @@ export function BiographyPage({ sheet }: { sheet: SheetEdit }) {
 
       <div className="bio-columns">
         <div className="bio-col sheet-section">
-          <TextBlock label="Ideals" value={value.ideals} disabled={!canEdit} onChange={(ideals) => update({ ideals })} />
-          <TextBlock label="Bonds" value={value.bonds} disabled={!canEdit} onChange={(bonds) => update({ bonds })} />
-          <TextBlock label="Flaws" value={value.flaws} disabled={!canEdit} onChange={(flaws) => update({ flaws })} />
+          <TextBlock label="Ideals" value={value.ideals} disabled={!canEdit} roomId={roomId} sheetId={id} field="ideals" onChange={(ideals) => update({ ideals })} />
+          <TextBlock label="Bonds" value={value.bonds} disabled={!canEdit} roomId={roomId} sheetId={id} field="bonds" onChange={(bonds) => update({ bonds })} />
+          <TextBlock label="Flaws" value={value.flaws} disabled={!canEdit} roomId={roomId} sheetId={id} field="flaws" onChange={(flaws) => update({ flaws })} />
         </div>
         <div className="bio-col sheet-section">
-          <TextBlock label="Personality Traits" value={value.personality} disabled={!canEdit} onChange={(personality) => update({ personality })} />
-          <TextBlock label="Appearance" value={value.appearance} disabled={!canEdit} onChange={(appearance) => update({ appearance })} />
+          <TextBlock label="Personality Traits" value={value.personality} disabled={!canEdit} roomId={roomId} sheetId={id} field="personality" onChange={(personality) => update({ personality })} />
+          <TextBlock label="Appearance" value={value.appearance} disabled={!canEdit} roomId={roomId} sheetId={id} field="appearance" onChange={(appearance) => update({ appearance })} />
         </div>
       </div>
 
-      <div className="bio-block sheet-section">
-        <label>Biography</label>
-        <textarea
-          className="bio-full"
+      <div className="sheet-section">
+        <TextBlock
+          label="Biography"
           value={value.backstoryPersonality}
           disabled={!canEdit}
+          roomId={roomId}
+          sheetId={id}
+          field="backstoryPersonality"
           rows={8}
-          onChange={(e) => update({ backstoryPersonality: e.target.value })}
+          className="bio-full"
+          onChange={(backstoryPersonality) => update({ backstoryPersonality })}
         />
       </div>
     </div>

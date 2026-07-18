@@ -59,6 +59,8 @@ export function useSheetEdit(
   return {
     sheet: {
       value,
+      id: record.id,
+      roomId: opts.roomId,
       kind: record.kind,
       canEdit: opts.canEdit,
       isDm: opts.isDm,

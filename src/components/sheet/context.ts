@@ -22,6 +22,9 @@ export type SheetActions = {
  */
 export type SheetEdit = {
   value: CharacterSheet;
+  /** Stable per-sheet identity — namespaces client-only UI state (e.g. persisted textarea sizes). */
+  id: string;
+  roomId: string;
   kind: SheetKind;
   canEdit: boolean;
   isDm: boolean;
