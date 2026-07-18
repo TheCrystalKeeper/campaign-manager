@@ -55,8 +55,12 @@ export function SpellsPage({ sheet }: { sheet: SheetEdit }) {
   }));
 
   // Slot maximums: auto caster types derive them from level (max inputs hidden);
-  // "Manual" keeps the stored per-level maximums editable.
-  const autoSlots = derived.auto && value.spellcasting.casterType !== "none";
+  // "Manual" keeps the stored per-level maximums editable. Multiclassed sheets
+  // (2+ classes) derive pooled maxes from the class list regardless of casterType.
+  const autoSlots =
+    derived.auto &&
+    (value.spellcasting.casterType !== "none" ||
+      (value.classes.length >= 2 && Object.keys(derived.slotMaxes).length > 0));
   const slotMax = (lv: number) =>
     autoSlots ? derived.slotMaxes[String(lv)] ?? 0 : value.spellSlots[String(lv)]?.max ?? 0;
   const slotLevels = [1, 2, 3, 4, 5, 6, 7, 8, 9].filter((lv) =>
