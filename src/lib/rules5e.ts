@@ -4,6 +4,7 @@ import {
   DEFAULT_SHEET_TEMPLATE,
   type CasterType,
   type CharacterSheet,
+  type ClassEntry,
   type RollPart,
   type SheetKind,
 } from "./types";
@@ -280,6 +281,76 @@ const PACT_SLOTS: Array<[number, number]> = [
   [4, 5],
 ];
 
+/** Base classes' contribution to the multiclass spell-slot pool (PHB multiclass table). */
+const CLASS_CASTER_WEIGHT: Record<string, "full" | "half"> = {
+  bard: "full",
+  cleric: "full",
+  druid: "full",
+  sorcerer: "full",
+  wizard: "full",
+  paladin: "half",
+  ranger: "half",
+};
+
+/**
+ * Official third-caster subclasses. They are NOT in the SRD (its 12 subclasses include
+ * neither), so the compendium can't mark them — slot pooling recognizes them by the
+ * free-text subclass name as a hardcoded exception. Slot pooling only; spell-list
+ * access stays with subclass features.
+ */
+const THIRD_CASTER_SUBCLASS = /eldritch\s*knight|arcane\s*trickster/i;
+
+type CasterContribution = { type: "full" | "half" | "third"; classLevel: number };
+
+/** Per-entry standard-pool contributions + total warlock (pact) levels. */
+function casterContributions(classes: ClassEntry[]): { sources: CasterContribution[]; pact: number } {
+  const sources: CasterContribution[] = [];
+  let pact = 0;
+  for (const entry of classes) {
+    const id = entry.className.trim().toLowerCase();
+    const classLevel = Math.max(1, Math.min(20, Math.round(entry.level)));
+    if (id === "warlock") pact += classLevel;
+    else if (CLASS_CASTER_WEIGHT[id]) sources.push({ type: CLASS_CASTER_WEIGHT[id], classLevel });
+    else if ((id === "fighter" || id === "rogue") && THIRD_CASTER_SUBCLASS.test(entry.subclassName))
+      sources.push({ type: "third", classLevel });
+  }
+  return { sources, pact: Math.min(20, pact) };
+}
+
+/**
+ * Slot maximums for a multiclassed sheet (2+ classes). One standard-casting source
+ * uses its own class table (RAW); two or more pool into the multiclass table with
+ * full level + floor(level/2) + floor(level/3) contributions. Warlock Pact Magic is
+ * computed separately from warlock levels only, then merged into the same per-level
+ * record for display (the sheet has one slot tracker per level; the pact portion
+ * refreshing on short rest is only auto-handled for single-class warlocks).
+ */
+export function multiclassSlotMaxes(classes: ClassEntry[]): Record<string, number> {
+  const { sources, pact } = casterContributions(classes);
+  let maxes: Record<string, number> = {};
+  if (sources.length === 1) {
+    maxes = spellSlotMaxes(sources[0].type, sources[0].classLevel);
+  } else if (sources.length > 1) {
+    const pooled = sources.reduce(
+      (sum, s) =>
+        sum +
+        (s.type === "full" ? s.classLevel : s.type === "half" ? Math.floor(s.classLevel / 2) : Math.floor(s.classLevel / 3)),
+      0,
+    );
+    if (pooled >= 1) {
+      const row = FULL_CASTER_SLOTS[Math.min(20, pooled) - 1];
+      row.forEach((count, index) => {
+        maxes[String(index + 1)] = count;
+      });
+    }
+  }
+  if (pact > 0) {
+    const [count, slotLevel] = PACT_SLOTS[pact - 1];
+    maxes[String(slotLevel)] = (maxes[String(slotLevel)] ?? 0) + count;
+  }
+  return maxes;
+}
+
 /** Spell-slot maximums for an auto caster type at a character level ("1".."9" keys). */
 export function spellSlotMaxes(casterType: CasterType, level: number): Record<string, number> {
   const lvl = Math.max(1, Math.min(20, Math.round(level)));
@@ -388,15 +459,19 @@ export function computeDerived(sheet: CharacterSheet, kind: SheetKind): Derived 
     values[`passive-${skill.id}`] = 10 + values[skill.id] + bonus;
   }
 
+  // Multiclassed sheets (2+ classes) derive slots from the class list — the
+  // multiclass pool + separate pact magic. Single-class keeps the casterType path.
   const casterType = sheet.spellcasting.casterType;
   const slotMaxes =
-    casterType === "none"
-      ? Object.fromEntries(
-          Object.entries(sheet.spellSlots)
-            .filter(([, slot]) => slot.max > 0)
-            .map(([level, slot]) => [level, slot.max]),
-        )
-      : spellSlotMaxes(casterType, sheet.level);
+    sheet.classes.length >= 2
+      ? multiclassSlotMaxes(sheet.classes)
+      : casterType === "none"
+        ? Object.fromEntries(
+            Object.entries(sheet.spellSlots)
+              .filter(([, slot]) => slot.max > 0)
+              .map(([level, slot]) => [level, slot.max]),
+          )
+        : spellSlotMaxes(casterType, sheet.level);
 
   return { auto: true, values, base, slotMaxes };
 }

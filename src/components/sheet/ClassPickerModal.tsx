@@ -5,7 +5,11 @@ import {
   type CompendiumClass,
   type CompendiumSubclass,
 } from "../../lib/compendium";
-import { classAutofillPatch } from "../../lib/compendiumMap";
+import {
+  addMulticlassPatch,
+  classAutofillPatch,
+  multiclassPrereqFailures,
+} from "../../lib/compendiumMap";
 import { DEFAULT_SHEET_TEMPLATE } from "../../lib/types";
 import { CompendiumPickerModal } from "../CompendiumPickerModal";
 import type { SheetEdit } from "./context";
@@ -16,21 +20,35 @@ const SKILL_NAME: Record<string, string> = Object.fromEntries(
 
 /// <summary>
 /// SRD class/subclass picker, opened from the class chip. Default = names only
-/// (sets characterClass/subclass text and nothing else); the "Autofill basics"
-/// checkbox additionally applies hit die, save dots, armor/weapon/tool
-/// proficiencies, spellcasting ability, and an optional choose-N skill grid.
-/// On NPC sheets the dots are display-only (the rules engine is off there) —
-/// the DM still gets the names and lists.
+/// (sets the class and nothing else); the "Autofill basics" checkbox additionally
+/// applies hit die, save dots, proficiencies, spellcasting ability, and a
+/// choose-N skill grid. When the sheet already has a class, an "Add as
+/// multiclass" mode appends the pick at level 1 instead — applying only the
+/// smaller multiclass proficiency set (never saving throws) with a soft
+/// prerequisite warning (13+ ability minimums for every class, spec §6).
 /// </summary>
-export function ClassPickerModal({ sheet, onClose }: { sheet: SheetEdit; onClose: () => void }) {
+export function ClassPickerModal({
+  sheet,
+  forceAdd = false,
+  onClose,
+}: {
+  sheet: SheetEdit;
+  /** Open directly in "add as multiclass" mode (the Manage classes ＋ button). */
+  forceAdd?: boolean;
+  onClose: () => void;
+}) {
+  const [allClasses, setAllClasses] = useState<CompendiumClass[]>([]);
   const [subclasses, setSubclasses] = useState<CompendiumSubclass[]>([]);
   const [current, setCurrent] = useState<CompendiumClass | null>(null);
   const [subclassId, setSubclassId] = useState("");
   const [autofill, setAutofill] = useState(false);
   const [chosenSkills, setChosenSkills] = useState<string[]>([]);
+  const hasClass = Boolean(sheet.value.characterClass.trim());
+  const [addMode, setAddMode] = useState(forceAdd);
 
   useEffect(() => {
     void loadSubclasses().then(setSubclasses, () => setSubclasses([]));
+    void loadClasses().then(setAllClasses, () => setAllClasses([]));
   }, []);
 
   // Subclass + skill choices are per-class; reset them when the highlight moves.
@@ -40,17 +58,32 @@ export function ClassPickerModal({ sheet, onClose }: { sheet: SheetEdit; onClose
     setChosenSkills([]);
   };
 
+  const skillChoices = autofill
+    ? addMode
+      ? current?.multiclass.skillChoice
+      : current?.skillChoices
+    : undefined;
+
   const toggleSkill = (id: string, max: number) =>
     setChosenSkills((prev) =>
       prev.includes(id) ? prev.filter((s) => s !== id) : prev.length < max ? [...prev, id] : prev,
     );
 
   const classSubclasses = subclasses.filter((sc) => sc.classId === current?.id);
-  const skillChoices = autofill ? current?.skillChoices : undefined;
+
+  // Soft prereq check (add mode): existing classes + the candidate, 13+ minimums.
+  const prereqFailures =
+    addMode && current
+      ? multiclassPrereqFailures(
+          [...sheet.value.classes, { className: current.name }],
+          sheet.value.abilityScores,
+          allClasses,
+        )
+      : [];
 
   return (
     <CompendiumPickerModal<CompendiumClass>
-      title="Choose a class"
+      title={addMode ? "Add a class (multiclass)" : "Choose a class"}
       load={loadClasses}
       columns={[
         { label: "Hit die", render: (c) => `d${c.hitDie}` },
@@ -91,6 +124,12 @@ export function ClassPickerModal({ sheet, onClose }: { sheet: SheetEdit; onClose
       onSelect={handleSelect}
       footer={
         <div className="cmp-footer">
+          {hasClass && !forceAdd ? (
+            <label title="Replace the current class, or keep it and add this one at level 1">
+              <input type="checkbox" checked={addMode} onChange={(e) => setAddMode(e.target.checked)} />
+              Add as multiclass (keep {sheet.value.characterClass})
+            </label>
+          ) : null}
           <label>
             Subclass
             <select value={subclassId} onChange={(e) => setSubclassId(e.target.value)}>
@@ -102,9 +141,15 @@ export function ClassPickerModal({ sheet, onClose }: { sheet: SheetEdit; onClose
               ))}
             </select>
           </label>
-          <label title="Also fill hit die, saving throws, proficiencies, and spellcasting ability from the class">
+          <label
+            title={
+              addMode
+                ? "Also apply the multiclass proficiency set (never saving throws)"
+                : "Also fill hit die, saving throws, proficiencies, and spellcasting ability from the class"
+            }
+          >
             <input type="checkbox" checked={autofill} onChange={(e) => setAutofill(e.target.checked)} />
-            Autofill basics
+            {addMode ? "Autofill multiclass proficiencies" : "Autofill basics"}
           </label>
           {sheet.kind === "npc" && autofill ? (
             <span className="muted">NPC numbers stay manual — this fills names and lists.</span>
@@ -128,13 +173,22 @@ export function ClassPickerModal({ sheet, onClose }: { sheet: SheetEdit; onClose
               ))}
             </div>
           ) : null}
+          {prereqFailures.length ? (
+            <span className="cmp-prereq-warn">
+              ⚠ Multiclass prerequisites not met:{" "}
+              {prereqFailures.map((f) => `${f.className} needs ${f.requirement}`).join("; ")} — you can
+              add it anyway (house rules welcome).
+            </span>
+          ) : null}
         </div>
       }
-      pickLabel="Set class"
+      pickLabel={addMode ? "Add class" : "Set class"}
       onPick={(cls) => {
         const subclassName = classSubclasses.find((sc) => sc.id === subclassId)?.name;
         sheet.update(
-          classAutofillPatch(cls, { subclassName, autofill, chosenSkills, sheet: sheet.value }),
+          addMode
+            ? addMulticlassPatch(cls, { subclassName, autofill, chosenSkills, sheet: sheet.value })
+            : classAutofillPatch(cls, { subclassName, autofill, chosenSkills, sheet: sheet.value }),
         );
       }}
       onClose={onClose}

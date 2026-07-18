@@ -32,9 +32,14 @@ export function SheetHeader({
   const [spendDice, setSpendDice] = useState(0);
   const importRef = useRef<HTMLInputElement>(null);
 
+  // Multiclassed PCs read "Elf Fighter 3 / Rogue 2" (per-class levels, not the total).
+  const multiclassed = !isNpc && value.classes.length >= 2;
+  const classLine = multiclassed
+    ? value.classes.map((c) => `${c.className} ${c.level}`).join(" / ")
+    : `${value.characterClass || "Class"} ${value.level}`;
   const subtitle = isNpc
     ? [value.size, value.creatureType, value.alignment].filter(Boolean).join(" · ") || "NPC"
-    : `${value.race ? `${value.race} ` : ""}${value.characterClass || "Class"} ${value.level}`;
+    : `${value.race ? `${value.race} ` : ""}${classLine}`;
 
   const meta = isNpc ? [value.source, value.xp ? `${value.xp} XP` : ""].filter(Boolean).join(" · ") : "";
 
@@ -157,8 +162,17 @@ export function SheetHeader({
         ) : null}
       </div>
 
-      <div className="level-ring" title={isNpc ? "Challenge rating" : "Level"}>
-        {canEdit ? (
+      <div
+        className="level-ring"
+        title={
+          isNpc
+            ? "Challenge rating"
+            : multiclassed
+              ? "Total level — the sum of per-class levels (edit them via the class chip)"
+              : "Level"
+        }
+      >
+        {canEdit && !multiclassed ? (
           isNpc ? (
             <input
               className="level-ring-input"

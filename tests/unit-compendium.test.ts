@@ -18,15 +18,17 @@ import type {
 } from "@lib/compendium";
 import { searchCompendium } from "@lib/compendium";
 import {
+  addMulticlassPatch,
   classAutofillPatch,
   featureRowFromFeat,
   inventoryRowFromEquipment,
   inventoryRowFromMagicItem,
   monsterSheetPatch,
+  multiclassPrereqFailures,
   speciesAutofillPatch,
   spellEntryFromCompendium,
 } from "@lib/compendiumMap";
-import { computeDerived } from "@lib/rules5e";
+import { computeDerived, multiclassSlotMaxes } from "@lib/rules5e";
 
 let failures = 0;
 function check(name: string, ok: boolean, detail = "") {
@@ -59,8 +61,8 @@ const wizard = classes.find((c) => c.id === "wizard")!;
 {
   const sheet = createDefaultSheet("Test");
   const namesOnly = classAutofillPatch(wizard, { autofill: false, subclassName: "Evoker", sheet });
-  check("class names-only: writes exactly characterClass + subclass",
-    Object.keys(namesOnly).sort().join(",") === "characterClass,subclass" &&
+  check("class names-only: writes exactly characterClass + subclass + classes",
+    Object.keys(namesOnly).sort().join(",") === "characterClass,classes,subclass" &&
       namesOnly.characterClass === "Wizard" && namesOnly.subclass === "Evoker");
 
   const full = classAutofillPatch(wizard, {
@@ -161,6 +163,112 @@ const elf = species.find((s) => s.id === "elf")!;
     derived.values["save-wis"] === -1, `save-wis=${derived.values["save-wis"]}`);
   check("goblin boss: scimitar attack row parsed",
     sheet.attacks.some((a) => a.name === "Scimitar" && a.toHit === 4 && a.damage === "1d6+2"));
+}
+
+// --- multiclassing -----------------------------------------------------------
+{
+  // Migration: legacy single-class sheets seed the classes array.
+  const legacy = normalizeCharacterSheet(
+    { ...createDefaultSheet("Legacy"), characterClass: "Wizard", subclass: "Evoker", level: 5 },
+    "Legacy",
+  );
+  check("migration: legacy sheet seeds classes[]",
+    legacy.classes.length === 1 && legacy.classes[0].className === "Wizard" &&
+      legacy.classes[0].level === 5 && legacy.classes[0].isFirstClass,
+    JSON.stringify(legacy.classes));
+
+  // Multiclass sync: level becomes the sum; display fields mirror the first class.
+  const multi = normalizeCharacterSheet(
+    {
+      ...createDefaultSheet("Multi"),
+      level: 1,
+      classes: [
+        { id: "a", className: "Fighter", subclassName: "Champion", level: 3, isFirstClass: true },
+        { id: "b", className: "Rogue", subclassName: "", level: 2, isFirstClass: false },
+      ],
+    },
+    "Multi",
+  );
+  check("sync: multiclass level = sum, display = first class",
+    multi.level === 5 && multi.characterClass === "Fighter" && multi.subclass === "Champion");
+
+  // Single entry: the level-ring stays authoritative and the entry mirrors it.
+  const single = normalizeCharacterSheet(
+    {
+      ...createDefaultSheet("Single"),
+      level: 4,
+      characterClass: "Wizard",
+      classes: [{ id: "a", className: "Wizard", subclassName: "", level: 2, isFirstClass: true }],
+    },
+    "Single",
+  );
+  check("sync: single-class entry mirrors sheet.level", single.classes[0].level === 4 && single.level === 4);
+
+  // classAutofillPatch writes the classes array (replace path).
+  const sheet = createDefaultSheet("Test");
+  const setPatch = classAutofillPatch(wizard, { autofill: false, sheet });
+  check("classAutofillPatch: writes single classes entry",
+    setPatch.classes?.length === 1 && setPatch.classes[0].isFirstClass);
+
+  // addMulticlassPatch: appends at level 1, never touches saving throws.
+  const fighterSheet = normalizeCharacterSheet(
+    { ...createDefaultSheet("F"), characterClass: "Fighter", level: 3 },
+    "F",
+  );
+  const cleric = classes.find((c) => c.id === "cleric")!;
+  const addPatch = addMulticlassPatch(cleric, {
+    autofill: true,
+    chosenSkills: ["skill-insight", "skill-religion"],
+    sheet: fighterSheet,
+  });
+  check("addMulticlassPatch: appends level-1 entry, level = sum",
+    addPatch.classes?.length === 2 && addPatch.classes[1].level === 1 &&
+      !addPatch.classes[1].isFirstClass && addPatch.level === 4);
+  check("addMulticlassPatch: never writes saveProfs", !("saveProfs" in addPatch));
+  check("addMulticlassPatch: multiclass armor profs applied",
+    (addPatch.armorProfs ?? []).some((p) => /light armor/i.test(p)));
+  check("addMulticlassPatch: skill choice capped at the multiclass grant (cleric: none)",
+    !("skillProfs" in addPatch));
+
+  // Slot pooling.
+  const entry = (className: string, level: number, subclassName = "", isFirstClass = false) => ({
+    id: className, className, subclassName, level, isFirstClass,
+  });
+  check("slots: single caster source uses its own table (Champion contributes 0)",
+    JSON.stringify(multiclassSlotMaxes([entry("Fighter", 3, "Champion", true), entry("Wizard", 2)])) ===
+      JSON.stringify({ "1": 3 }));
+  check("slots: Eldritch Knight third-caster exception pools floor(5/3)+2 = caster level 3",
+    JSON.stringify(multiclassSlotMaxes([entry("Fighter", 5, "Eldritch Knight", true), entry("Wizard", 2)])) ===
+      JSON.stringify({ "1": 4, "2": 2 }));
+  check("slots: full+full pool (Wizard 3 + Cleric 2 = caster level 5)",
+    JSON.stringify(multiclassSlotMaxes([entry("Wizard", 3, "", true), entry("Cleric", 2)])) ===
+      JSON.stringify({ "1": 4, "2": 3, "3": 2 }));
+  const pact = multiclassSlotMaxes([entry("Warlock", 3, "", true), entry("Wizard", 2)]);
+  check("slots: pact pool separate then merged for display (Warlock 3 + Wizard 2)",
+    pact["1"] === 3 && pact["2"] === 2, JSON.stringify(pact));
+  const derivedMulti = computeDerived(
+    normalizeCharacterSheet(
+      {
+        ...createDefaultSheet("MC"),
+        classes: [entry("Fighter", 3, "Champion", true), entry("Wizard", 2)],
+      },
+      "MC",
+    ),
+    "pc",
+  );
+  check("computeDerived: multiclass sheets use pooled slotMaxes",
+    JSON.stringify(derivedMulti.slotMaxes) === JSON.stringify({ "1": 3 }));
+
+  // Prereq soft check.
+  const scores = { str: 8, dex: 14, con: 10, int: 10, wis: 10, cha: 10 };
+  const fails = multiclassPrereqFailures(
+    [{ className: "Fighter" }, { className: "Paladin" }],
+    scores,
+    classes,
+  );
+  check("prereqs: Fighter passes via DEX-or-STR, Paladin fails STR+CHA",
+    fails.length > 0 && fails.every((f) => f.className === "Paladin"),
+    JSON.stringify(fails));
 }
 
 // --- search ------------------------------------------------------------------

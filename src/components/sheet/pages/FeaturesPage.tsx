@@ -13,6 +13,7 @@ import { UsesCell } from "../atoms";
 import { advFromEvent, ROLL_HINT, type SheetEdit } from "../context";
 import { ClassPickerModal } from "../ClassPickerModal";
 import { FeatPickerModal } from "../FeatPickerModal";
+import { ManageClassesModal } from "../ManageClassesModal";
 import { SpeciesPickerModal } from "../SpeciesPickerModal";
 import { AbilityRow, SavesRow } from "./MainPage";
 
@@ -86,10 +87,17 @@ export function FeaturesPage({ sheet }: { sheet: SheetEdit }) {
   const { value, canEdit, kind, derived, update, onRollCheck, actions } = sheet;
   const isNpc = kind === "npc";
   const [classPickerOpen, setClassPickerOpen] = useState(false);
+  const [manageClassesOpen, setManageClassesOpen] = useState(false);
   const [speciesPickerOpen, setSpeciesPickerOpen] = useState(false);
   const [featPickerOpen, setFeatPickerOpen] = useState(false);
 
-  const classChipText = (
+  // 2+ classes: the chip shows the composed list and opens the multiclass manager.
+  const multiclassed = value.classes.length >= 2;
+  const openClassEditor = () => (multiclassed ? setManageClassesOpen(true) : setClassPickerOpen(true));
+
+  const classChipText = multiclassed ? (
+    <>{value.classes.map((c) => `${c.className} ${c.level}`).join(" / ")}</>
+  ) : (
     <>
       {value.characterClass || (canEdit ? "Choose class" : "Class")}{" "}
       {value.subclass ? `· ${value.subclass} ` : ""}
@@ -144,7 +152,7 @@ export function FeaturesPage({ sheet }: { sheet: SheetEdit }) {
               type="button"
               className="class-chip class-chip--btn"
               title="Set a class from the SRD (optional for NPCs)"
-              onClick={() => setClassPickerOpen(true)}
+              onClick={openClassEditor}
             >
               {value.characterClass ? classChipText : "＋ Class"}
               <ChevronDown size={12} strokeWidth={2.2} />
@@ -158,7 +166,7 @@ export function FeaturesPage({ sheet }: { sheet: SheetEdit }) {
               type="button"
               className="class-chip class-chip--btn"
               title="Choose a class from the SRD"
-              onClick={() => setClassPickerOpen(true)}
+              onClick={openClassEditor}
             >
               {classChipText}
               <ChevronDown size={12} strokeWidth={2.2} />
@@ -192,6 +200,7 @@ export function FeaturesPage({ sheet }: { sheet: SheetEdit }) {
         </div>
       )}
       {classPickerOpen ? <ClassPickerModal sheet={sheet} onClose={() => setClassPickerOpen(false)} /> : null}
+      {manageClassesOpen ? <ManageClassesModal sheet={sheet} onClose={() => setManageClassesOpen(false)} /> : null}
       {speciesPickerOpen ? <SpeciesPickerModal sheet={sheet} onClose={() => setSpeciesPickerOpen(false)} /> : null}
       {featPickerOpen ? <FeatPickerModal sheet={sheet} onClose={() => setFeatPickerOpen(false)} /> : null}
 

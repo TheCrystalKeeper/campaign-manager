@@ -795,6 +795,22 @@ export function inventoryRowFromItem(item: ItemRecord): InventoryEntry {
   });
 }
 
+/**
+ * One class a character has levels in (multiclassing). The `isFirstClass` entry was
+ * taken at character level 1 — it gets the full starting proficiencies; classes added
+ * later grant only the smaller multiclass set. Exactly one entry carries the flag.
+ */
+export type ClassEntry = {
+  id: string;
+  className: string;
+  subclassName: string;
+  /** Levels in THIS class (1..20); the sheet's `level` is the sum across entries. */
+  level: number;
+  isFirstClass: boolean;
+};
+
+export const MAX_CLASSES = 5;
+
 /** A class resource chip (name + current/max). */
 export type ResourceEntry = { id: string; name: string; current: number; max: number };
 
@@ -832,6 +848,12 @@ export type CharacterSheet = {
   playerName: string;
   characterClass: string;
   subclass: string;
+  /**
+   * Multiclassing (empty = derive from characterClass/level). When non-empty this is
+   * authoritative: the normalizer syncs `characterClass`/`subclass` from the first-class
+   * entry, and with 2+ entries `level` becomes the sum of per-class levels.
+   */
+  classes: ClassEntry[];
   level: number;
   xp: number;
   race: string;
@@ -996,6 +1018,7 @@ export const SHEET_SECTION_FIELDS: Record<SheetSectionId, Array<keyof CharacterS
     "playerName",
     "characterClass",
     "subclass",
+    "classes",
     "level",
     "xp",
     "race",
@@ -1813,6 +1836,7 @@ export function createDefaultSheet(name: string): CharacterSheet {
     playerName: "",
     characterClass: "",
     subclass: "",
+    classes: [],
     level: 1,
     xp: 0,
     race: "",
@@ -2304,6 +2328,59 @@ function sanitizeSpellSlots(
 /// Merges legacy and partial character sheets into the current schema. All Phase 7
 /// fields are required + defaulted so the redaction copy-loop stays total.
 /// </summary>
+/**
+ * Sanitize + migrate the multiclass array, then sync the legacy display fields.
+ * Single entry: `level` stays authoritative (the level-ring keeps working) and the
+ * entry mirrors it. 2+ entries: per-class levels are authoritative and `level` is
+ * their sum. `characterClass`/`subclass` always mirror the first-class entry.
+ */
+function reconcileClasses(
+  raw: unknown,
+  fields: { characterClass: string; subclass: string; level: number },
+): { classes: ClassEntry[]; characterClass: string; subclass: string; level: number } {
+  const rows = Array.isArray(raw) ? raw.slice(0, MAX_CLASSES) : [];
+  let classes: ClassEntry[] = [];
+  for (const [index, row] of rows.entries()) {
+    if (!row || typeof row !== "object") continue;
+    const entry = row as Partial<ClassEntry>;
+    const className = str(typeof entry.className === "string" ? entry.className : "", NAME_CAP);
+    if (!className) continue;
+    classes.push({
+      id: typeof entry.id === "string" && entry.id ? entry.id.slice(0, 40) : `cls-${index}`,
+      className,
+      subclassName: str(typeof entry.subclassName === "string" ? entry.subclassName : "", NAME_CAP),
+      level: clampInt(entry.level, 1, 20, 1),
+      isFirstClass: entry.isFirstClass === true,
+    });
+  }
+  // Exactly one first class: first flagged entry wins, else the first entry.
+  const firstIdx = Math.max(0, classes.findIndex((c) => c.isFirstClass));
+  classes = classes.map((c, i) => ({ ...c, isFirstClass: i === firstIdx }));
+
+  // Migration: legacy single-class sheets seed the array from the display fields.
+  if (classes.length === 0 && fields.characterClass.trim()) {
+    classes.push({
+      id: "cls-0",
+      className: str(fields.characterClass, NAME_CAP),
+      subclassName: str(fields.subclass, NAME_CAP),
+      level: clampInt(fields.level, 1, 20, 1),
+      isFirstClass: true,
+    });
+  }
+  if (classes.length === 0) {
+    return { classes, ...fields };
+  }
+  const primary = classes[firstIdx < classes.length ? firstIdx : 0];
+  const level =
+    classes.length === 1
+      ? fields.level
+      : classes.reduce((sum, c) => sum + c.level, 0);
+  if (classes.length === 1) {
+    classes = [{ ...classes[0], level: clampInt(fields.level, 1, 20, 1) }];
+  }
+  return { classes, characterClass: primary.className, subclass: primary.subclassName, level };
+}
+
 export function normalizeCharacterSheet(
   sheet: LegacyCharacterSheet | undefined,
   fallbackName: string,
@@ -2320,13 +2397,19 @@ export function normalizeCharacterSheet(
   )
     ? (sheet.spellcasting?.casterType as CasterType)
     : "none";
+  const reconciled = reconcileClasses(sheet.classes, {
+    characterClass: sheet.characterClass ?? defaults.characterClass,
+    subclass: sheet.subclass ?? defaults.subclass,
+    level: typeof sheet.level === "number" && sheet.level > 0 ? sheet.level : defaults.level,
+  });
 
   return {
     characterName: sheet.characterName ?? legacyName?.trim() ?? defaults.characterName,
     playerName: sheet.playerName ?? defaults.playerName,
-    characterClass: sheet.characterClass ?? defaults.characterClass,
-    subclass: sheet.subclass ?? defaults.subclass,
-    level: typeof sheet.level === "number" && sheet.level > 0 ? sheet.level : defaults.level,
+    characterClass: reconciled.characterClass,
+    subclass: reconciled.subclass,
+    classes: reconciled.classes,
+    level: reconciled.level,
     xp: typeof sheet.xp === "number" && sheet.xp >= 0 ? sheet.xp : defaults.xp,
     race: sheet.race ?? sheet.species?.trim() ?? defaults.race,
     background: sheet.background ?? defaults.background,

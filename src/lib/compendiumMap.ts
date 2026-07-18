@@ -185,9 +185,22 @@ export type ClassPickOptions = {
 };
 
 export function classAutofillPatch(cls: CompendiumClass, opts: ClassPickOptions): Partial<CharacterSheet> {
+  const className = cap(cls.name, NAME_CAP);
+  const subclassName = opts.subclassName ? cap(opts.subclassName, NAME_CAP) : "";
   const patch: Partial<CharacterSheet> = {
-    characterClass: cap(cls.name, NAME_CAP),
-    subclass: opts.subclassName ? cap(opts.subclassName, NAME_CAP) : "",
+    characterClass: className,
+    subclass: subclassName,
+    // Replaces the class list — this is the "set/replace class" path. Adding a
+    // second class goes through addMulticlassPatch instead.
+    classes: [
+      {
+        id: opts.sheet.classes[0]?.id ?? rowId("cls"),
+        className,
+        subclassName,
+        level: Math.max(1, opts.sheet.level),
+        isFirstClass: true,
+      },
+    ],
   };
   if (!opts.autofill) return patch;
   const sheet = opts.sheet;
@@ -214,6 +227,88 @@ export function classAutofillPatch(cls: CompendiumClass, opts: ClassPickOptions)
     patch.skillProfs = skillProfs;
   }
   return patch;
+}
+
+// ---------------------------------------------------------------------------
+// Multiclassing
+// ---------------------------------------------------------------------------
+
+export type MulticlassAddOptions = {
+  subclassName?: string;
+  /** false = just append the class entry; true = also apply multiclass proficiencies. */
+  autofill: boolean;
+  /** At most one skill id, from cls.multiclass.skillChoice (bard/ranger/rogue). */
+  chosenSkills?: string[];
+  sheet: CharacterSheet;
+};
+
+/**
+ * Adds `cls` as an additional class at level 1 (spec §3: multiclass proficiencies
+ * only — NEVER saving throws, and only the 1-skill choice when the source grants one).
+ * The spellcasting ability is filled only if the sheet has none yet; slot maximums
+ * derive from the class list itself once multiclassed (rules engine).
+ */
+export function addMulticlassPatch(cls: CompendiumClass, opts: MulticlassAddOptions): Partial<CharacterSheet> {
+  const sheet = opts.sheet;
+  const entry = {
+    id: rowId("cls"),
+    className: cap(cls.name, NAME_CAP),
+    subclassName: opts.subclassName ? cap(opts.subclassName, NAME_CAP) : "",
+    level: 1,
+    isFirstClass: false,
+  };
+  const classes = [...sheet.classes, entry];
+  const patch: Partial<CharacterSheet> = {
+    classes,
+    level: classes.reduce((sum, c) => sum + c.level, 0),
+  };
+  if (!opts.autofill) return patch;
+  const mc = cls.multiclass;
+  if (mc.armorProfs?.length) patch.armorProfs = unionPills(sheet.armorProfs, mc.armorProfs);
+  if (mc.weaponProfs?.length) patch.weaponProfs = unionPills(sheet.weaponProfs, mc.weaponProfs);
+  if (mc.toolProfs?.length) patch.tools = appendMissingTools(sheet.tools, mc.toolProfs);
+  if (cls.spellcasting && !sheet.spellcasting.abilityId) {
+    patch.spellcasting = { ...sheet.spellcasting, abilityId: cls.spellcasting.abilityId };
+  }
+  const allowed = mc.skillChoice?.choose ?? 0;
+  const chosen = (opts.chosenSkills ?? []).slice(0, allowed);
+  if (chosen.length) {
+    const skillProfs = { ...sheet.skillProfs };
+    for (const id of chosen) skillProfs[id] = Math.max(1, skillProfs[id] ?? 0);
+    patch.skillProfs = skillProfs;
+  }
+  return patch;
+}
+
+export type PrereqFailure = { className: string; requirement: string };
+
+/**
+ * Soft multiclass prerequisite check (spec §6): every class the character would have —
+ * existing AND the candidate — must meet its 13+ ability minimums. Classes whose name
+ * doesn't match the compendium (homebrew) are skipped. Returns human-readable failures.
+ */
+export function multiclassPrereqFailures(
+  entries: Array<{ className: string }>,
+  abilityScores: Record<string, number>,
+  compendium: CompendiumClass[],
+): PrereqFailure[] {
+  const byName = new Map(compendium.map((c) => [c.name.toLowerCase(), c]));
+  const failures: PrereqFailure[] = [];
+  for (const entry of entries) {
+    const cls = byName.get(entry.className.trim().toLowerCase());
+    if (!cls) continue;
+    for (const prereq of cls.multiclass.prereqs) {
+      const meets = (id: string) => (abilityScores[id] ?? 10) >= prereq.min;
+      const ok = prereq.mode === "or" ? prereq.abilityIds.some(meets) : prereq.abilityIds.every(meets);
+      if (!ok) {
+        failures.push({
+          className: cls.name,
+          requirement: prereq.abilityIds.map((id) => `${id.toUpperCase()} ${prereq.min}`).join(prereq.mode === "or" ? " or " : " and "),
+        });
+      }
+    }
+  }
+  return failures;
 }
 
 // ---------------------------------------------------------------------------
