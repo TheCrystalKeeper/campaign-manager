@@ -305,7 +305,8 @@ export function resolveSkinForSides(prefs: DiceSkinPrefs, sides: number): string
 /// A percentile d10 immediately followed by its unit d10 is one d100 (decomposeDie
 /// order), so both halves take the d100 override. Defaults ("classic"/"gold") are left
 /// off the spec to keep payloads lean and old-server compatible. Custom crystal dice
-/// are never skinned.
+/// (odd sizes like d77) have no per-size override slot, so they follow the all-dice
+/// variant.
 /// </summary>
 export function applySkinsToSpecs<
   T extends { kind: string; percentile: boolean; sides?: number; skin?: string },
@@ -313,6 +314,9 @@ export function applySkinsToSpecs<
   for (let i = 0; i < specs.length; i += 1) {
     const spec = specs[i];
     if (spec.kind === "custom") {
+      if (prefs.all !== "classic") {
+        spec.skin = prefs.all;
+      }
       continue;
     }
     if (spec.kind === "coin") {

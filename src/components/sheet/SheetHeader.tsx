@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { Download, Eye, EyeOff, Tent, Upload, Utensils } from "lucide-react";
 import { NumberInput } from "../NumberInput";
+import { AbilityRow } from "./pages/MainPage";
 import type { SheetEdit } from "./context";
 
 /** Per-page reveal control (DM viewing an NPC sheet). */
@@ -50,6 +51,7 @@ export function SheetHeader({
 
   return (
     <div className="sheet-header">
+      <div className="sheet-header-top">
       <div className="sheet-header-main">
         {canEdit ? (
           <input
@@ -186,7 +188,13 @@ export function SheetHeader({
         ) : (
           <span className="level-ring-value">{isNpc ? value.cr || "—" : value.level}</span>
         )}
+        <span className="level-ring-label">{isNpc ? "CR" : "Level"}</span>
       </div>
+      </div>
+
+      {/* Abilities live in the hero banner (persistent, Foundry-style). NPCs keep
+          theirs in the Features landing header instead. */}
+      {!isNpc ? <AbilityRow sheet={sheet} /> : null}
     </div>
   );
 }

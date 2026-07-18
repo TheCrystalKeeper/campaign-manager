@@ -13,12 +13,15 @@ import { upsertSavedCampaign } from "../lib/savedCampaigns";
 import type { Scene } from "../lib/types";
 import type { PanelContext } from "../panels/registry";
 
-// Section order shown on the page. "unused" collects every unreferenced image; "maps"
-// includes scene backdrops (which physically live in the token folder). See assetSection.
-const SECTIONS = ["maps", "tokens", "portraits", "handouts", "icons", "unused"] as const;
+// Section order shown on the page. Grouping is by what an image depicts (the entity that
+// references it), not the folder it was uploaded to — so a character's portrait and that same
+// character's map token share one "characters" section instead of being split across
+// "portraits" and "tokens". "unused" collects every unreferenced image. See assetSection.
+const SECTIONS = ["maps", "characters", "npcs", "items", "handouts", "icons", "unused"] as const;
 const KIND_LABEL: Record<string, string> = {
-  tokens: "Tokens",
-  portraits: "Portraits",
+  characters: "Characters",
+  npcs: "NPCs",
+  items: "Items",
   maps: "Maps",
   handouts: "Handouts",
   icons: "Icons",
@@ -187,7 +190,7 @@ export function AssetsPage({
     return map;
   }, [assets, state, campaignIconUrl]);
   const inSection = (kind: string) =>
-    assets.filter((a) => assetSection(a.kind, usageByUrl.get(a.url) ?? []) === kind);
+    assets.filter((a) => assetSection(usageByUrl.get(a.url) ?? []) === kind);
 
   return (
     <div className="npcs-page">

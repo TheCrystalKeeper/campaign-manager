@@ -99,8 +99,6 @@ export function MainPage({ sheet }: { sheet: SheetEdit }) {
 
   return (
     <div className="sheet-page main-page">
-      <AbilityRow sheet={sheet} />
-
       <div className="main-columns">
         <div className="main-col">
           <section className="sheet-section">

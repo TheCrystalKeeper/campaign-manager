@@ -86,7 +86,7 @@ function track(specs: DieSpec[]): DiceTrack {
   check("d100 pair: unit die takes the d100 override", specs[1].skin === "bronze");
   check("standalone d10 keeps its own resolution", specs[2].skin === "marble");
   check("coin gets the coin finish", specs[3].skin === "silver");
-  check("custom crystal never skinned", specs[4].skin === undefined);
+  check("custom crystal follows the all-dice variant", specs[4].skin === "marble");
 }
 
 {
@@ -95,11 +95,13 @@ function track(specs: DieSpec[]): DiceTrack {
     [
       { kind: "d20", percentile: false },
       { kind: "coin", percentile: false },
+      { kind: "custom", percentile: false, sides: 35 },
     ] as { kind: string; percentile: boolean; sides?: number; skin?: string }[],
     DEFAULT_SKIN_PREFS,
   );
   check("classic default attaches no skin", specs[0].skin === undefined);
   check("gold coin default attaches no skin", specs[1].skin === undefined);
+  check("classic custom crystal attaches no skin", specs[2].skin === undefined);
 }
 
 if (failures > 0) {
