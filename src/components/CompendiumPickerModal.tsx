@@ -64,11 +64,16 @@ export function CompendiumPickerModal<T extends { id: string; name: string }>({
   useEffect(fetchRows, []);
 
   useEffect(() => {
+    // Capture phase + stopPropagation so Esc closes ONLY the picker — the floating
+    // sheet window underneath also listens for Escape on window and must not close.
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        onClose();
+      }
     };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [onClose]);
 
   const visible = useMemo(() => {
