@@ -34,7 +34,7 @@ export function SheetHeader({
 
   const subtitle = isNpc
     ? [value.size, value.creatureType, value.alignment].filter(Boolean).join(" · ") || "NPC"
-    : `${value.characterClass || "Class"} ${value.level}`;
+    : `${value.race ? `${value.race} ` : ""}${value.characterClass || "Class"} ${value.level}`;
 
   const meta = isNpc ? [value.source, value.xp ? `${value.xp} XP` : ""].filter(Boolean).join(" · ") : "";
 

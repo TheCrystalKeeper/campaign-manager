@@ -1028,6 +1028,31 @@
   font-family: var(--font-display);
   font-size: 0.85rem;
 }
+/* Editable chip variant — opens the SRD class/species picker. */
+button.class-chip--btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  cursor: pointer;
+  color: inherit;
+}
+button.class-chip--btn:hover {
+  background: var(--surface-2);
+  border-color: var(--border);
+}
+/* Identity chips + SRD-add buttons above the Features tables. */
+.chip-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+.chip-row .class-chip {
+  align-self: auto;
+}
+.chip-row-add {
+  font-size: 0.8rem;
+}
 
 /* --- Inventory -------------------------------------------------------------- */
 /* Docked Inventory panel wrapper: its own container context so the narrow-width

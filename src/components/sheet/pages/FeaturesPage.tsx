@@ -1,3 +1,5 @@
+import { useState } from "react";
+import { ChevronDown } from "lucide-react";
 import {
   DEFAULT_SHEET_TEMPLATE,
   rowId,
@@ -9,6 +11,9 @@ import { NumberInput } from "../../NumberInput";
 import { RowTable, type RowGroup } from "../RowTable";
 import { UsesCell } from "../atoms";
 import { advFromEvent, ROLL_HINT, type SheetEdit } from "../context";
+import { ClassPickerModal } from "../ClassPickerModal";
+import { FeatPickerModal } from "../FeatPickerModal";
+import { SpeciesPickerModal } from "../SpeciesPickerModal";
 import { AbilityRow, SavesRow } from "./MainPage";
 
 
@@ -80,6 +85,17 @@ const FEATURE_GROUPS: Array<{ id: FeatureEntry["source"]; title: string }> = [
 export function FeaturesPage({ sheet }: { sheet: SheetEdit }) {
   const { value, canEdit, kind, derived, update, onRollCheck, actions } = sheet;
   const isNpc = kind === "npc";
+  const [classPickerOpen, setClassPickerOpen] = useState(false);
+  const [speciesPickerOpen, setSpeciesPickerOpen] = useState(false);
+  const [featPickerOpen, setFeatPickerOpen] = useState(false);
+
+  const classChipText = (
+    <>
+      {value.characterClass || (canEdit ? "Choose class" : "Class")}{" "}
+      {value.subclass ? `· ${value.subclass} ` : ""}
+      {isNpc ? "" : value.level}
+    </>
+  );
 
   const derivedRows: AttackRow[] = value.inventory
     .filter((r) => r.equipped && r.damage)
@@ -123,12 +139,61 @@ export function FeaturesPage({ sheet }: { sheet: SheetEdit }) {
         <div className="npc-stat-header">
           <AbilityRow sheet={sheet} />
           <SavesRow sheet={sheet} />
+          {canEdit ? (
+            <button
+              type="button"
+              className="class-chip class-chip--btn"
+              title="Set a class from the SRD (optional for NPCs)"
+              onClick={() => setClassPickerOpen(true)}
+            >
+              {value.characterClass ? classChipText : "＋ Class"}
+              <ChevronDown size={12} strokeWidth={2.2} />
+            </button>
+          ) : null}
         </div>
       ) : (
-        <div className="class-chip">
-          {value.characterClass || "Class"} {value.subclass ? `· ${value.subclass}` : ""} {value.level}
+        <div className="chip-row">
+          {canEdit ? (
+            <button
+              type="button"
+              className="class-chip class-chip--btn"
+              title="Choose a class from the SRD"
+              onClick={() => setClassPickerOpen(true)}
+            >
+              {classChipText}
+              <ChevronDown size={12} strokeWidth={2.2} />
+            </button>
+          ) : (
+            <div className="class-chip">{classChipText}</div>
+          )}
+          {canEdit ? (
+            <button
+              type="button"
+              className="class-chip class-chip--btn"
+              title="Choose a species from the SRD"
+              onClick={() => setSpeciesPickerOpen(true)}
+            >
+              {value.race || "Choose species"}
+              <ChevronDown size={12} strokeWidth={2.2} />
+            </button>
+          ) : value.race ? (
+            <div className="class-chip">{value.race}</div>
+          ) : null}
+          {canEdit ? (
+            <button
+              type="button"
+              className="btn-ghost chip-row-add"
+              title="Add a feat from the SRD"
+              onClick={() => setFeatPickerOpen(true)}
+            >
+              ＋ Feat
+            </button>
+          ) : null}
         </div>
       )}
+      {classPickerOpen ? <ClassPickerModal sheet={sheet} onClose={() => setClassPickerOpen(false)} /> : null}
+      {speciesPickerOpen ? <SpeciesPickerModal sheet={sheet} onClose={() => setSpeciesPickerOpen(false)} /> : null}
+      {featPickerOpen ? <FeatPickerModal sheet={sheet} onClose={() => setFeatPickerOpen(false)} /> : null}
 
       <RowTable
         groups={[{ id: "actions", title: isNpc ? "Actions" : "Attacks & Actions", rows: attackRows, onAdd: canEdit ? addAttack : undefined }]}
