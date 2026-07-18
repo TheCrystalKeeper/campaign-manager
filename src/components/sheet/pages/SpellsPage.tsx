@@ -1,4 +1,4 @@
-import type { ReactElement } from "react";
+import { useState, type ReactElement } from "react";
 import { Sparkles } from "lucide-react";
 import {
   CASTER_TYPES,
@@ -11,6 +11,7 @@ import { NumberInput } from "../../NumberInput";
 import { RowTable, type RowGroup } from "../RowTable";
 import { DerivedNumber, SlotPips } from "../atoms";
 import { type SheetEdit } from "../context";
+import { SpellPickerModal } from "../SpellPickerModal";
 
 function levelTitle(level: number): string {
   return level === 0 ? "Cantrips" : `Level ${level}`;
@@ -32,7 +33,8 @@ const CASTER_TYPE_LABELS: Record<CasterType, string> = {
  * derives slot maximums from level.
  */
 export function SpellsPage({ sheet }: { sheet: SheetEdit }) {
-  const { value, canEdit, derived, setOverride, update, actions } = sheet;
+  const { value, canEdit, isDm, derived, setOverride, update, actions } = sheet;
+  const [srdPickerOpen, setSrdPickerOpen] = useState(false);
 
   const patchSpell = (id: string, patch: Partial<SpellEntry>) =>
     update({ spells: value.spells.map((s) => (s.id === id ? { ...s, ...patch } : s)) });
@@ -172,8 +174,19 @@ export function SpellsPage({ sheet }: { sheet: SheetEdit }) {
         <div className="spell-add-bar">
           <button type="button" className="btn-ghost" onClick={() => addSpell(0)}>＋ Cantrip</button>
           <button type="button" className="btn-ghost" onClick={() => addSpell(1)}>＋ Spell</button>
+          {isDm ? (
+            <button
+              type="button"
+              className="btn-ghost"
+              title="Browse the full SRD spell list (DM only)"
+              onClick={() => setSrdPickerOpen(true)}
+            >
+              ＋ From SRD
+            </button>
+          ) : null}
         </div>
       ) : null}
+      {srdPickerOpen ? <SpellPickerModal sheet={sheet} onClose={() => setSrdPickerOpen(false)} /> : null}
 
       <RowTable
         groups={groups}
