@@ -11,7 +11,7 @@ import { LogToasts } from "./components/LogToasts";
 import { SceneSwitcher } from "./components/SceneSwitcher";
 import { TokenEditor } from "./components/TokenEditor";
 import { CroppableImage } from "./components/CroppableImage";
-import { dockPanelsForRole, PANELS, type PanelContext, type PanelId } from "./panels/registry";
+import { dockPanelsForRole, PANELS, type PanelContext, type PanelId, type SettingsView } from "./panels/registry";
 import { PlayersPage } from "./pages/PlayersPage";
 import { NpcsPage } from "./pages/NpcsPage";
 import { ItemsPage } from "./pages/ItemsPage";
@@ -32,6 +32,8 @@ import {
   writeCampaignJson,
 } from "./lib/campaignStore";
 import { useSpaceClick } from "./lib/useSpaceClick";
+import { useKeybinds } from "./lib/useKeybinds";
+import { matchesBinding } from "./lib/keybinds";
 import { fitViewportToScene, prefetchImage } from "./lib/sceneUtils";
 import { setOptimizeUploads as applyOptimizeUploads } from "./lib/uploadAsset";
 import { LoadingScreen } from "./components/LoadingScreen";
@@ -155,6 +157,12 @@ export default function App() {
   // may include the SHEET_PICKER sentinel (the DM's "pick a character" placeholder).
   const [openSheetIds, setOpenSheetIds] = useState<string[]>([]);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // The Settings window's current page: the main list vs the Keybinds sub-page. Reset to "main"
+  // whenever the window closes so reopening always lands on the main settings.
+  const [settingsView, setSettingsView] = useState<SettingsView>("main");
+  // Live keyboard-shortcut map (undo/redo, S = Settings, …). Identity changes on rebind, so the
+  // keydown effects below re-attach with the new chords.
+  const keybinds = useKeybinds();
   // Item-sheet windows currently open (DM-only), one FloatingWindow each, ordered by open time.
   const [openItemIds, setOpenItemIds] = useState<string[]>([]);
   // Handout viewer windows currently open, one FloatingWindow each, ordered by open time.
@@ -385,30 +393,27 @@ export default function App() {
       return;
     }
     const onKey = (event: KeyboardEvent) => {
-      if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== "z") {
-        // Ctrl+Y is an alternate redo.
-        if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "y") {
-          if (!isTypingTarget(event.target)) {
-            event.preventDefault();
-            historyRedo();
-          }
-        }
-        return;
-      }
       if (isTypingTarget(event.target)) {
         return;
       }
-      event.preventDefault();
-      if (event.shiftKey) {
+      // Ctrl/Cmd+Y stays a fixed alternate redo alongside the rebindable Redo chord.
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "y") {
+        event.preventDefault();
         historyRedo();
-      } else {
+        return;
+      }
+      if (matchesBinding(event, keybinds.redo)) {
+        event.preventDefault();
+        historyRedo();
+      } else if (matchesBinding(event, keybinds.undo)) {
+        event.preventDefault();
         historyUndo();
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isDm, onBoard, historyUndo, historyRedo]);
+  }, [isDm, onBoard, historyUndo, historyRedo, keybinds]);
 
   // 'S' toggles the Settings window (board only; ignored while typing or with a modifier held).
   useEffect(() => {
@@ -416,13 +421,7 @@ export default function App() {
       return;
     }
     const onKey = (event: KeyboardEvent) => {
-      if (
-        event.key.toLowerCase() !== "s" ||
-        event.ctrlKey ||
-        event.metaKey ||
-        event.altKey ||
-        isTypingTarget(event.target)
-      ) {
+      if (isTypingTarget(event.target) || !matchesBinding(event, keybinds.toggleSettings)) {
         return;
       }
       event.preventDefault();
@@ -430,7 +429,7 @@ export default function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onBoard]);
+  }, [onBoard, keybinds]);
 
   // Opt-in: a pointer-down anywhere outside the open Settings window (except its dock toggle)
   // closes it — click-off-to-dismiss. Off by default; the ⚙ toggle stays available.
@@ -863,6 +862,8 @@ export default function App() {
     setConfirmDeletes,
     history: isDm ? history : undefined,
     resetUiLayout,
+    settingsView,
+    setSettingsView,
     leave,
   };
 
@@ -1200,7 +1201,11 @@ export default function App() {
             minWidth={settingsPanel.minWidth}
             minHeight={settingsPanel.minHeight}
             defaultPos={settingsPanel.defaultPos}
-            onClose={() => setSettingsOpen(false)}
+            onClose={() => {
+              setSettingsOpen(false);
+              setSettingsView("main");
+            }}
+            onBack={settingsView === "keybinds" ? () => setSettingsView("main") : undefined}
           >
             {settingsPanel.render(panelContext)}
           </FloatingWindow>

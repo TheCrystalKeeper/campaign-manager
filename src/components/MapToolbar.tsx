@@ -43,6 +43,8 @@ import {
   type WallBrush,
 } from "../lib/types";
 import type { History } from "../lib/history";
+import { useKeybinds } from "../lib/useKeybinds";
+import { formatBinding, type KeybindId } from "../lib/keybinds";
 
 const DRAW_COLORS = ["#ffd166", "#ff6b6b", "#7cc4ff", "#8ce99a", "#f3f0ff"];
 const FOG_SHAPE_OPTIONS: Array<{ id: FogShape; label: ReactNode; title: string }> = [
@@ -271,6 +273,8 @@ export function MapToolbar({
   hasVisionTokens,
   history,
 }: MapToolbarProps) {
+  // Tool hotkeys are user-rebindable, so tooltips read the live binding rather than tool.hotkey.
+  const keybinds = useKeybinds();
   // Shared "Lighting on/off + Preview" block for the walls & lights tools.
   const lightingRow = (
     <>
@@ -365,7 +369,7 @@ export function MapToolbar({
           <button
             key={tool.id}
             className={`map-tool-btn${activeToolId === tool.id ? " btn-active" : ""}`}
-            title={`${tool.label} (${tool.hotkey.toUpperCase()})`}
+            title={`${tool.label} (${formatBinding(keybinds[`tool.${tool.id}` as KeybindId])})`}
             // Clicking the already-active tool toggles back to Select (v).
             onClick={() =>
               onSelectTool(activeToolId === tool.id && tool.id !== "select" ? "select" : tool.id)

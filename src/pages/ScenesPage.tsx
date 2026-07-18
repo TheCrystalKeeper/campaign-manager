@@ -6,6 +6,8 @@ import { PageSwitcher, type PageId } from "./PageSwitcher";
 import { readCampaignFlag, writeCampaignFlag } from "../lib/campaignStore";
 import { applySceneMessage, sceneMessageSceneId } from "../lib/sceneMessages";
 import { buildInverse, useHistory } from "../lib/history";
+import { useKeybinds } from "../lib/useKeybinds";
+import { matchesBinding } from "../lib/keybinds";
 import { createEmptyScene, fitViewportToScene } from "../lib/sceneUtils";
 import {
   DEFAULT_VIEWPORT,
@@ -60,6 +62,7 @@ export function ScenesPage({
   const fittedSceneRef = useRef<string | null>(null);
   // Undo/redo for scene-editor edits (independent of the board's history).
   const history = useHistory();
+  const keybinds = useKeybinds();
 
   // Fall back to the live scene when nothing (or a removed scene) is selected.
   const selectedSceneId =
@@ -169,26 +172,25 @@ export function ScenesPage({
       return;
     }
     const onKey = (event: KeyboardEvent) => {
-      if (!(event.ctrlKey || event.metaKey)) {
-        return;
-      }
       const t = event.target as HTMLElement | null;
       if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) {
         return;
       }
-      const key = event.key.toLowerCase();
-      if (key === "z") {
-        event.preventDefault();
-        if (event.shiftKey) historyRedo();
-        else historyUndo();
-      } else if (key === "y") {
+      // Ctrl/Cmd+Y stays a fixed alternate redo alongside the rebindable Redo chord.
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "y") {
         event.preventDefault();
         historyRedo();
+      } else if (matchesBinding(event, keybinds.redo)) {
+        event.preventDefault();
+        historyRedo();
+      } else if (matchesBinding(event, keybinds.undo)) {
+        event.preventDefault();
+        historyUndo();
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [active, historyUndo, historyRedo]);
+  }, [active, historyUndo, historyRedo, keybinds]);
 
   const applyDraft = useCallback(
     (sceneId: string) => {

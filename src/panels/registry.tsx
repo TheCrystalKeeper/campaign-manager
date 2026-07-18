@@ -110,9 +110,15 @@ export type PanelContext = {
   history?: History;
   /** Clears saved window/tray positions and returns floating UI to defaults. */
   resetUiLayout: () => void;
+  /** Which page the Settings window shows: the main list or the Keybinds sub-page. */
+  settingsView: SettingsView;
+  setSettingsView: (view: SettingsView) => void;
   /** Leaves the campaign (back to the lobby). */
   leave: () => void;
 };
+
+/** The Settings window's two pages (a lightweight in-panel sub-view, not a separate window). */
+export type SettingsView = "main" | "keybinds";
 
 export type PanelDef = {
   id: PanelId;
@@ -408,7 +414,7 @@ export const PANELS: PanelDef[] = [
     icon: <Settings size={17} strokeWidth={2.2} />,
     dockable: false,
     roles: ["dm", "player"],
-    title: () => "Settings",
+    title: (ctx) => (ctx.settingsView === "keybinds" ? "Keybinds" : "Settings"),
     // Bigger by default and centered horizontally, biased slightly above the vertical
     // center (the panel has a lot of rows, especially for the DM) — the width/height here
     // must match the centering math.

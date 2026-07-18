@@ -1,4 +1,6 @@
 import { useEffect } from "react";
+import { useKeybinds } from "./useKeybinds";
+import { physicalKey } from "./keybinds";
 
 /** True when a keyboard event targets an editable field (so Space types a space there). */
 function isTypingTarget(target: EventTarget | null): boolean {
@@ -29,6 +31,8 @@ type Mods = { shiftKey: boolean; ctrlKey: boolean; altKey: boolean; metaKey: boo
 /// Space in a text field still types a space; Ctrl/Alt/Meta+Space pass through untouched.
 /// </summary>
 export function useSpaceClick(enabled: boolean) {
+  // The trigger key is rebindable (default Space) via the Keybinds settings page.
+  const triggerKey = useKeybinds().spaceClick.key;
   useEffect(() => {
     if (!enabled) {
       return;
@@ -126,10 +130,10 @@ export function useSpaceClick(enabled: boolean) {
     };
 
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.code !== "Space" && event.key !== " ") {
+      if (physicalKey(event) !== triggerKey) {
         return;
       }
-      // Leave Space alone while typing, and let OS/app combos (Ctrl/Alt/Meta+Space) pass.
+      // Leave the key alone while typing, and let OS/app combos (Ctrl/Alt/Meta+key) pass.
       if (isTypingTarget(event.target) || event.ctrlKey || event.altKey || event.metaKey) {
         return;
       }
@@ -144,7 +148,7 @@ export function useSpaceClick(enabled: boolean) {
     };
 
     const onKeyUp = (event: KeyboardEvent) => {
-      if (event.code !== "Space" && event.key !== " ") {
+      if (physicalKey(event) !== triggerKey) {
         return;
       }
       if (!held) {
@@ -175,5 +179,5 @@ export function useSpaceClick(enabled: boolean) {
       window.removeEventListener("keyup", onKeyUp, { capture: true });
       window.removeEventListener("blur", onBlur);
     };
-  }, [enabled]);
+  }, [enabled, triggerKey]);
 }

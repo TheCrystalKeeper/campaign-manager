@@ -64,6 +64,8 @@ import type { History } from "../lib/history";
 import { deriveBoardColor, DEFAULT_BOARD_BG } from "../lib/boardBackdrop";
 import { clampMove, movementSegments } from "../lib/visibility";
 import { toolsForRole } from "../map/tools/registry";
+import { useKeybinds } from "../lib/useKeybinds";
+import { matchesBinding, physicalKey, type KeybindId } from "../lib/keybinds";
 import { selectTool } from "../map/tools/select";
 import { LIGHT_PRESETS, type LightPreset } from "../map/tools/lights";
 import { RulerShape } from "../map/tools/measure";
@@ -1793,6 +1795,10 @@ export function MapCanvas({
     [isDm, playersCanDraw],
   );
 
+  // Live keyboard shortcuts (tool letters, rotate/delete/visibility, clone) — the keydown handler
+  // below matches against these so the Keybinds settings page can remap them.
+  const keybinds = useKeybinds();
+
   // If the active tool becomes unavailable (DM revoked drawing), fall back to select.
   useEffect(() => {
     if (!availableTools.some((tool) => tool.id === activeToolId)) {
@@ -1815,10 +1821,9 @@ export function MapCanvas({
       ) {
         return;
       }
-      // Ctrl/Cmd+D clones the selected walls.
+      // Clone the selected walls (default Ctrl/Cmd+D).
       if (
-        (event.ctrlKey || event.metaKey) &&
-        event.key.toLowerCase() === "d" &&
+        matchesBinding(event, keybinds.cloneSelection) &&
         activeToolId === "walls" &&
         selectedWallIds.length > 0
       ) {
@@ -1829,37 +1834,34 @@ export function MapCanvas({
       if (event.ctrlKey || event.metaKey || event.altKey) {
         return;
       }
+      // Escape always resets the active tool to Select (kept fixed — it's the universal cancel key).
       if (event.key === "Escape") {
         setActiveToolId("select");
         setDraft(null);
         return;
       }
-      // X / Delete removes the selected wall(s), or — with nothing selected — whichever wall the
+      const isDelete =
+        matchesBinding(event, keybinds.deleteToken) ||
+        event.key === "Delete" ||
+        event.key === "Backspace";
+      // Delete removes the selected wall(s), or — with nothing selected — whichever wall the
       // cursor is hovering (no click-to-select needed first).
-      if (
-        activeToolId === "walls" &&
-        (selectedWallIds.length > 0 || hoveredWallId) &&
-        (event.key === "x" || event.key === "X" || event.key === "Delete" || event.key === "Backspace")
-      ) {
+      if (activeToolId === "walls" && (selectedWallIds.length > 0 || hoveredWallId) && isDelete) {
         event.preventDefault();
         deleteHoveredOrSelectedWalls();
         return;
       }
-      // X / Delete over a token (DM): remove the TOKEN only — the linked character/item
+      // Delete over a token (DM): remove the TOKEN only — the linked character/item
       // record survives in its directory. Undoable via Ctrl+Z / the toolbar buttons.
-      if (
-        isDm &&
-        hoveredTokenId &&
-        (event.key === "x" || event.key === "X" || event.key === "Delete" || event.key === "Backspace")
-      ) {
+      if (isDm && hoveredTokenId && isDelete) {
         event.preventDefault();
         send({ type: "REMOVE_TOKEN", tokenId: hoveredTokenId });
         setHoveredTokenId(null);
         return;
       }
-      // H over a token (DM): toggle its player-visibility (Token.hidden). The DM keeps
-      // seeing it ghosted with an eye-off badge; players' copies vanish/return. Undoable.
-      if (isDm && hoveredTokenId && (event.key === "h" || event.key === "H")) {
+      // Toggle the hovered token's player-visibility (DM, default H). The DM keeps seeing it
+      // ghosted with an eye-off badge; players' copies vanish/return. Undoable.
+      if (isDm && hoveredTokenId && matchesBinding(event, keybinds.toggleVisibility)) {
         const tok = state.tokens.find((item) => item.id === hoveredTokenId);
         if (tok) {
           event.preventDefault();
@@ -1867,22 +1869,27 @@ export function MapCanvas({
         }
         return;
       }
-      // Rotate the selected token's facing: [ / ] nudge 15°, { / } (shift) 45°.
-      if (
-        selectedTokenId &&
-        (event.key === "[" || event.key === "]" || event.key === "{" || event.key === "}")
-      ) {
-        const tok = state.tokens.find((item) => item.id === selectedTokenId);
-        if (tok && (isDm || tok.ownerPlayerId === yourPlayerId)) {
-          const step = event.key === "{" || event.key === "}" ? 45 : 15;
-          const dir = event.key === "[" || event.key === "{" ? -1 : 1;
-          const next = (((tok.facing ?? 0) + dir * step) % 360 + 360) % 360;
-          onMoveToken(tok.id, tok.x, tok.y, next);
-          event.preventDefault();
+      // Rotate the selected token's facing: the bound keys ([ / ]) nudge 15°, Shift makes it 45°.
+      // Matched on the physical key (ignoring Shift's printed variant) so Shift+[ still rotates.
+      if (selectedTokenId) {
+        const pk = physicalKey(event);
+        const ccw = pk === keybinds.rotateCcw.key;
+        const cw = pk === keybinds.rotateCw.key;
+        if (ccw || cw) {
+          const tok = state.tokens.find((item) => item.id === selectedTokenId);
+          if (tok && (isDm || tok.ownerPlayerId === yourPlayerId)) {
+            const step = event.shiftKey ? 45 : 15;
+            const dir = ccw ? -1 : 1;
+            const next = (((tok.facing ?? 0) + dir * step) % 360 + 360) % 360;
+            onMoveToken(tok.id, tok.x, tok.y, next);
+            event.preventDefault();
+          }
+          return;
         }
-        return;
       }
-      const tool = availableTools.find((item) => item.hotkey === event.key.toLowerCase());
+      const tool = availableTools.find((item) =>
+        matchesBinding(event, keybinds[`tool.${item.id}` as KeybindId]),
+      );
       if (tool) {
         setActiveToolId(tool.id);
         setDraft(null);
@@ -1905,6 +1912,7 @@ export function MapCanvas({
     send,
     onCloneWalls,
     deleteHoveredOrSelectedWalls,
+    keybinds,
   ]);
 
   // A live calibrate drag previews the grid it's about to commit: "move" slides the offset, "resize"

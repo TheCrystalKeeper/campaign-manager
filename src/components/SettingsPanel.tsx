@@ -28,6 +28,8 @@ import {
 } from "../lib/savedCampaigns";
 import { useDebouncedCallback } from "../hooks/useDebouncedCallback";
 import { uploadLibraryImage } from "../lib/uploadAsset";
+import { KeybindsPage } from "./KeybindsPage";
+import { Keyboard } from "lucide-react";
 
 const SHAPE_LABEL: Record<TokenShape, string> = {
   circle: "● Circle",
@@ -364,6 +366,12 @@ export function SettingsPanel({ ctx }: { ctx: PanelContext }) {
     }
   };
 
+  // The Keybinds sub-page takes over the whole window body; the window's Back button
+  // (wired in App via FloatingWindow) returns to this main view.
+  if (ctx.settingsView === "keybinds") {
+    return <KeybindsPage ctx={ctx} />;
+  }
+
   return (
     <div className="panel-body stack">
       <div className="section-title">This device</div>
@@ -473,6 +481,14 @@ export function SettingsPanel({ ctx }: { ctx: PanelContext }) {
           }}
         >
           {layoutReset ? "Reset ✓" : "Reset layout"}
+        </button>
+      </div>
+      <div className="row" style={{ justifyContent: "space-between" }}>
+        <label style={{ margin: 0 }} title="View and customize the app's keyboard shortcuts">
+          Keyboard shortcuts
+        </label>
+        <button onClick={() => ctx.setSettingsView("keybinds")}>
+          <Keyboard size={13} strokeWidth={2.2} /> Customize…
         </button>
       </div>
 

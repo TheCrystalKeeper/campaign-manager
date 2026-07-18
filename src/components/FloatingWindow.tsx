@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import { Maximize2, Minimize2, PanelRight, X } from "lucide-react";
+import { ChevronLeft, Maximize2, Minimize2, PanelRight, X } from "lucide-react";
 import { clampSizeToViewport, clampToViewport, CLAMP_MARGIN } from "../lib/clampToViewport";
 import { campaignKey } from "../lib/campaignStore";
 
@@ -98,6 +98,8 @@ type FloatingWindowProps = {
   minHeight?: number;
   /** When set, shows a "return to dock" button in the title bar. */
   onDock?: () => void;
+  /** When set, shows a leading "back" button in the title bar (e.g. Settings → Keybinds sub-page). */
+  onBack?: () => void;
 };
 
 /// <summary>
@@ -119,6 +121,7 @@ export function FloatingWindow({
   minWidth = 240,
   minHeight = 140,
   onDock,
+  onBack,
 }: FloatingWindowProps) {
   const [geom, setGeom] = useState<WindowGeom>(() => {
     const stored = loadStoredGeom(roomId, id);
@@ -397,7 +400,19 @@ export function FloatingWindow({
           onPointerCancel={endDrag}
           onDoubleClick={resetGeom}
         >
-          <span className="window-title">{title}</span>
+          <span className="row" style={{ gap: "0.35rem", minWidth: 0 }}>
+            {onBack ? (
+              <button
+                className="btn-ghost icon-btn"
+                title="Back"
+                onPointerDown={(event) => event.stopPropagation()}
+                onClick={onBack}
+              >
+                <ChevronLeft size={16} strokeWidth={2.2} />
+              </button>
+            ) : null}
+            <span className="window-title">{title}</span>
+          </span>
           <span className="row" style={{ gap: "0.15rem" }}>
             {onDock ? (
               <button
