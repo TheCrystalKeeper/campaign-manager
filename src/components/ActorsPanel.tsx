@@ -1,5 +1,9 @@
+import { useState } from "react";
+import { Skull } from "lucide-react";
 import { Directory, type DirectoryRowData } from "./Directory";
 import { confirmDelete } from "./ConfirmDeleteDialog";
+import { MonsterPickerModal } from "./MonsterPickerModal";
+import { monsterSheetPatch } from "../lib/compendiumMap";
 import { startPointerDrag } from "../lib/pointerDrag";
 import { playerTokenColorForSlot, TOKEN_ENEMY_COLOR, type GameState } from "../lib/types";
 import type { useDmActions } from "../hooks/useGameRoom";
@@ -94,12 +98,35 @@ export function ActorsPanel({
     }
   };
 
+  const [monsterPickerOpen, setMonsterPickerOpen] = useState(false);
+
   return (
+    <>
+    {monsterPickerOpen ? (
+      <MonsterPickerModal
+        onPick={(monster) => {
+          const sheetId = newId("sheet");
+          // Ordered messages: the sheet exists by the time the patch arrives.
+          dm.createSheet(sheetId, monster.name);
+          dm.updateSheet(sheetId, monsterSheetPatch(monster));
+          if (openOnCreate) {
+            openSheet(sheetId);
+          }
+        }}
+        onClose={() => setMonsterPickerOpen(false)}
+      />
+    ) : null}
     <Directory
       kind="actor"
       folders={state.folders.filter((folder) => folder.kind === folderKind)}
       rows={rows}
       createLabel="Create NPC"
+      extraCreate={{
+        label: "From SRD",
+        title: "Create an NPC from an SRD monster stat block",
+        icon: <Skull size={15} strokeWidth={2.2} />,
+        onClick: () => setMonsterPickerOpen(true),
+      }}
       // The combined Actors sidebar can also spin up a new player slot; the NPC-only page can't.
       onCreatePlayer={
         filterKind
@@ -212,5 +239,6 @@ export function ActorsPanel({
         )
       }
     />
+    </>
   );
 }
