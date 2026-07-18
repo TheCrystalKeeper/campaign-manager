@@ -1054,6 +1054,62 @@ button.class-chip--btn:hover {
   font-size: 0.8rem;
 }
 
+/* Editable identity pill: type class / subclass / species, browse the SRD alongside. */
+.class-chip--edit {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+  padding-right: 0.25rem;
+}
+.class-chip-input {
+  background: none;
+  border: none;
+  box-shadow: none;
+  border-radius: var(--radius);
+  padding: 0.05rem 0.2rem;
+  font-family: var(--font-display);
+  font-size: 0.85rem;
+  width: 11ch;
+  min-width: 0;
+}
+.class-chip-sub-input {
+  width: 13ch;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+.class-chip-input::placeholder {
+  color: var(--text-faint);
+}
+.class-chip-input:focus {
+  outline: none;
+  background: var(--surface-page);
+  box-shadow: inset 0 -1px 0 var(--accent);
+}
+.class-chip-sep {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+.class-chip-lv {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  padding: 0 0.15rem;
+}
+.class-chip-browse {
+  display: inline-grid;
+  place-items: center;
+  padding: 0.12rem;
+  border: none;
+  border-radius: var(--radius);
+  background: none;
+  box-shadow: none;
+  opacity: 0.55;
+  cursor: pointer;
+}
+.class-chip-browse:hover {
+  opacity: 1;
+  background: var(--surface-2);
+}
+
 /* --- Inventory -------------------------------------------------------------- */
 /* Docked Inventory panel wrapper: its own container context so the narrow-width
    @container rules below fire at dock width (320px) in both the dock and pop-out.

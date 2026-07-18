@@ -177,6 +177,24 @@ const elf = species.find((s) => s.id === "elf")!;
       legacy.classes[0].level === 5 && legacy.classes[0].isFirstClass,
     JSON.stringify(legacy.classes));
 
+  // Manual (typed) homebrew class: co-writing characterClass/subclass + classes[0]
+  // survives normalization (proves the inline-edit path isn't clobbered).
+  const homebrew = normalizeCharacterSheet(
+    {
+      ...createDefaultSheet("HB"),
+      characterClass: "Blood Hunter",
+      subclass: "Order of the Lycan",
+      level: 1,
+      classes: [
+        { id: "cls-0", className: "Blood Hunter", subclassName: "Order of the Lycan", level: 1, isFirstClass: true },
+      ],
+    },
+    "HB",
+  );
+  check("manual class: typed homebrew round-trips without clobbering",
+    homebrew.characterClass === "Blood Hunter" && homebrew.subclass === "Order of the Lycan" &&
+      homebrew.classes.length === 1 && homebrew.classes[0].className === "Blood Hunter");
+
   // Multiclass sync: level becomes the sum; display fields mirror the first class.
   const multi = normalizeCharacterSheet(
     {

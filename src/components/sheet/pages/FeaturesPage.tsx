@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Search } from "lucide-react";
 import {
   DEFAULT_SHEET_TEMPLATE,
   rowId,
@@ -95,6 +95,29 @@ export function FeaturesPage({ sheet }: { sheet: SheetEdit }) {
   const multiclassed = value.classes.length >= 2;
   const openClassEditor = () => (multiclassed ? setManageClassesOpen(true) : setClassPickerOpen(true));
 
+  // Manual class/subclass typing. The normalizer re-syncs characterClass/subclass FROM
+  // classes[0], and draft flushes are field-granular — so we must co-write the classes
+  // array in the SAME update or the typed value is clobbered on the next normalize.
+  const setClassFields = (patch: { characterClass?: string; subclass?: string }) => {
+    const characterClass = patch.characterClass ?? value.characterClass;
+    const subclass = patch.subclass ?? value.subclass;
+    update({
+      characterClass,
+      subclass,
+      classes: characterClass.trim()
+        ? [
+            {
+              id: value.classes[0]?.id ?? rowId("cls"),
+              className: characterClass,
+              subclassName: subclass,
+              level: value.classes[0]?.level ?? value.level,
+              isFirstClass: true,
+            },
+          ]
+        : [],
+    });
+  };
+
   const classChipText = multiclassed ? (
     <>{value.classes.map((c) => `${c.className} ${c.level}`).join(" / ")}</>
   ) : (
@@ -161,29 +184,70 @@ export function FeaturesPage({ sheet }: { sheet: SheetEdit }) {
         </div>
       ) : (
         <div className="chip-row">
-          {canEdit ? (
+          {!canEdit ? (
+            <div className="class-chip">{classChipText}</div>
+          ) : multiclassed ? (
+            // Multiclass: the composed chip opens the manager (typing a single class
+            // name doesn't map to a multiclass sheet).
             <button
               type="button"
               className="class-chip class-chip--btn"
-              title="Choose a class from the SRD"
+              title="Manage classes"
               onClick={openClassEditor}
             >
               {classChipText}
               <ChevronDown size={12} strokeWidth={2.2} />
             </button>
           ) : (
-            <div className="class-chip">{classChipText}</div>
+            <div className="class-chip class-chip--edit">
+              <input
+                className="class-chip-input"
+                value={value.characterClass}
+                placeholder="Class"
+                aria-label="Class"
+                onChange={(e) => setClassFields({ characterClass: e.target.value })}
+              />
+              {value.characterClass.trim() ? (
+                <>
+                  <span className="class-chip-sep">·</span>
+                  <input
+                    className="class-chip-input class-chip-sub-input"
+                    value={value.subclass}
+                    placeholder="Subclass"
+                    aria-label="Subclass"
+                    onChange={(e) => setClassFields({ subclass: e.target.value })}
+                  />
+                </>
+              ) : null}
+              <span className="class-chip-lv">{value.level}</span>
+              <button
+                type="button"
+                className="class-chip-browse"
+                title="Browse the SRD classes"
+                onClick={() => setClassPickerOpen(true)}
+              >
+                <Search size={12} strokeWidth={2.2} />
+              </button>
+            </div>
           )}
           {canEdit ? (
-            <button
-              type="button"
-              className="class-chip class-chip--btn"
-              title="Choose a species from the SRD"
-              onClick={() => setSpeciesPickerOpen(true)}
-            >
-              {value.race || "Choose species"}
-              <ChevronDown size={12} strokeWidth={2.2} />
-            </button>
+            <div className="class-chip class-chip--edit">
+              <input
+                className="class-chip-input"
+                value={value.race}
+                placeholder="Species"
+                aria-label="Species"
+                onChange={(e) => update({ race: e.target.value })}
+              />
+              <button
+                type="button"
+                className="class-chip-browse"
+                title="Browse the SRD species"
+                onClick={() => setSpeciesPickerOpen(true)}
+              >
+                <Search size={12} strokeWidth={2.2} />
+              </button>
+            </div>
           ) : value.race ? (
             <div className="class-chip">{value.race}</div>
           ) : null}
