@@ -28,6 +28,8 @@ type DiceTrayProps = {
   isDm: boolean;
   secret: boolean;
   onToggleSecret: (on: boolean) => void;
+  /** Combat is waiting on this client's initiative roll — pulse the d20 as the die to throw. */
+  highlightD20?: boolean;
   controller: DiceOverlayController;
   /** Text-roll fallback (3D off, engine warming up, or invalid for 3D). */
   onTextRoll: (expression: string) => void;
@@ -101,6 +103,7 @@ export function DiceTray({
   isDm,
   secret,
   onToggleSecret,
+  highlightD20,
   controller,
   onTextRoll,
   onClose,
@@ -156,6 +159,11 @@ export function DiceTray({
     setPos(next);
     savePos(roomId, next);
   }, [resetSignal, roomId]);
+
+  // Mirror the pending-initiative cue onto the 3D tray die (glows like a readied d20).
+  useEffect(() => {
+    controller.setInitiativeDieHighlight(!!highlightD20);
+  }, [highlightD20, controller.setInitiativeDieHighlight]);
 
   // Esc puts readied dice back.
   useEffect(() => {
@@ -409,14 +417,22 @@ export function DiceTray({
         })()}
         {DICE_QUICK_SIDES.map((sides) => {
           const count = controller.selection[sides] ?? 0;
+          // Only when 3D is on: the highlight signals "throw this physical d20 for
+          // initiative". With 3D off a d20 is a text roll that can't bind to initiative,
+          // so players use the tracker's "Roll initiative!" button instead.
+          const initHighlight = sides === 20 && highlightD20 && controller.enabled;
           return (
             <button
               key={sides}
-              className={`die-btn${count > 0 ? " die-btn--sel" : ""}${sides === 20 ? " btn-crystal" : ""}`}
+              className={`die-btn${count > 0 ? " die-btn--sel" : ""}${sides === 20 ? " btn-crystal" : ""}${initHighlight ? " die-btn--init" : ""}`}
               title={
-                controller.enabled
-                  ? `d${sides} — click to ready a die (right-click puts one back), then drag it out of the tray to throw`
-                  : `d${sides} — roll 1d${sides}`
+                initHighlight
+                  ? isDm
+                    ? "Roll d20s for NPC initiative — each fills the next NPC; extra dice are ignored, other dice don't count"
+                    : "Roll this d20 for your initiative — any d20 you throw sets it; other dice don't count"
+                  : controller.enabled
+                    ? `d${sides} — click to ready a die (right-click puts one back), then drag it out of the tray to throw`
+                    : `d${sides} — roll 1d${sides}`
               }
               onClick={() => {
                 if (controller.enabled) {

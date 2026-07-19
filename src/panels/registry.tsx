@@ -289,6 +289,7 @@ export const PANELS: PanelDef[] = [
         isDm={ctx.isDm}
         room={ctx.room}
         dm={ctx.dm}
+        dice={ctx.dice}
         openSheet={ctx.openSheet}
       />
     ),

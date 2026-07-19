@@ -225,6 +225,22 @@ export default function App() {
   const activePage: PageId = isDm ? page : "board";
   const onBoard = activePage === "board";
 
+  // Highlight the tray's d20 while this client still owes initiative rolls: a player for
+  // their own entry, the DM while any NPC is unrolled (a free d20 fills the next NPC).
+  // Any d20 they throw counts for initiative; other dice don't.
+  const initiativePending =
+    !!state?.combat &&
+    state.combat.entries.some((entry) => {
+      if (entry.initiative !== null) {
+        return false;
+      }
+      const token = state?.tokens.find((item) => item.id === entry.tokenId);
+      if (isDm) {
+        return !token?.ownerPlayerId;
+      }
+      return token?.ownerPlayerId === room.yourPlayerId || entry.sheetId === room.yourPlayerId;
+    });
+
   // DM undo/redo for map edits + tokens. `historySend` wraps room.send: it records the
   // inverse of each tracked mutation, then forwards. All DM mutations that should be
   // undoable (dm actions, board map edits, token moves) go through it.
@@ -1312,6 +1328,7 @@ export default function App() {
           isDm={isDm}
           secret={secretRolls}
           onToggleSecret={setSecretRolls}
+          highlightD20={initiativePending}
           controller={dice}
           onTextRoll={(expression) =>
             room.rollDice(expression, { private: isDm && secretRolls })

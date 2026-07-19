@@ -1,6 +1,7 @@
-// Phase 3 WS smoke test: combat start (NPC auto-roll, PC pending), player
-// initiative CTA roll, DEX tiebreak, turn wrap, set-initiative turn
-// preservation, HP-display redaction exception, mid-combat joiner.
+// Phase 3 WS smoke test: combat start (everyone pending — no NPC auto-roll), DM NPC
+// initiative (auto-roll fallback + physical d20 binding with per-entry bonus + zip),
+// player CTA + physical d20 roll (only a d20 counts), DEX tiebreak, turn wrap,
+// set-initiative turn preservation, HP-display redaction exception, mid-combat joiner.
 const ROOM = `smoke3-${Date.now().toString(36)}`;
 const URL_BASE = `ws://127.0.0.1:1999/parties/main/${ROOM}`;
 
@@ -47,6 +48,34 @@ const mkToken = (id, sceneId, extra = {}) => ({
   id, sceneId, x: 0, y: 0, label: id, color: "#c45c5c", kind: "enemy",
   imageUrl: null, ownerPlayerId: null, sheetId: null, conditions: [], showHp: "none", ...extra,
 });
+const entryById = (state, id) => state.combat?.entries.find((e) => e.id === id);
+// Wait until combat entry `id` has a rolled (non-null) initiative — history-safe: a
+// null-combat frame or an unrolled entry never matches.
+const initSet = (client, id, t = 5000) =>
+  client.next((m) => {
+    if (m.type !== "STATE") return false;
+    const e = entryById(m.state, id);
+    return !!e && e.initiative !== null;
+  }, t);
+
+// A physical 3D throw: a minimal but valid track (1 frame → 7 samples/die) passes
+// sanitizeThrow. The roller receives DICE_THROW carrying the server-decided faceValues.
+let rollSeq = 0;
+async function physThrow(client, kinds, context) {
+  const rollId = `r${Date.now().toString(36)}-${rollSeq++}`;
+  const specs = kinds.map((kind, i) => ({ id: `${rollId}-${i}`, kind, percentile: false }));
+  const track = {
+    fps: 30, frames: 1,
+    dice: specs.map((s) => ({ id: s.id, samples: [0, 0, 0, 0, 0, 0, 1] })),
+    impacts: [],
+  };
+  client.send({
+    type: "DICE_THROW_REQUEST", rollId, specs, track, modifier: 0, trayCenter: [0, 0],
+    ...(context ? { context } : {}),
+  });
+  const frame = await client.next((m) => m.type === "DICE_THROW" && m.rollId === rollId);
+  return { rollId, faceValues: frame.faceValues };
+}
 
 try {
   // Setup: DM, one player slot + player
@@ -79,44 +108,91 @@ try {
   dm.send({ type: "ADD_TOKEN", token: mkToken("tok-mook", sceneId, { label: "Mook" }) });
   await dm.next((m) => m.type === "STATE" && m.state.tokens.length === 3);
 
-  // --- combat start: NPCs pre-rolled, PC pending -----------------------------
-  dm.send({ type: "COMBAT_START", tokenIds: ["tok-vex", "tok-gob", "tok-mook"] });
-  const startFrame = await vex.next((m) => m.type === "STATE" && m.state.combat);
-  const combat0 = startFrame.state.combat;
-  const pcEntry = combat0.entries.find((e) => e.tokenId === "tok-vex");
-  const npcEntries = combat0.entries.filter((e) => e.tokenId !== "tok-vex");
-  check(
-    "combat starts: NPCs auto-rolled, PC pending",
-    combat0.round === 1 && pcEntry.initiative === null &&
-      npcEntries.every((e) => typeof e.initiative === "number"),
-    `npc inits=[${npcEntries.map((e) => e.initiative)}]`,
+  const allTokenIds = ["tok-vex", "tok-gob", "tok-mook"];
+
+  // ==== Combat: no auto-roll; DM auto-roll fallback + physical d20; player physical =====
+  dm.send({ type: "COMBAT_START", tokenIds: allTokenIds });
+  const start = await dm.next(
+    (m) => m.type === "STATE" && m.state.combat && m.state.combat.entries.length === 3 &&
+      m.state.combat.entries.every((e) => e.initiative === null),
   );
+  const idOf = (tokenId) => start.state.combat.entries.find((e) => e.tokenId === tokenId).id;
+  const gobEntryId = idOf("tok-gob");
+  const mookEntryId = idOf("tok-mook");
+  const pcEntryId = idOf("tok-vex");
   check(
-    "unrolled PC sorts last",
-    combat0.entries[combat0.entries.length - 1].tokenId === "tok-vex",
+    "combat starts: EVERYONE pending (no NPC auto-roll)",
+    start.state.combat.round === 1 &&
+      start.state.combat.entries.every((e) => e.initiative === null && e.hasRolled === false),
+    `inits=[${start.state.combat.entries.map((e) => e.initiative)}]`,
   );
   check(
     "combat start logged",
-    startFrame.state.log.some((e) => e.kind === "event" && /Combat started/.test(e.text)),
+    start.state.log.some((e) => e.kind === "event" && /Combat started/.test(e.text)),
   );
 
-  // --- player CTA roll --------------------------------------------------------
-  vex.send({ type: "COMBAT_ROLL_INITIATIVE" });
-  const rolledFrame = await vex.next(
-    (m) => m.type === "STATE" && m.state.combat?.entries.every((e) => e.initiative !== null),
-  );
-  const vexEntry = rolledFrame.state.combat.entries.find((e) => e.tokenId === "tok-vex");
-  check("player initiative rolled via CTA", vexEntry.hasRolled && vexEntry.initiative !== null,
-    `init=${vexEntry.initiative}`);
+  // DM auto-roll fallback (3D off) for the mook only: targeted, NPC-only.
+  dm.send({ type: "COMBAT_ROLL_INITIATIVE_NPCS", entryIds: [mookEntryId] });
+  const mookRolled = await initSet(dm, mookEntryId);
+  const gobAfterMook = entryById(mookRolled.state, gobEntryId);
+  const pcAfterMook = entryById(mookRolled.state, pcEntryId);
   check(
-    "initiative roll appears in public log",
-    rolledFrame.state.log.some((e) => e.kind === "roll" && e.label === "Initiative"),
+    "DM 'Roll NPCs' fallback rolls only the targeted NPC; others stay pending",
+    entryById(mookRolled.state, mookEntryId).hasRolled &&
+      gobAfterMook.initiative === null && pcAfterMook.initiative === null,
+    `mook=${entryById(mookRolled.state, mookEntryId).initiative} gob=${gobAfterMook.initiative} pc=${pcAfterMook.initiative}`,
   );
-  const sorted = rolledFrame.state.combat.entries.map((e) => e.initiative);
   check(
-    "entries sorted descending",
-    sorted.every((v, i) => i === 0 || sorted[i - 1] >= v),
-    `[${sorted}]`,
+    "NPC initiative logged under the Initiative label",
+    mookRolled.state.log.some((e) => e.kind === "roll" && e.label === "Initiative"),
+  );
+
+  // DM FREE-throw from the tray (no explicit target): auto-fills the NEXT unrolled NPC.
+  // Throwing 2 d20s with only one NPC left fills it from one die; the extra is ignored.
+  const mookBefore = entryById(mookRolled.state, mookEntryId).initiative;
+  const dmFree = await physThrow(dm, ["d20", "d20"]);
+  const gobBound = await initSet(dm, gobEntryId, 4000);
+  const gobB = entryById(gobBound.state, gobEntryId);
+  check(
+    "DM free d20 throw auto-fills the next NPC (face + own bonus, goblin +4)",
+    [dmFree.faceValues[0] + 4, dmFree.faceValues[1] + 4].includes(gobB.initiative) && gobB.hasRolled,
+    `faces=[${dmFree.faceValues}] gob=${gobB.initiative}`,
+  );
+  check(
+    "extra dice beyond the unrolled-NPC count are ignored (mook unchanged)",
+    entryById(gobBound.state, mookEntryId).initiative === mookBefore,
+  );
+  check(
+    "DM free throw logged under the Initiative label",
+    gobBound.state.log.some((e) => e.kind === "roll" && e.label === "Initiative" && /d20/.test(e.roll?.expression ?? "")),
+  );
+  check("unrolled PC still sorts last", gobBound.state.combat.entries.at(-1).id === pcEntryId);
+
+  // With every NPC rolled, a DM free d20 does NOT touch the pending PC (players roll their own).
+  await physThrow(dm, ["d20"]);
+  const dmNoop = await dm.next(
+    (m) => m.type === "STATE" &&
+      m.state.log.some((e) => e.kind === "roll" && e.roll?.expression === "1d20" && e.label !== "Initiative"),
+    4000,
+  );
+  check("DM free d20 with no unrolled NPCs leaves the pending PC alone", entryById(dmNoop.state, pcEntryId).initiative === null);
+
+  // Player throws a NON-d20 while pending → it does NOT count for initiative.
+  await physThrow(vex, ["d6"]);
+  const afterD6 = await vex.next(
+    (m) => m.type === "STATE" && m.state.log.some((e) => e.kind === "roll" && e.roll?.expression === "1d6"),
+    4000,
+  );
+  check("a player's non-d20 throw does NOT set initiative", entryById(afterD6.state, pcEntryId).initiative === null);
+
+  // Player throws a d20 while pending → their own initiative binds.
+  const vexThrow = await physThrow(vex, ["d20"]);
+  const pcBound = await initSet(vex, pcEntryId, 4000);
+  const vexB = entryById(pcBound.state, pcEntryId);
+  check(
+    "a player's d20 throw sets their own initiative",
+    vexB.hasRolled && vexB.initiative !== null && Number.isInteger(vexB.initiative),
+    `face=${vexThrow.faceValues[0]} init=${vexB.initiative}`,
   );
 
   // re-rolling when nothing pending → error
@@ -124,7 +200,7 @@ try {
   const rerollErr = await vex.next((m) => m.type === "ERROR");
   check("no double initiative roll", /no pending/i.test(rerollErr.message));
 
-  // --- DEX tiebreak via forced tie ---------------------------------------------
+  // --- DEX tiebreak via forced tie --------------------------------------------------
   const combatNow = lastState(dm).combat;
   for (const entry of combatNow.entries) {
     dm.send({ type: "COMBAT_SET_INITIATIVE", entryId: entry.id, value: 15 });
@@ -138,7 +214,7 @@ try {
     `order=[${tied.map((e) => `${e.name}:${e.dexScore}`)}]`,
   );
 
-  // --- set-initiative preserves whose turn it is ---------------------------------
+  // --- set-initiative preserves whose turn it is ------------------------------------
   const currentEntryId = tied[lastState(dm).combat.turnIndex].id;
   const lastEntry = tied[tied.length - 1];
   dm.send({ type: "COMBAT_SET_INITIATIVE", entryId: lastEntry.id, value: 99 });
@@ -148,7 +224,7 @@ try {
   const stillCurrent = resorted.state.combat.entries[resorted.state.combat.turnIndex].id;
   check("re-sort keeps the turn on the same combatant", stillCurrent === currentEntryId);
 
-  // --- turn wrap → round increments ------------------------------------------------
+  // --- turn wrap → round increments -------------------------------------------------
   const entryCount = resorted.state.combat.entries.length;
   for (let i = 0; i < entryCount; i++) {
     dm.send({ type: "COMBAT_NEXT" });
@@ -177,7 +253,7 @@ try {
     `hp=${vexView.data.hp.current}/${vexView.data.hp.max} ac=${vexView.data.ac}`,
   );
 
-  // --- conditions roundtrip ------------------------------------------------------------
+  // --- conditions roundtrip ---------------------------------------------------------
   dm.send({ type: "UPDATE_TOKEN", token: { ...gobToken, showHp: "bar", conditions: ["poisoned", "prone", "bogus"] } });
   const condFrame = await vex.next(
     (m) => m.type === "STATE" && m.state.tokens.find((t) => t.id === "tok-gob")?.conditions.length > 0,
@@ -190,7 +266,7 @@ try {
     `[${condTok.conditions}]`,
   );
 
-  // --- mid-combat joiner sees the tracker ------------------------------------------------
+  // --- mid-combat joiner sees the tracker -------------------------------------------
   dm.send({ type: "ADD_PLAYER_SLOT", name: "Brom" });
   const bromSlot = await dm.next((m) => m.type === "STATE" && m.state.playerSlots.length === 2);
   const bromId = bromSlot.state.playerSlots.find((s) => s.name === "Brom").id;
@@ -203,7 +279,7 @@ try {
     bromState.state.combat && bromState.state.combat.round >= 2,
   );
 
-  // --- end combat --------------------------------------------------------------------------
+  // --- end combat -------------------------------------------------------------------
   dm.send({ type: "COMBAT_END" });
   const ended = await vex.next(
     (m) =>

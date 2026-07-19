@@ -483,6 +483,7 @@ function TokenShapeNode({
           <CrispText
             text={initial}
             fontSize={radius * 1.1}
+            fontFamily="Alegreya"
             fontStyle="bold"
             fill={readableTextColor(fill)}
             align="center"

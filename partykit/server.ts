@@ -60,6 +60,7 @@ import { partsFromDice, partsFromExpression, resolveCheck } from "../src/lib/rol
 import {
   buildExpressionLabel,
   coinFaceLabel,
+  type DieSpec,
   interpretRoll,
   rollFaceValues,
   rollPartLabels,
@@ -260,6 +261,111 @@ export default class GameServer implements Party.Server {
       return { bonus: computeDerived(record.data, "pc").values["init"] ?? 0, dexScore };
     }
     return { bonus: abilityModifier(dexScore) + (data?.initiative ?? 0), dexScore };
+  }
+
+  /// <summary>
+  /// Binds a physical d20 throw to combat initiative. Only d20 faces count — any other
+  /// dice in the throw are ignored. Resolution by roller:
+  /// - `entryIds` present (DM's per-NPC / "Roll NPCs" buttons): zips each rolled d20 onto
+  ///   those entries in order.
+  /// - DM free-throw (no entryIds): auto-fills the NEXT unrolled NPCs in order, one d20
+  ///   each, so the DM can throw a few at a time; dice beyond the unrolled-NPC count are
+  ///   ignored.
+  /// - player: sets every pending entry they control (from the first d20).
+  /// Each entry adds its own initiative bonus. Returns true when at least one entry was
+  /// set, so the roll can be logged as "Initiative".
+  /// </summary>
+  applyInitiativeFromThrow(
+    meta: ClientMeta,
+    entryIds: string[] | undefined,
+    specs: DieSpec[],
+    rolls: number[],
+  ): boolean {
+    const combat = this.state.combat;
+    if (!combat) {
+      return false;
+    }
+    // d20 faces in throw order (a standalone d20's face is its value).
+    const d20Faces: number[] = [];
+    specs.forEach((spec, i) => {
+      if (spec.kind === "d20") {
+        d20Faces.push(rolls[i]);
+      }
+    });
+    if (d20Faces.length === 0) {
+      return false;
+    }
+
+    const setEntry = (entry: CombatEntry, face: number) => {
+      const { bonus, dexScore } = this.initiativeBonus(entry.sheetId);
+      entry.initiative = face + bonus;
+      entry.dexScore = dexScore;
+      entry.hasRolled = true;
+    };
+
+    if (entryIds && entryIds.length > 0) {
+      // DM rolling for NPCs: only the DM may target arbitrary entries.
+      if (meta.role !== "dm") {
+        return false;
+      }
+      let changed = false;
+      entryIds.forEach((id, idx) => {
+        const entry = combat.entries.find((item) => item.id === id);
+        if (!entry || entry.initiative !== null) {
+          return;
+        }
+        setEntry(entry, d20Faces[idx] ?? d20Faces[d20Faces.length - 1]);
+        changed = true;
+      });
+      if (changed) {
+        this.sortCombat();
+      }
+      return changed;
+    }
+
+    // DM free-throw (no explicit targets): auto-fill the next unrolled NPCs in order, one
+    // d20 each. Extra dice beyond the unrolled-NPC count are ignored; players' own entries
+    // are never touched (they roll for themselves).
+    if (meta.role === "dm") {
+      const npcs = combat.entries.filter((entry) => {
+        if (entry.initiative !== null) {
+          return false;
+        }
+        const token = this.state.tokens.find((item) => item.id === entry.tokenId);
+        return !token?.ownerPlayerId;
+      });
+      if (npcs.length === 0) {
+        return false;
+      }
+      const count = Math.min(d20Faces.length, npcs.length);
+      for (let i = 0; i < count; i += 1) {
+        setEntry(npcs[i], d20Faces[i]);
+      }
+      this.sortCombat();
+      return true;
+    }
+
+    // A player's own d20: set every pending entry they control from the first d20.
+    if (meta.role === "player" && meta.playerId) {
+      const playerId = meta.playerId;
+      const pending = combat.entries.filter((entry) => {
+        if (entry.initiative !== null) {
+          return false;
+        }
+        const token = this.state.tokens.find((item) => item.id === entry.tokenId);
+        return token?.ownerPlayerId === playerId || entry.sheetId === playerId;
+      });
+      if (pending.length === 0) {
+        return false;
+      }
+      for (const entry of pending) {
+        setEntry(entry, d20Faces[0]);
+      }
+      this.sortCombat();
+      return true;
+    }
+
+    return false;
   }
 
   /// <summary>
@@ -1364,10 +1470,18 @@ export default class GameServer implements Party.Server {
       }
 
       // Defer the log entry until the dice would have settled, so the log never
-      // spoils the result mid-tumble. (v1 behavior; capped for safety.)
+      // spoils the result mid-tumble. (v1 behavior; capped for safety.) Initiative is
+      // applied here too, so the tracker number appears exactly when the dice land.
       const settleMs = Math.min((track.frames / track.fps) * 1000 + 400, 8000);
-      const label = parsed.context?.label ?? (isCoin ? "🪙 Coin flip" : undefined);
+      const baseLabel = parsed.context?.label ?? (isCoin ? "🪙 Coin flip" : undefined);
       setTimeout(() => {
+        const setInitiative = this.applyInitiativeFromThrow(
+          meta,
+          parsed.context?.initiativeEntryIds,
+          specs,
+          rolls,
+        );
+        const label = setInitiative ? "Initiative" : baseLabel;
         this.appendLog({
           id: `log-${crypto.randomUUID().slice(0, 8)}`,
           t: Date.now(),
@@ -1847,18 +1961,17 @@ export default class GameServer implements Party.Server {
           return;
         }
         const entries: CombatEntry[] = tokens.map((token) => {
-          const isPc = Boolean(token.ownerPlayerId);
-          const { bonus, dexScore } = this.initiativeBonus(token.sheetId);
-          // NPCs auto-roll; PCs wait for their player's click.
-          const initiative = isPc ? null : secureRandInt(20) + 1 + bonus;
+          const { dexScore } = this.initiativeBonus(token.sheetId);
+          // Everyone starts unrolled: the DM rolls a d20 for NPCs (typically first),
+          // then players roll their own. No more silent NPC auto-roll.
           return {
             id: `centry-${crypto.randomUUID().slice(0, 8)}`,
             tokenId: token.id,
             sheetId: token.sheetId,
             name: token.label || "Combatant",
-            initiative,
+            initiative: null,
             dexScore,
-            hasRolled: initiative !== null,
+            hasRolled: false,
             // Hidden tokens keep their slot in the order but players see "???".
             ...(token.hidden ? { hidden: true } : {}),
           };
@@ -1878,6 +1991,56 @@ export default class GameServer implements Party.Server {
         }
         entry.initiative = parsed.value;
         entry.hasRolled = true;
+        this.sortCombat();
+        void this.broadcastState();
+        break;
+      }
+      case "COMBAT_ROLL_INITIATIVE_NPCS": {
+        // DM initiative roll for NPCs without the 3D dice (auto-roll fallback). With 3D on
+        // the tracker throws a real d20 instead (DICE_THROW_REQUEST → applyInitiativeFromThrow).
+        const combat = this.state.combat;
+        if (!combat) {
+          this.sendTo(sender, { type: "ERROR", message: "No active combat." });
+          return;
+        }
+        const wanted =
+          parsed.entryIds && parsed.entryIds.length > 0 ? new Set(parsed.entryIds) : null;
+        const targets = combat.entries.filter((entry) => {
+          if (entry.initiative !== null) {
+            return false;
+          }
+          if (wanted) {
+            return wanted.has(entry.id);
+          }
+          // Default: every unrolled NPC entry (tokens with no player owner).
+          const token = this.state.tokens.find((item) => item.id === entry.tokenId);
+          return !token?.ownerPlayerId;
+        });
+        for (const entry of targets) {
+          const d20 = secureRandInt(20) + 1;
+          const { bonus, dexScore } = this.initiativeBonus(entry.sheetId);
+          entry.initiative = d20 + bonus;
+          entry.dexScore = dexScore;
+          entry.hasRolled = true;
+          const roll: DiceRoll = {
+            id: `roll-${crypto.randomUUID().slice(0, 8)}`,
+            rollerName: meta.displayName?.trim() || "DM",
+            rollerId: meta.playerId ?? "dm",
+            expression: `1d20${bonus >= 0 ? `+${bonus}` : bonus}`,
+            rolls: [d20],
+            modifier: bonus,
+            total: entry.initiative,
+            timestamp: Date.now(),
+          };
+          this.appendLog({
+            id: `log-${crypto.randomUUID().slice(0, 8)}`,
+            t: roll.timestamp,
+            kind: "roll",
+            roll,
+            actor: { name: entry.name, sheetId: entry.sheetId ?? undefined },
+            label: "Initiative",
+          });
+        }
         this.sortCombat();
         void this.broadcastState();
         break;

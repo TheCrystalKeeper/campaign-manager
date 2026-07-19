@@ -1,6 +1,7 @@
 import type { GameRoom, useDmActions } from "../hooks/useGameRoom";
 import { Dices, Swords } from "lucide-react";
 import { DEFAULT_ICON_CROP, type GameState } from "../lib/types";
+import type { DiceOverlayController } from "../dice/useDiceOverlay";
 import { CroppableImage } from "./CroppableImage";
 import { NumberInput } from "./NumberInput";
 import { HpStepper } from "./HpStepper";
@@ -10,15 +11,19 @@ type InitiativeTrackerProps = {
   isDm: boolean;
   room: GameRoom;
   dm: ReturnType<typeof useDmActions>;
+  dice: DiceOverlayController;
   openSheet: (sheetId: string) => void;
 };
 
 /// <summary>
-/// The initiative order during combat. Out of combat the DM gets the
-/// "Roll for initiative!" button (all tokens in the active scene); in combat
-/// players with a pending roll get a one-click CTA that uses their sheet.
+/// The initiative order during combat. Out of combat the DM gets the "Roll for
+/// initiative!" button (starts combat with every token in the active scene). In combat
+/// nobody is auto-rolled: the DM throws a d20 for NPCs (a "Roll NPCs" button plus a
+/// per-NPC die on each unrolled NPC), and players throw their own d20 — typically NPCs
+/// first, then players. With 3D dice on, these throw a real (highlighted) d20 whose face
+/// sets the initiative; with 3D off they fall back to a server auto-roll.
 /// </summary>
-export function InitiativeTracker({ state, isDm, room, dm, openSheet }: InitiativeTrackerProps) {
+export function InitiativeTracker({ state, isDm, room, dm, dice, openSheet }: InitiativeTrackerProps) {
   const combat = state.combat;
 
   if (!combat) {
@@ -44,11 +49,26 @@ export function InitiativeTracker({ state, isDm, room, dm, openSheet }: Initiati
         <span className="muted" style={{ fontSize: "0.78rem" }}>
           {sceneTokenIds.length === 0
             ? "Place tokens in the scene first."
-            : `Starts combat with all ${sceneTokenIds.length} tokens in the scene. NPCs roll automatically; players get a roll prompt.`}
+            : `Starts combat with all ${sceneTokenIds.length} tokens in the scene. Roll a d20 for the NPCs, then players roll theirs.`}
         </span>
       </div>
     );
   }
+
+  // An NPC entry is one whose token has no player owner (the DM rolls these; players roll
+  // their own). Bare tokens with no owner count as NPCs too.
+  const isNpcEntry = (tokenId: string | null, sheetId: string | null) => {
+    const token = state.tokens.find((item) => item.id === tokenId);
+    if (token) {
+      return !token.ownerPlayerId;
+    }
+    // No token: treat a sheet the DM owns (not a player's own PC slot) as an NPC.
+    return sheetId !== null;
+  };
+
+  const unrolledNpcIds = combat.entries
+    .filter((entry) => entry.initiative === null && isNpcEntry(entry.tokenId, entry.sheetId))
+    .map((entry) => entry.id);
 
   const myPendingRoll =
     !isDm &&
@@ -59,6 +79,21 @@ export function InitiativeTracker({ state, isDm, room, dm, openSheet }: Initiati
       const token = state.tokens.find((item) => item.id === entry.tokenId);
       return token?.ownerPlayerId === room.yourPlayerId || entry.sheetId === room.yourPlayerId;
     });
+
+  // Roll a real d20 when 3D dice are on; otherwise fall back to a server auto-roll.
+  const rollNpcInitiative = (entryIds: string[]) => {
+    if (entryIds.length === 0) {
+      return;
+    }
+    if (!dice.throwInitiative(entryIds)) {
+      dm.rollInitiativeNpcs(entryIds);
+    }
+  };
+  const rollMyInitiative = () => {
+    if (!dice.throwInitiative()) {
+      room.send({ type: "COMBAT_ROLL_INITIATIVE" });
+    }
+  };
 
   return (
     <div className="panel-body stack">
@@ -79,11 +114,19 @@ export function InitiativeTracker({ state, isDm, room, dm, openSheet }: Initiati
         ) : null}
       </div>
 
-      {myPendingRoll ? (
+      {isDm && unrolledNpcIds.length > 0 ? (
         <button
           className="btn-primary"
-          onClick={() => room.send({ type: "COMBAT_ROLL_INITIATIVE" })}
+          title="Throw a d20 for every NPC that hasn't rolled yet"
+          onClick={() => rollNpcInitiative(unrolledNpcIds)}
         >
+          <Dices size={15} strokeWidth={2.2} /> Roll NPCs
+          {unrolledNpcIds.length > 1 ? ` (${unrolledNpcIds.length})` : ""}
+        </button>
+      ) : null}
+
+      {myPendingRoll ? (
+        <button className="btn-primary" title="Throw a d20 for your initiative" onClick={rollMyInitiative}>
           <Dices size={15} strokeWidth={2.2} /> Roll initiative!
         </button>
       ) : null}
@@ -95,6 +138,8 @@ export function InitiativeTracker({ state, isDm, room, dm, openSheet }: Initiati
           const portrait = sheet?.data.iconUrl ?? token?.imageUrl ?? null;
           const portraitCrop = sheet?.data.iconUrl ? sheet.data.iconCrop : DEFAULT_ICON_CROP;
           const current = index === combat.turnIndex;
+          const canRollThisNpc =
+            isDm && entry.initiative === null && isNpcEntry(entry.tokenId, entry.sheetId);
           // No portrait (or a broken/deleted one) → the name's initial, not a broken-image icon.
           const initDot = (
             <span
@@ -124,7 +169,17 @@ export function InitiativeTracker({ state, isDm, room, dm, openSheet }: Initiati
                 <span className="init-name">{entry.name}</span>
               )}
               {isDm ? (
-                <span className="init-value">
+                <span className="init-value init-value--dm">
+                  {canRollThisNpc ? (
+                    <button
+                      className="init-roll-btn"
+                      title={`Throw a d20 for ${entry.name}`}
+                      aria-label={`Roll initiative for ${entry.name}`}
+                      onClick={() => rollNpcInitiative([entry.id])}
+                    >
+                      <Dices size={13} strokeWidth={2.2} />
+                    </button>
+                  ) : null}
                   <NumberInput
                     value={entry.initiative ?? 0}
                     onCommit={(value) => dm.setCombatInitiative(entry.id, value)}

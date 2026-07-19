@@ -545,6 +545,9 @@ export function useDmActions(room: GameRoom) {
       startCombat: (tokenIds: string[]) => send({ type: "COMBAT_START", tokenIds }),
       setCombatInitiative: (entryId: string, value: number) =>
         send({ type: "COMBAT_SET_INITIATIVE", entryId, value }),
+      /** Auto-roll NPC initiative (3D-off fallback); empty/absent = all unrolled NPCs. */
+      rollInitiativeNpcs: (entryIds?: string[]) =>
+        send({ type: "COMBAT_ROLL_INITIATIVE_NPCS", entryIds }),
       nextTurn: () => send({ type: "COMBAT_NEXT" }),
       prevTurn: () => send({ type: "COMBAT_PREV" }),
       endCombat: () => send({ type: "COMBAT_END" }),

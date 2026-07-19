@@ -1653,6 +1653,40 @@ button.mod.roll-btn {
   text-align: center;
   padding: 0.1rem 0.2rem;
 }
+/* DM value cell: the per-NPC roll die sits left of the number box (fixed width so the
+   HP steppers past it stay column-aligned whether or not the die is showing). */
+.init-value--dm {
+  width: 4.9rem;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.25rem;
+}
+.init-value--dm input {
+  flex: 1;
+  min-width: 0;
+}
+.init-roll-btn {
+  flex-shrink: 0;
+  display: inline-grid;
+  place-items: center;
+  width: 1.55rem;
+  height: 1.55rem;
+  padding: 0;
+  border-radius: var(--r-wob-sm);
+  border: 1.5px solid var(--primary-strong);
+  background: var(--primary-soft);
+  color: var(--primary-strong);
+  cursor: pointer;
+  transition: background-color var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
+}
+.init-roll-btn:hover {
+  background: var(--primary);
+  color: #2a1c07;
+}
+.init-roll-btn:active {
+  transform: translateY(1px);
+}
 
 /* --- Token editor conditions ------------------------------------------------ */
 .cond-grid {
@@ -3270,6 +3304,30 @@ body.pointer-dragging * {
 [data-theme="night"] .btn-crystal::before {
   filter: drop-shadow(0 2.5px 0 var(--border-subtle))
     drop-shadow(0 0 7px color-mix(in srgb, #d6d2f2 48%, transparent));
+}
+/* Combat is waiting on this client's initiative roll: the d20 pulses gold as the die to
+   throw. Any d20 they throw sets initiative; other dice don't count. */
+.btn-crystal.die-btn--init::before {
+  background: var(--primary-strong);
+  animation: dieInitPulse 1.4s ease-in-out infinite;
+}
+@keyframes dieInitPulse {
+  0%,
+  100% {
+    filter: drop-shadow(0 2.5px 0 var(--border-subtle))
+      drop-shadow(0 0 3px color-mix(in srgb, var(--primary) 42%, transparent));
+  }
+  50% {
+    filter: drop-shadow(0 2.5px 0 var(--border-subtle))
+      drop-shadow(0 0 10px color-mix(in srgb, var(--primary) 85%, transparent));
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .btn-crystal.die-btn--init::before {
+    animation: none;
+    filter: drop-shadow(0 2.5px 0 var(--border-subtle))
+      drop-shadow(0 0 7px color-mix(in srgb, var(--primary) 70%, transparent));
+  }
 }
 
 /* --- Page switcher + DM prep pages (Phase 5.5) -------------------------------

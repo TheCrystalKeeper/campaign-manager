@@ -1544,11 +1544,18 @@ export type ClientMessage =
       /** Roller's world-units-per-physics-unit — shared so every client places the
        *  dice at the same world footprint (dice are map-glued after landing). */
       worldScale?: number;
-      context?: { sheetId?: string; label?: string };
+      /**
+       * `initiativeEntryIds` binds this throw to combat initiative: the d20 faces are
+       * zipped onto these entries in order (DM rolling for NPCs). Without it, a d20 from
+       * a player who has a pending entry still sets their own initiative (server auto-detects).
+       */
+      context?: { sheetId?: string; label?: string; initiativeEntryIds?: string[] };
       private?: boolean;
     }
   | { type: "COMBAT_START"; tokenIds: string[] }
   | { type: "COMBAT_ROLL_INITIATIVE" }
+  /** DM: roll initiative for NPC entries without 3D dice (auto-roll fallback). Empty/absent = all unrolled NPCs. */
+  | { type: "COMBAT_ROLL_INITIATIVE_NPCS"; entryIds?: string[] }
   | { type: "COMBAT_SET_INITIATIVE"; entryId: string; value: number }
   | { type: "COMBAT_NEXT" }
   | { type: "COMBAT_PREV" }

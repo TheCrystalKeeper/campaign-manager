@@ -102,6 +102,8 @@ export class DiceTrayScene {
   private skinPrefs: DiceSkinPrefs;
   private envMap: THREE.Texture | null = null;
   private unsubscribeSkinTextures: (() => void) | null = null;
+  /** Combat is waiting on this client's initiative roll → the d20 glows on its own. */
+  private initiativeHighlight = false;
 
   constructor(container: HTMLElement, skinPrefs: DiceSkinPrefs = DEFAULT_SKIN_PREFS) {
     this.container = container;
@@ -267,14 +269,39 @@ export class DiceTrayScene {
           disposeDie(part.group);
         });
       }
-      const glowing = (this.counts.get(sides) ?? 0) > 0;
+    }
+    this.refreshGlow();
+    this.layout();
+  }
+
+  /// <summary>
+  /// Forces the d20 die to glow while combat is waiting on this client's initiative roll
+  /// — the very die to throw — independent of the d#-button selection. Persists across
+  /// selection and skin changes until turned off.
+  /// </summary>
+  setInitiativeHighlight(on: boolean) {
+    if (this.initiativeHighlight === on) {
+      return;
+    }
+    this.initiativeHighlight = on;
+    this.refreshGlow();
+    this.requestRender();
+  }
+
+  /// <summary>A die glows if it's readied (selected) or — for the d20 — the initiative cue is on.</summary>
+  private diceGlow(sides: number): boolean {
+    return (this.counts.get(sides) ?? 0) > 0 || (sides === 20 && this.initiativeHighlight);
+  }
+
+  private refreshGlow() {
+    for (const [sides, instances] of this.dice) {
+      const glowing = this.diceGlow(sides);
       instances.forEach((die) => {
         die.parts.forEach((part) => {
           part.outline.visible = glowing && !die.lifted;
         });
       });
     }
-    this.layout();
   }
 
   /// <summary>Which die size sits under a window pointer position, if any.</summary>

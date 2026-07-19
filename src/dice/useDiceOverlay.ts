@@ -112,6 +112,11 @@ export interface DiceOverlayController {
   adjustSelection: (sides: number, delta: number) => void;
   clearSelection: () => void;
   /**
+   * While on, the tray's d20 die glows (like a readied die) to cue a pending initiative
+   * roll — independent of the button selection. No-op until the 3D tray scene exists.
+   */
+  setInitiativeDieHighlight: (on: boolean) => void;
+  /**
    * Starts a grab from a pointerdown on the tray well. Picks up the die under the
    * cursor — plus every other highlighted die (far ones gather next to the cursor).
    * Returns false when nothing grabbable is under the pointer or 3D isn't ready.
@@ -124,13 +129,28 @@ export interface DiceOverlayController {
    * it. False → 3D off/not ready or nothing selected; caller falls back to text.
    */
   throwSelection: () => boolean;
+  /**
+   * Throws d20(s) for combat initiative. With `entryIds` (the DM rolling for NPCs) it
+   * throws one d20 per entry, tagged so the server zips each rolled face onto an entry;
+   * with none, a single d20 the server binds to the roller's own pending entry. The value
+   * is server-decided like any throw. False → 3D off/not ready (caller falls back).
+   */
+  throwInitiative: (entryIds?: string[]) => boolean;
 }
 
 const uid = () => crypto.randomUUID().slice(0, 8);
 
+/** Optional "why" for a throw — attribution and combat-initiative binding. */
+interface ThrowContext {
+  sheetId?: string;
+  label?: string;
+  initiativeEntryIds?: string[];
+}
+
 interface ArmedRoll {
   specs: DieSpec[];
   modifier: number;
+  context?: ThrowContext;
 }
 
 /// <summary>
@@ -152,6 +172,8 @@ export function useDiceOverlay(room: GameRoom, roomId: string | null): DiceOverl
   }, []);
   /** The tray selection captured at grab time, restored if the grab is cancelled. */
   const grabbedSelectionRef = useRef<Record<number, number>>({});
+  /** Whether the tray's d20 should glow for a pending initiative roll (survives remounts). */
+  const initHighlightRef = useRef(false);
 
   const roomRef = useRef(room);
   roomRef.current = room;
@@ -210,6 +232,7 @@ export function useDiceOverlay(room: GameRoom, roomId: string | null): DiceOverl
                   modifier: armed.modifier,
                   trayCenter,
                   worldScale,
+                  ...(armed.context ? { context: armed.context } : {}),
                   private: secretRef.current || undefined,
                 });
               }
@@ -283,6 +306,7 @@ export function useDiceOverlay(room: GameRoom, roomId: string | null): DiceOverl
       }
       const tray = new DiceTrayScene(trayMount, skinPrefsRef.current);
       tray.setSelection(selectionRef.current);
+      tray.setInitiativeHighlight(initHighlightRef.current);
       trayRef.current = tray;
     });
     return () => {
@@ -408,6 +432,11 @@ export function useDiceOverlay(room: GameRoom, roomId: string | null): DiceOverl
   }, []);
 
   const clearSelection = useCallback(() => setSelection({}), []);
+
+  const setInitiativeDieHighlight = useCallback((on: boolean) => {
+    initHighlightRef.current = on;
+    trayRef.current?.setInitiativeHighlight(on);
+  }, []);
 
   /** This client's window center in map/world coordinates — the text-roll throw anchor. */
   const viewCenter = useCallback((): WorldPoint => {
@@ -617,6 +646,38 @@ export function useDiceOverlay(room: GameRoom, roomId: string | null): DiceOverl
     return true;
   }, [ensureEngine, viewCenter]);
 
+  const throwInitiative = useCallback(
+    (entryIds?: string[]): boolean => {
+      if (!enabledRef.current || !engineRef.current) {
+        if (enabledRef.current) {
+          void ensureEngine(); // warm up for next time
+        }
+        return false;
+      }
+      // One d20 per targeted entry (DM rolling NPCs); a lone d20 for a player's own roll.
+      const targets =
+        entryIds && entryIds.length > 0 ? entryIds.slice(0, MAX_PHYSICAL_DICE) : undefined;
+      const count = targets ? targets.length : 1;
+      const specs = applySkinsToSpecs(
+        Array.from({ length: count }, () => ({ id: uid(), kind: "d20" as const, percentile: false })),
+        skinPrefsRef.current,
+      );
+      const engine = engineRef.current;
+      const rollId = uid();
+      armedRef.current.set(rollId, {
+        specs,
+        modifier: 0,
+        context: { label: "Initiative", ...(targets ? { initiativeEntryIds: targets } : {}) },
+      });
+      ourRollIdsRef.current.add(rollId);
+      audioRef.current?.resume();
+      engine.arm(rollId, specs, viewCenter());
+      engine.autoThrow(rollId);
+      return true;
+    },
+    [ensureEngine, viewCenter],
+  );
+
   // Preload the engine as soon as 3D is enabled and the arena exists, so the first
   // grab doesn't stall on the three/rapier download.
   useEffect(() => {
@@ -642,8 +703,10 @@ export function useDiceOverlay(room: GameRoom, roomId: string | null): DiceOverl
     selection,
     adjustSelection,
     clearSelection,
+    setInitiativeDieHighlight,
     grabFromTray,
     throwExpression,
     throwSelection,
+    throwInitiative,
   };
 }
