@@ -238,6 +238,7 @@ export function useDiceOverlay(room: GameRoom, roomId: string | null): DiceOverl
               }
             },
             onImpact: (strength, coin) => audioRef.current?.impact(strength, coin),
+            onShake: (intensity) => audioRef.current?.shake(intensity),
             getSafeInsets: () => safeAreaRef.current?.() ?? { top: 24, right: 24, bottom: 24, left: 24 },
           });
           engine.setMapProjection(viewportRef.current);
@@ -267,6 +268,12 @@ export function useDiceOverlay(room: GameRoom, roomId: string | null): DiceOverl
         ourRollIdsRef.current.delete(event.rollId);
         armedRef.current.delete(event.rollId);
         const blank = !event.faceValues || event.faceValues.length === 0;
+        // Throw-release sounds fire as playback begins, on every client — the whoosh for
+        // dice, the airborne flip for coins (its landing "drop" comes via onImpact).
+        audioRef.current?.throwStart(
+          event.specs.some((spec) => spec.kind !== "coin"),
+          event.specs.some((spec) => spec.kind === "coin"),
+        );
         engine.playTrack(
           event.rollId,
           event.specs,

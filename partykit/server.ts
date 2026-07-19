@@ -41,6 +41,9 @@ import {
   sanitizeWall,
   SHEET_SECTIONS,
   syncTokenFromState,
+  ARCHIVE_CHUNK_SIZE,
+  MAX_ARCHIVE_ROLLS,
+  type CheckSpec,
   type ClientMessage,
   type CombatEntry,
   type ConnectedPlayer,
@@ -48,10 +51,13 @@ import {
   type GameState,
   type LogEntry,
   type Role,
+  type RollCategory,
+  type RollRecord,
   type Scene,
   type ServerMessage,
   type SheetRecord,
 } from "../src/lib/types";
+import { buildRollRecord, deriveRollCategory, type RollLogEntry } from "../src/lib/rollStats";
 import { clampMove, movementSegments } from "../src/lib/visibility";
 import { rotateSceneCW, rotateTokenCW } from "../src/lib/sceneTransform";
 import { rollDiceExpression, rollWithAdvantage, secureRandInt } from "../src/lib/dice";
@@ -77,6 +83,21 @@ type ClientMeta = {
 };
 
 const ROOM_KEY = "room-key";
+/** Roll-archive storage keys (Stats page): meta + fixed-size record chunks. */
+const ARCHIVE_META_KEY = "rollarchive:meta";
+const archiveChunkKey = (n: number) => `rollarchive:chunk:${n}`;
+type ArchiveMeta = { v: 1; first: number; head: number; count: number };
+/** Stats grouping for structured sheet rolls, keyed by the CheckSpec kind. */
+const CHECK_CATEGORY: Record<CheckSpec["kind"], RollCategory> = {
+  ability: "check",
+  skill: "check",
+  tool: "check",
+  save: "save",
+  attack: "attack",
+  "spell-attack": "attack",
+  damage: "damage",
+  initiative: "initiative",
+};
 const VIEWPORT_THROTTLE_MS = 66;
 const VIEWPORT_PERSIST_DEBOUNCE_MS = 2000;
 const MAX_CHAT_LENGTH = 2000;
@@ -96,6 +117,11 @@ export default class GameServer implements Party.Server {
     string,
     { last: number; timer: ReturnType<typeof setTimeout> | null; pending: ServerMessage | null }
   >();
+  /** Roll archive (Stats page): meta + in-memory head chunk. null = storage failed, run without. */
+  archiveMeta: ArchiveMeta | null = null;
+  archiveHead: RollRecord[] = [];
+  /** Serializes archive storage writes so near-simultaneous rolls can't interleave. */
+  archiveWrite: Promise<void> = Promise.resolve();
 
   constructor(readonly room: Party.Room) {
     this.state = createInitialState(room.id);
@@ -121,6 +147,118 @@ export default class GameServer implements Party.Server {
     }
     this.clearStaleDm();
     await this.persistState();
+    await this.loadRollArchive();
+  }
+
+  /// <summary>
+  /// Loads roll-archive meta + head chunk. First run seeds the archive from whatever
+  /// rolls are still in the (100-entry) log, so pre-archive rooms keep some history.
+  /// </summary>
+  async loadRollArchive() {
+    try {
+      const meta = await this.room.storage.get<ArchiveMeta>(ARCHIVE_META_KEY);
+      if (meta) {
+        this.archiveMeta = meta;
+        this.archiveHead =
+          (await this.room.storage.get<RollRecord[]>(archiveChunkKey(meta.head))) ?? [];
+        return;
+      }
+      const seeded: RollRecord[] = [];
+      for (const entry of this.state.log ?? []) {
+        if (entry.kind === "roll") {
+          const record = buildRollRecord(entry);
+          if (record) {
+            seeded.push(record);
+          }
+        }
+      }
+      this.archiveMeta = { v: 1, first: 0, head: 0, count: seeded.length };
+      this.archiveHead = seeded;
+      await this.room.storage.put(archiveChunkKey(0), seeded);
+      await this.room.storage.put(ARCHIVE_META_KEY, this.archiveMeta);
+    } catch {
+      // Stats must never break the game — run without an archive if storage fails.
+      this.archiveMeta = null;
+    }
+  }
+
+  /// <summary>
+  /// Appends a roll record to the chunked archive: memory synchronously, storage via
+  /// the serialized write chain. Sealed chunks are always exactly ARCHIVE_CHUNK_SIZE
+  /// records, so trimming drops whole oldest chunks without rewrites.
+  /// </summary>
+  queueArchiveAppend(record: RollRecord) {
+    const meta = this.archiveMeta;
+    if (!meta) {
+      return;
+    }
+    this.archiveHead.push(record);
+    meta.count += 1;
+    const headIndex = meta.head;
+    const headSnapshot = this.archiveHead;
+    if (this.archiveHead.length >= ARCHIVE_CHUNK_SIZE) {
+      meta.head += 1;
+      this.archiveHead = [];
+    }
+    const dropped: number[] = [];
+    while (meta.count > MAX_ARCHIVE_ROLLS && meta.first < meta.head) {
+      dropped.push(meta.first);
+      meta.first += 1;
+      meta.count -= ARCHIVE_CHUNK_SIZE;
+    }
+    const metaSnapshot = { ...meta };
+    this.archiveWrite = this.archiveWrite
+      .then(async () => {
+        await this.room.storage.put(archiveChunkKey(headIndex), headSnapshot);
+        for (const n of dropped) {
+          await this.room.storage.delete(archiveChunkKey(n));
+        }
+        await this.room.storage.put(ARCHIVE_META_KEY, metaSnapshot);
+      })
+      .catch(() => {
+        // Storage hiccup: the in-memory archive stays usable; next append retries meta.
+      });
+  }
+
+  /// <summary>
+  /// Reads the whole archive oldest→newest (flushing pending writes first).
+  /// </summary>
+  async readRollArchive(): Promise<RollRecord[]> {
+    const meta = this.archiveMeta;
+    if (!meta) {
+      return [];
+    }
+    await this.archiveWrite;
+    const records: RollRecord[] = [];
+    for (let n = meta.first; n < meta.head; n += 1) {
+      const chunk = await this.room.storage.get<RollRecord[]>(archiveChunkKey(n));
+      if (chunk) {
+        records.push(...chunk);
+      }
+    }
+    records.push(...this.archiveHead);
+    return records;
+  }
+
+  /// <summary>
+  /// Best-effort archive top-up after a campaign import: archives any imported log
+  /// rolls we haven't seen (the export format doesn't carry the archive itself).
+  /// </summary>
+  async appendImportedRolls() {
+    try {
+      const existing = new Set((await this.readRollArchive()).map((record) => record.id));
+      for (const entry of this.state.log ?? []) {
+        if (entry.kind !== "roll") {
+          continue;
+        }
+        const record = buildRollRecord(entry);
+        if (record && !existing.has(record.id)) {
+          this.queueArchiveAppend(record);
+        }
+      }
+    } catch {
+      // Stats must never break the game.
+    }
   }
 
   /// <summary>
@@ -190,6 +328,16 @@ export default class GameServer implements Party.Server {
   /// </summary>
   appendLog(entry: LogEntry) {
     this.state.log = [...(this.state.log ?? []), entry].slice(-MAX_LOG_ENTRIES);
+    if (entry.kind === "roll") {
+      try {
+        const record = buildRollRecord(entry);
+        if (record) {
+          this.queueArchiveAppend(record);
+        }
+      } catch {
+        // Stats must never break the game.
+      }
+    }
   }
 
   /// <summary>
@@ -1139,6 +1287,7 @@ export default class GameServer implements Party.Server {
         roll,
         actor: { name, sheetId: parsed.sheetId },
         label: `Death saving throw (${note})`,
+        category: "death",
       });
       if (event) {
         this.logEvent(event);
@@ -1247,7 +1396,7 @@ export default class GameServer implements Party.Server {
 
         // Secret rolls persist as dmOnly log entries (stripped for players by
         // redactStateFor), so the DM's secret log survives a refresh.
-        this.appendLog({
+        const entry: RollLogEntry = {
           id: `log-${crypto.randomUUID().slice(0, 8)}`,
           t: roll.timestamp,
           kind: "roll",
@@ -1255,7 +1404,9 @@ export default class GameServer implements Party.Server {
           actor,
           ...(parsed.context?.label ? { label: parsed.context.label } : {}),
           ...(parsed.private ? { dmOnly: true } : {}),
-        });
+        };
+        entry.category = deriveRollCategory(entry);
+        this.appendLog(entry);
         void this.broadcastState();
       } catch (error) {
         const message = error instanceof Error ? error.message : "Invalid dice expression.";
@@ -1322,6 +1473,7 @@ export default class GameServer implements Party.Server {
         roll,
         actor: { name: record.data.characterName?.trim() || meta.displayName?.trim() || "Unknown", sheetId: parsed.sheetId },
         label: resolved.label,
+        category: CHECK_CATEGORY[parsed.check.kind],
         ...(parsed.private ? { dmOnly: true } : {}),
       });
       void this.broadcastState();
@@ -1380,6 +1532,7 @@ export default class GameServer implements Party.Server {
             sheetId: playerId,
           },
           label: "Initiative",
+          category: "initiative",
         });
       }
       this.sortCombat();
@@ -1482,7 +1635,7 @@ export default class GameServer implements Party.Server {
           rolls,
         );
         const label = setInitiative ? "Initiative" : baseLabel;
-        this.appendLog({
+        const entry: RollLogEntry = {
           id: `log-${crypto.randomUUID().slice(0, 8)}`,
           t: Date.now(),
           kind: "roll",
@@ -1490,9 +1643,28 @@ export default class GameServer implements Party.Server {
           actor,
           ...(label ? { label } : {}),
           ...(secret ? { dmOnly: true } : {}),
-        });
+        };
+        entry.category = setInitiative
+          ? "initiative"
+          : isCoin
+            ? "coin"
+            : deriveRollCategory(entry);
+        this.appendLog(entry);
         void this.broadcastState();
       }, settleMs);
+      return;
+    }
+
+    // Stats page: the long roll history, filtered server-side — players never
+    // receive secret records unless the DM's reveal switch is on.
+    if (parsed.type === "GET_ROLL_ARCHIVE") {
+      void this.readRollArchive().then((records) => {
+        const visible =
+          meta.role === "dm" || this.state.revealSecretRolls
+            ? records
+            : records.filter((record) => !record.secret);
+        this.sendTo(sender, { type: "ROLL_ARCHIVE", records: visible, total: records.length });
+      });
       return;
     }
 
@@ -1930,6 +2102,8 @@ export default class GameServer implements Party.Server {
           this.state = { ...incoming, dmClientId: this.state.dmClientId };
           this.syncConnectedPlayers();
           this.logEvent("Campaign imported from a backup file");
+          // Exports don't carry the roll archive; salvage the imported log's rolls.
+          void this.appendImportedRolls();
           void this.persistState();
           void this.broadcastState();
           break;
@@ -2039,6 +2213,7 @@ export default class GameServer implements Party.Server {
             roll,
             actor: { name: entry.name, sheetId: entry.sheetId ?? undefined },
             label: "Initiative",
+            category: "initiative",
           });
         }
         this.sortCombat();
@@ -2249,6 +2424,15 @@ export default class GameServer implements Party.Server {
         if (this.state.showAllTokenHp !== enabled) {
           this.state.showAllTokenHp = enabled;
           this.logEvent(`Health bars on all tokens ${enabled ? "shown" : "hidden"} by the DM.`);
+          void this.broadcastState();
+        }
+        break;
+      }
+      case "SET_REVEAL_SECRET_ROLLS": {
+        const enabled = Boolean(parsed.enabled);
+        if (this.state.revealSecretRolls !== enabled) {
+          this.state.revealSecretRolls = enabled;
+          this.logEvent(`Secret rolls ${enabled ? "revealed to" : "hidden from"} players by the DM.`);
           void this.broadcastState();
         }
         break;

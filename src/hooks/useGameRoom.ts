@@ -67,6 +67,8 @@ export type TemplateEvent = Extract<ServerMessage, { type: "TEMPLATE" }>;
 export type TokenDragEvent = Extract<ServerMessage, { type: "TOKEN_DRAG" }>;
 /** The DM popped a handout on this client's screen (targeted transient push). */
 export type HandoutShowEvent = Extract<ServerMessage, { type: "HANDOUT_SHOW" }>;
+/** The long roll history for the Stats page (reply to GET_ROLL_ARCHIVE). */
+export type RollArchiveEvent = Extract<ServerMessage, { type: "ROLL_ARCHIVE" }>;
 
 export type GameRoom = {
   status: ConnectionStatus;
@@ -93,6 +95,8 @@ export type GameRoom = {
   subscribeTokenDrag: (listener: (event: TokenDragEvent) => void) => () => void;
   /** Listen for DM "show handout" pushes aimed at this client; returns an unsubscribe function. */
   subscribeHandout: (listener: (event: HandoutShowEvent) => void) => () => void;
+  /** Listen for roll-archive replies (Stats page); returns an unsubscribe function. */
+  subscribeRollArchive: (listener: (event: RollArchiveEvent) => void) => () => void;
   clearError: () => void;
 };
 
@@ -272,6 +276,7 @@ export function useGameRoom(roomId: string | null): GameRoom {
   const templateListenersRef = useRef<Set<(event: TemplateEvent) => void>>(new Set());
   const tokenDragListenersRef = useRef<Set<(event: TokenDragEvent) => void>>(new Set());
   const handoutListenersRef = useRef<Set<(event: HandoutShowEvent) => void>>(new Set());
+  const rollArchiveListenersRef = useRef<Set<(event: RollArchiveEvent) => void>>(new Set());
 
   const send = useCallback((message: ClientMessage) => {
     const socket = socketRef.current;
@@ -385,6 +390,10 @@ export function useGameRoom(roomId: string | null): GameRoom {
         for (const listener of handoutListenersRef.current) {
           listener(message);
         }
+      } else if (message.type === "ROLL_ARCHIVE") {
+        for (const listener of rollArchiveListenersRef.current) {
+          listener(message);
+        }
       } else if (message.type === "CAMPAIGN_EXPORT") {
         // The DM's full-campaign backup → download it as a JSON file.
         try {
@@ -487,6 +496,13 @@ export function useGameRoom(roomId: string | null): GameRoom {
     };
   }, []);
 
+  const subscribeRollArchive = useCallback((listener: (event: RollArchiveEvent) => void) => {
+    rollArchiveListenersRef.current.add(listener);
+    return () => {
+      rollArchiveListenersRef.current.delete(listener);
+    };
+  }, []);
+
   return {
     status,
     error,
@@ -503,6 +519,7 @@ export function useGameRoom(roomId: string | null): GameRoom {
     subscribeTemplate,
     subscribeTokenDrag,
     subscribeHandout,
+    subscribeRollArchive,
     clearError,
   };
 }

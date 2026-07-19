@@ -18,7 +18,8 @@ import { NpcsPage } from "./pages/NpcsPage";
 import { ItemsPage } from "./pages/ItemsPage";
 import { ScenesPage } from "./pages/ScenesPage";
 import { AssetsPage } from "./pages/AssetsPage";
-import { PageSwitcher, type PageId } from "./pages/PageSwitcher";
+import { DM_PAGES, PLAYER_PAGES, PageSwitcher, type PageId } from "./pages/PageSwitcher";
+import { StatsPage } from "./pages/StatsPage";
 import { useDiceOverlay } from "./dice/useDiceOverlay";
 import { useDmActions, useGameRoom, type JoinParams } from "./hooks/useGameRoom";
 import { buildInverse, useHistory } from "./lib/history";
@@ -221,8 +222,9 @@ export default function App() {
     setViewingSceneId(null);
   }, [activeSceneId]);
 
-  // Players have no pages — the Board (with maximizable sheet windows) covers them.
-  const activePage: PageId = isDm ? page : "board";
+  // Players get exactly two pages: the Board and the Stats page. Everything else
+  // (the DM prep pages) clamps back to the board for them.
+  const activePage: PageId = isDm ? page : page === "stats" ? "stats" : "board";
   const onBoard = activePage === "board";
 
   // Highlight the tray's d20 while this client still owes initiative rolls: a player for
@@ -628,7 +630,8 @@ export default function App() {
     setDockTab(layout.dockTab);
     setPopped(Array.isArray(layout.popped) ? layout.popped : []);
     setTrayOpen(layout.trayOpen);
-    setPage(layout.page);
+    // Unknown/legacy stored pages fall back to the board (role clamping happens in activePage).
+    setPage(DM_PAGES.some((entry) => entry.id === layout.page) ? layout.page : "board");
     setSettingsOpen(layout.settingsOpen);
     setSnap(readCampaignFlag(roomId, "snap", false, SNAP_KEY));
     setToastsEnabledState(readCampaignFlag(roomId, "toasts", true, TOASTS_KEY));
@@ -1083,9 +1086,13 @@ export default function App() {
         </FloatingCluster>
         ) : null}
 
-        {isDm && onBoard ? (
+        {onBoard ? (
           <div className="page-switcher">
-            <PageSwitcher active={activePage} onSelect={setPage} />
+            <PageSwitcher
+              pages={isDm ? DM_PAGES : PLAYER_PAGES}
+              active={activePage}
+              onSelect={setPage}
+            />
           </div>
         ) : null}
 
@@ -1151,6 +1158,16 @@ export default function App() {
             </div>
           </>
         ) : null}
+
+        {/* Roll Statistics: the one full page players can open too. */}
+        <div className={`page${activePage === "stats" ? " page--active" : ""}`}>
+          <StatsPage
+            room={room}
+            active={activePage === "stats"}
+            activePage={activePage}
+            onNavigate={setPage}
+          />
+        </div>
 
         {/* Floating windows are board furniture — hidden while a prep page is up. */}
         {onBoard

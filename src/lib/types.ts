@@ -1266,6 +1266,68 @@ export type CheckSpec =
   | { kind: "damage"; rowId: string; crit?: boolean }
   | { kind: "spell-attack" };
 
+/**
+ * Plain-English purpose of a roll, for the Stats page. Assigned server-side at roll
+ * time (mapped from CheckSpec where available, else derived from the label) — never
+ * trusted from clients.
+ */
+export type RollCategory =
+  | "check"
+  | "save"
+  | "attack"
+  | "damage"
+  | "initiative"
+  | "death"
+  | "coin"
+  | "other";
+
+export const ROLL_CATEGORIES: RollCategory[] = [
+  "check",
+  "save",
+  "attack",
+  "damage",
+  "initiative",
+  "death",
+  "coin",
+  "other",
+];
+
+/** One kept die as [sides, value] — e.g. [20, 17]. Compact for archive storage. */
+export type DieResult = [sides: number, value: number];
+
+/**
+ * A slim archived roll for the Stats page. Rolls only live in the 100-entry unified
+ * log, so the server also appends every roll here (chunked room storage) to keep a
+ * long history. ~150-190 bytes serialized.
+ */
+export type RollRecord = {
+  id: string;
+  /** roll.timestamp (the log entry's `t` lags it for 3D throws — settle delay). */
+  t: number;
+  /** rollerId: player slot id or "dm". */
+  who: string;
+  /** Actor display name at roll time (survives slot rename/delete). */
+  name: string;
+  cat: RollCategory;
+  /** KEPT dice only; sides 0 = unknown/custom die. */
+  dice: DieResult[];
+  /** total − sum(dice values): every bonus folded together. */
+  mod: number;
+  total: number;
+  adv?: "adv" | "dis";
+  /** Discarded NATURAL d20 (otherTotal − mod), single-d20 adv/dis rolls only. */
+  other?: number;
+  crit?: boolean;
+  /** dmOnly at roll time — filtered out of player archive fetches unless revealed. */
+  secret?: boolean;
+  label?: string;
+};
+
+/** Archive cap (~480 KB serialized — comfortably under the ~1 MB WS frame budget). */
+export const MAX_ARCHIVE_ROLLS = 3000;
+/** Records per storage chunk (~60-75 KB — under PartyKit's 128 KB per-value cap). */
+export const ARCHIVE_CHUNK_SIZE = 400;
+
 export type DiceRoll = {
   id: string;
   rollerName: string;
@@ -1296,6 +1358,8 @@ export type LogEntry =
       actor: { name: string; sheetId?: string };
       /** e.g. "Stealth check" for sheet-integrated rolls. */
       label?: string;
+      /** What the roll was for (Stats page grouping). Server-assigned; absent on legacy rolls. */
+      category?: RollCategory;
       /** Secret DM roll — values masked in player frames. */
       dmOnly?: boolean;
       /** Set on outbound player copies of secret rolls: values are blanked. */
@@ -1356,6 +1420,12 @@ export type GameState = {
    * on individually in the Token panel). Only forces the bar — numeric values stay per-token.
    */
   showAllTokenHp: boolean;
+  /**
+   * DM master switch (Stats page): when on, players see the DM's secret rolls — both in
+   * the live log (unmasked, still badged) and in roll-archive fetches. Off by default;
+   * secret rolls stay masked/excluded for players.
+   */
+  revealSecretRolls: boolean;
   /**
    * DM master switch: when on, the on-board token tray (the top-center strip of PC/NPC portrait
    * chips) is hidden for everyone — the DM included. Off by default. Purely a display toggle; it
@@ -1580,6 +1650,10 @@ export type ClientMessage =
   | { type: "SET_OPTIMIZE_UPLOADS"; enabled: boolean }
   | { type: "SET_PLAYERS_CAN_POINT"; enabled: boolean }
   | { type: "SET_SHOW_ALL_TOKEN_HP"; enabled: boolean }
+  /** DM-only: let players see secret rolls (live log + roll archive). */
+  | { type: "SET_REVEAL_SECRET_ROLLS"; enabled: boolean }
+  /** Fetch the long roll history for the Stats page (any joined client; server-filtered). */
+  | { type: "GET_ROLL_ARCHIVE" }
   | { type: "SET_HIDE_TOKEN_TRAY"; enabled: boolean }
   /** Replace a scene's whole wall set — bulk ops only (clear all / paste). Granular edits below. */
   | { type: "SET_WALLS"; sceneId: string; walls: Wall[] }
@@ -1651,6 +1725,11 @@ export type ServerMessage =
   | { type: "ERROR"; message: string }
   | { type: "JOINED"; role: Role; playerId: string }
   | { type: "KICKED"; message: string }
+  /**
+   * The long roll history, sent only to the requesting client. Already filtered by
+   * role: players never receive `secret` records while `revealSecretRolls` is off.
+   */
+  | { type: "ROLL_ARCHIVE"; records: RollRecord[]; total: number }
   /** Full-campaign backup, sent only to the requesting DM to download. */
   | { type: "CAMPAIGN_EXPORT"; manifest: CampaignExport };
 
@@ -3005,6 +3084,7 @@ export function normalizeGameState(state: GameState & LegacyGameStateFields): Ga
     playersCanPoint: state.playersCanPoint !== false,
     // Off by default: only an explicit `true` turns it on (undefined ⇒ off).
     showAllTokenHp: state.showAllTokenHp === true,
+    revealSecretRolls: state.revealSecretRolls === true,
     hideTokenTray: state.hideTokenTray === true,
     optimizeUploads: state.optimizeUploads !== false,
     uiOverride: normalizeUiOverride(state.uiOverride),
@@ -3064,6 +3144,7 @@ export function createInitialState(roomId: string): GameState {
     playersCanMove: true,
     playersCanPoint: true,
     showAllTokenHp: false,
+    revealSecretRolls: false,
     hideTokenTray: false,
     optimizeUploads: true,
     uiOverride: null,

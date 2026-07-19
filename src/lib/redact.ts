@@ -156,6 +156,12 @@ export function redactStateFor(state: GameState, view: StateView): GameState {
       continue;
     }
     if (entry.kind === "roll") {
+      // DM master switch (Stats page): share secret rolls with everyone. The entry
+      // passes through unmasked but keeps dmOnly so the UI can badge "was secret".
+      if (state.revealSecretRolls) {
+        log.push(entry);
+        continue;
+      }
       // Players see THAT the DM rolled in secret, never what — no label
       // (it could leak "Goblin Boss attack"), no expression, no values.
       log.push({

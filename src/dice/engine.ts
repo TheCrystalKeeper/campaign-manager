@@ -168,6 +168,9 @@ export interface DiceEngineCallbacks {
   /** A die-on-surface impact, strength ~ relative speed, for sound effects. `coin` is set
    * when the whole roll is coins, so audio can swap the clack for a metallic ring. */
   onImpact?: (strength: number, coin: boolean) => void;
+  /** Held dice were shaken (the drag direction snapped roughly opposite) — one click of
+   * dice knocking together in the hand. Local-only; intensity ~ speed, 0..1. */
+  onShake?: (intensity: number) => void;
   /** A roll finished playing back its track. */
   onSettled?: (rollId: string) => void;
 }
@@ -198,6 +201,8 @@ export class DiceEngine {
     offsets: Map<string, { cur: THREE.Vector3; target: THREE.Vector3 }>;
     samples: { t: number; x: number; z: number }[];
     lastClient: { x: number; y: number };
+    /** Last established motion direction (unit), the reference a shake reverses against. */
+    shakeDir: { x: number; z: number } | null;
   } | null = null;
 
   private callbacks: DiceEngineCallbacks;
@@ -485,6 +490,7 @@ export class DiceEngine {
       offsets,
       samples: [{ t: performance.now(), x: world.x, z: world.z }],
       lastClient: { x: clientX, y: clientY },
+      shakeDir: null,
     };
     this.requestRender();
   }
@@ -540,6 +546,24 @@ export class DiceEngine {
       }
     }
     const dragSpeed = Math.hypot(dragVX, dragVZ);
+
+    // Shake detection: dice knock together in the hand when the motion *reverses*, so fire
+    // one click per direction flip (dot < -0.2 vs the last established direction) — a fast
+    // back-and-forth becomes a patter that paces itself off the gesture. Sustained same-ish
+    // motion (dot > 0.4) refreshes the reference, so smooth drags and circular swirls stay
+    // quiet. The speed gate keeps slow repositioning from ever triggering it.
+    if (dragSpeed > 3) {
+      const dirX = dragVX / dragSpeed;
+      const dirZ = dragVZ / dragSpeed;
+      const ref = this.drag.shakeDir;
+      const dot = ref ? dirX * ref.x + dirZ * ref.z : 1;
+      if (ref && dot < -0.2) {
+        this.callbacks.onShake?.(Math.min(1, dragSpeed / 14));
+        this.drag.shakeDir = { x: dirX, z: dirZ };
+      } else if (!ref || dot > 0.4) {
+        this.drag.shakeDir = { x: dirX, z: dirZ };
+      }
+    }
 
     roll.dice.forEach((d) => {
       const off = this.drag!.offsets.get(d.spec.id);

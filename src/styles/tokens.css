@@ -93,6 +93,24 @@
   --tex-grain: url("/textures/paper-grain.png");
   --tex-speckle: url("/textures/ink-speckles.png");
 
+  /* -- Chart series colors (Stats page) ---------------------------------------
+     One slot per player (same order as TOKEN_COLORS so chart identity matches
+     token identity) + the DM's gold + the single-hue accent for magnitude
+     charts. Darker steps of the token hues: the raw token colors are tuned for
+     dark map backdrops and fail legibility on parchment. Validated (CVD +
+     contrast) against --surface-solid; night has its own validated steps. */
+  --chart-1: #c0392b;
+  --chart-2: #2874ab;
+  --chart-3: #157347;
+  --chart-4: #a86d08;
+  --chart-5: #7d3c98;
+  --chart-6: #148f77;
+  --chart-7: #af601a;
+  --chart-8: #b03a6e; /* the "white/silver" token slot — snapped to a legible hue */
+  --chart-dm: #9c742e; /* DM = gold family */
+  --chart-accent: #35678f; /* single-hue bars (histogram, die/category breakdowns) */
+  --chart-ghost: #98866b; /* departed rollers (no live slot) */
+
   /* -- Motion: press onto the ledge, panels drift up like turned pages -------- */
   --dur-1: 120ms; /* hover / press */
   --dur-2: 220ms; /* toggles, fills */
@@ -211,6 +229,21 @@
   --accent-soft: #31435c;
   --success-soft: #3d4432;
   --backdrop: rgba(8, 9, 13, 0.6);
+
+  /* Chart series colors on stone: brighter steps of the same hues (dark mode is
+     selected, not flipped). Validated against --surface-solid; the mid-tone slab
+     caps raw contrast, so charts always pair color with labels + legend. */
+  --chart-1: #e74c3c;
+  --chart-2: #3498db;
+  --chart-3: #1a7a43;
+  --chart-4: #c48407;
+  --chart-5: #9b59b6;
+  --chart-6: #17a589;
+  --chart-7: #d35400;
+  --chart-8: #c74e93;
+  --chart-dm: #b8892f;
+  --chart-accent: #7fb3e2;
+  --chart-ghost: #92918a;
 
   --elev-1: 0 2px 8px rgba(6, 4, 10, 0.45);
   --elev-2: 0 8px 26px rgba(6, 4, 10, 0.55);

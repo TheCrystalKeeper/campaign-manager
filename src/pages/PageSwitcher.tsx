@@ -1,7 +1,7 @@
 import { Redo2, Undo2 } from "lucide-react";
 import type { History } from "../lib/history";
 
-export type PageId = "board" | "players" | "npcs" | "items" | "scenes" | "assets";
+export type PageId = "board" | "players" | "npcs" | "items" | "scenes" | "assets" | "stats";
 
 export const DM_PAGES: Array<{ id: PageId; label: string }> = [
   { id: "board", label: "Board" },
@@ -10,6 +10,13 @@ export const DM_PAGES: Array<{ id: PageId; label: string }> = [
   { id: "items", label: "Items" },
   { id: "scenes", label: "Scenes" },
   { id: "assets", label: "Assets" },
+  { id: "stats", label: "Stats" },
+];
+
+/** The only pages players may open: the board and the roll-statistics page. */
+export const PLAYER_PAGES: Array<{ id: PageId; label: string }> = [
+  { id: "board", label: "Board" },
+  { id: "stats", label: "Stats" },
 ];
 
 /// <summary>
@@ -25,15 +32,18 @@ export function PageSwitcher({
   onSelect,
   className,
   history,
+  pages = DM_PAGES,
 }: {
   active: PageId;
   onSelect: (id: PageId) => void;
   className?: string;
   history?: History;
+  /** Which page buttons to show (players get the reduced PLAYER_PAGES set). */
+  pages?: Array<{ id: PageId; label: string }>;
 }) {
   return (
     <div className={`page-switcher-group${className ? ` ${className}` : ""}`}>
-      {DM_PAGES.map((entry) => (
+      {pages.map((entry) => (
         <button
           key={entry.id}
           className={active === entry.id ? "btn-active" : ""}

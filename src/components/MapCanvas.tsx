@@ -89,6 +89,7 @@ import { computeVisiblePointIds, computeVisibleTokenIds, DmLightingOverlay, Door
 import { LightConfigPanel } from "./LightConfigPanel";
 import { WallConfigPanel } from "./WallConfigPanel";
 import { readCampaignFlag, writeCampaignFlag } from "../lib/campaignStore";
+import { playSfx, preloadSfx } from "../lib/sfx";
 import {
   annotationOpacity,
   annotationPathLength,
@@ -887,6 +888,9 @@ const TokenNode = memo(function TokenNode({
         // A real move begins: let the board suppress the duplicate above-darkness name label,
         // which is pinned to the (not-yet-updated) React position and would otherwise trail.
         onDragActive?.(token, true);
+        // Local-only pickup sound — after the guard above, so aiming a pointer arrow or
+        // rotating never audibly "lifts" the token. Silent until the files exist.
+        playSfx("token-pickup", { gain: 0.4, rateLimitMs: 80 });
         startLift();
       }}
       onDragMove={(e) => {
@@ -897,6 +901,7 @@ const TokenNode = memo(function TokenNode({
         onDragActive?.(token, false);
         onDragFrame?.(token, null); // clear frame: tells receivers to reconcile with the echo
         onMove(token, e.target.x(), e.target.y());
+        playSfx("token-place", { gain: 0.5, rateLimitMs: 80 });
         endLift();
       }}
     >
@@ -1290,6 +1295,12 @@ export function MapCanvas({
     [send, sceneId],
   );
   const onConfigureLight = useCallback((light: Light) => setEditingLightId(light.id), []);
+
+  // Decode the token pickup/place samples while the board is idle, so the very first
+  // drag doesn't miss its sound waiting on a fetch.
+  useEffect(() => {
+    preloadSfx("token-pickup", "token-place");
+  }, []);
 
   const canControlView = Boolean(onViewportChange);
   const placing = Boolean(onPlaceToken);
@@ -2551,6 +2562,7 @@ export function MapCanvas({
       if (point && onPlaceToken) {
         const snapped = snapPoint(point.x, point.y);
         onPlaceToken(snapped.x, snapped.y);
+        playSfx("token-place", { gain: 0.5, rateLimitMs: 80 }); // new mini hits the table
       }
       return;
     }

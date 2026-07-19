@@ -4150,3 +4150,419 @@ body.pointer-dragging * {
   color: var(--danger-text);
   font-size: 0.8rem;
 }
+
+/* --- Stats page (Roll Statistics) ------------------------------------------ */
+.stats-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  white-space: nowrap;
+}
+.stats-count {
+  white-space: nowrap;
+}
+.stats-topbar-actions {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.stats-topbar-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.stats-reveal-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.55rem;
+  font-size: 0.8rem;
+  color: var(--text);
+  background: var(--accent-soft);
+  border: 1.5px solid var(--border-subtle);
+  border-radius: var(--r-wob-pill);
+}
+.stats-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0.9rem 1.1rem 1.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+/* Filter chips: quieter than real buttons — flat pills that ink up when on. */
+.stats-filters {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.stats-filter-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+.stats-filter-cap {
+  width: 3.2rem;
+  flex-shrink: 0;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+}
+.stats-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.16rem 0.6rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  background-color: transparent;
+  background-image: none;
+  border: 1.5px solid var(--border-subtle);
+  border-radius: var(--r-wob-pill);
+  box-shadow: none;
+}
+.stats-chip:hover:not(:disabled) {
+  background-color: var(--surface-2);
+  color: var(--text);
+  transform: none;
+  box-shadow: none;
+}
+.stats-chip--on {
+  background-color: var(--accent);
+  border-color: var(--border);
+  color: var(--on-accent);
+}
+.stats-chip--on:hover:not(:disabled) {
+  background-color: var(--accent);
+  color: var(--on-accent);
+}
+.stats-chip--on .chart-dot {
+  outline: 2px solid var(--on-accent);
+}
+.stats-clear {
+  font-size: 0.8rem;
+}
+
+/* KPI tiles */
+.stats-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.6rem;
+}
+.stat-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.6rem 0.75rem;
+  background-color: var(--surface);
+  background-image: var(--tex-grain);
+  background-size: 280px;
+  border: 2px solid var(--border);
+  border-radius: var(--r-wob-md);
+  box-shadow: var(--elev-1);
+}
+.stat-tile-label {
+  font-size: 0.74rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+.stat-tile-value {
+  font-family: var(--font-mono);
+  font-size: 1.55rem;
+  font-weight: 700;
+  line-height: 1.15;
+  color: var(--text);
+}
+.stat-tile-value--name {
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.stat-tile-sub {
+  font-size: 0.74rem;
+  color: var(--text-faint);
+}
+
+/* Chart / table cards */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.9rem;
+}
+@media (max-width: 980px) {
+  .stats-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.stats-card {
+  min-width: 0;
+  padding: 0.75rem 0.9rem 0.9rem;
+  background-color: var(--surface);
+  background-image: var(--tex-grain);
+  background-size: 280px;
+  border: 2px solid var(--border);
+  border-radius: var(--r-wob-lg);
+  box-shadow: var(--elev-1);
+}
+.stats-card h3 {
+  margin: 0 0 0.15rem;
+  font-family: var(--font-display);
+  font-size: 1.02rem;
+}
+.stats-caption {
+  margin: 0 0 0.6rem;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+/* The lucky table */
+.stats-table-scroll {
+  overflow-x: auto;
+}
+.stats-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+.stats-table th {
+  text-align: right;
+  border-bottom: 1.5px solid var(--border-subtle);
+  padding: 0 0.5rem 0.25rem;
+  white-space: nowrap;
+}
+.stats-table th:first-child {
+  text-align: left;
+}
+.stats-table th button {
+  font-size: 0.74rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  background: transparent;
+  background-image: none;
+  border: none;
+  border-radius: var(--radius);
+  box-shadow: none;
+  padding: 0.1rem 0.2rem;
+}
+.stats-table th button:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--surface-2);
+  transform: none;
+  box-shadow: none;
+}
+.stats-table td {
+  padding: 0.3rem 0.5rem;
+  text-align: right;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  border-bottom: 1px solid var(--border-subtle);
+  white-space: nowrap;
+}
+.stats-table tr:last-child td {
+  border-bottom: none;
+}
+.stats-table .stats-table-name {
+  text-align: left;
+  font-family: var(--font-body);
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.stats-luck-up {
+  color: var(--success);
+}
+.stats-luck-down {
+  color: var(--danger-text);
+}
+.stats-small-sample {
+  color: var(--text-faint);
+}
+
+/* Charts: shared plot bits */
+.chart-plot {
+  position: relative;
+}
+.chart-axis {
+  stroke: var(--border-subtle);
+  stroke-width: 1;
+}
+/* Horizontal y-gridlines: recessive, one step quieter than the axis. */
+.chart-grid {
+  stroke: var(--border-subtle);
+  stroke-opacity: 0.45;
+  stroke-width: 1;
+}
+.chart-crosshair {
+  stroke: var(--text-muted);
+  stroke-width: 1;
+  stroke-opacity: 0.6;
+}
+/* Line end/hover markers keep a 2px surface ring so they read over lines. */
+.chart-end-dot {
+  stroke: var(--surface-solid);
+  stroke-width: 2;
+}
+.chart-tick {
+  fill: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+.chart-refline {
+  stroke: var(--text-muted);
+  stroke-width: 1;
+  stroke-dasharray: 4 3;
+}
+.chart-ref-label {
+  fill: var(--text-muted);
+  font-size: 10px;
+  font-family: var(--font-body);
+  /* Surface-colored halo so the label stays readable over bars/lines. */
+  paint-order: stroke;
+  stroke: var(--surface-solid);
+  stroke-width: 3px;
+  stroke-linejoin: round;
+}
+.chart-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.8rem;
+  margin-top: 0.4rem;
+}
+.chart-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+.chart-tooltip {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  pointer-events: none;
+  z-index: 5;
+  padding: 0.3rem 0.5rem;
+  font-size: 0.78rem;
+  color: var(--text);
+  background: var(--surface-solid);
+  border: 1.5px solid var(--border);
+  border-radius: var(--r-wob-sm);
+  box-shadow: var(--elev-2);
+  white-space: nowrap;
+}
+.chart-tooltip-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+/* Horizontal magnitude bars (die sizes, categories) */
+.hbar-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.hbar-row {
+  display: grid;
+  grid-template-columns: 3.4rem minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 0.5rem;
+}
+.hbar-label {
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-align: right;
+}
+.hbar-track {
+  display: block;
+  height: 14px;
+  background: var(--surface-inset);
+  border-radius: 0 4px 4px 0;
+}
+.hbar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 0 4px 4px 0;
+}
+.hbar-value {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.82rem;
+}
+.hbar-detail {
+  font-size: 0.74rem;
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+/* Word labels ("Saving throws") instead of die codes: wider column, body font. */
+.hbar-list--wide .hbar-row {
+  grid-template-columns: 8.5rem minmax(0, 1fr) auto auto;
+}
+.hbar-list--wide .hbar-label {
+  font-family: var(--font-body);
+  white-space: nowrap;
+}
+
+/* Memorable moments */
+.stats-moments {
+  list-style: none;
+  margin: 0.4rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.stats-moments li {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+.stats-moment-badge {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0.08rem 0.42rem;
+  border: 1.5px solid var(--border-subtle);
+  border-radius: var(--r-wob-pill);
+}
+.stats-moment-badge--crit {
+  background: var(--success-soft);
+  color: var(--text);
+}
+.stats-moment-badge--fumble {
+  background: var(--danger-soft);
+  color: var(--danger-text);
+}
+.stats-moment-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.85rem;
+}
+.stats-moment-when {
+  margin-left: auto;
+  flex-shrink: 0;
+}

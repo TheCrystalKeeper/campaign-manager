@@ -1,8 +1,11 @@
 /// <summary>
-/// Procedurally synthesizes dice-clatter sound effects with the Web Audio API.
-/// Generating the sound in code (a filtered noise burst plus a short pitched "tock")
-/// means the feature ships zero audio files — no bundle weight and no R2 usage.
+/// Dice & coin sound effects. Plays real samples from `public/sounds/` when they exist
+/// (via the shared sfx layer, SOUND_DESIGN.md §3 Phase A) and falls back to the original
+/// procedural Web Audio synth (filtered noise burst + short pitched "tock") for any sound
+/// whose file is missing — so the feature still works with zero audio files.
 /// </summary>
+
+import { getSfxContext, playSfx, preloadSfx } from "../lib/sfx";
 
 const STORAGE_KEY = "dice-muted";
 
@@ -15,18 +18,21 @@ export class DiceAudio {
 
   constructor() {
     this.muted = readMuted();
+    // Warm the sample cache at overlay init so buffers are decoded before the first throw.
+    preloadSfx("dice-impact-soft", "dice-impact-hard", "dice-shake", "dice-throw", "coin-flip", "coin-drop");
   }
 
-  /// <summary>Lazily creates the audio graph; safe to call repeatedly.</summary>
+  /// <summary>Lazily builds this instance's synth graph on the app-wide shared
+  /// AudioContext (browsers cap concurrent contexts); safe to call repeatedly.</summary>
   private ensure(): boolean {
     if (this.ctx) {
       return true;
     }
-    const Ctor = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (!Ctor) {
+    const shared = getSfxContext();
+    if (!shared) {
       return false;
     }
-    this.ctx = new Ctor();
+    this.ctx = shared;
     this.master = this.ctx.createGain();
     this.master.gain.value = 0.9;
     this.master.connect(this.ctx.destination);
@@ -79,7 +85,24 @@ export class DiceAudio {
 
     const clamped = Math.max(0, Math.min(1, strength));
     if (coin) {
+      // Real coin-drop sample when present; the synthesized metallic ring otherwise.
+      if (playSfx("coin-drop", { gain: 0.4 + clamped * 0.5, rateLimitMs: 0 })) {
+        return;
+      }
       this.coinRing(clamped, now);
+      return;
+    }
+
+    // Sample path: soft/hard sample set picked by strength, strength carried as gain.
+    // If the preferred set has no files (yet), the other set covers it; only when neither
+    // has anything does the synth below play. Rate limiting is this method's 20 ms gate.
+    const set = clamped < 0.4 ? "dice-impact-soft" : "dice-impact-hard";
+    const other = clamped < 0.4 ? "dice-impact-hard" : "dice-impact-soft";
+    const sampleGain = 0.15 + clamped * 0.85;
+    if (
+      playSfx(set, { gain: sampleGain, rateLimitMs: 0 }) ||
+      playSfx(other, { gain: sampleGain, rateLimitMs: 0 })
+    ) {
       return;
     }
 
@@ -101,6 +124,36 @@ export class DiceAudio {
       q: 0.8,
       lowpass: 1700 + clamped * 2400,
     });
+  }
+
+  /// <summary>
+  /// One click of held dice knocking together — fired by the engine on each direction
+  /// reversal while shaking. Rate-limited here (not by the caller) so a jittery pointer
+  /// can't chatter. Sample-only; silent until shake files exist.
+  /// </summary>
+  shake(intensity: number) {
+    if (this.muted) {
+      return;
+    }
+    const clamped = Math.max(0, Math.min(1, intensity));
+    playSfx("dice-shake", { gain: 0.25 + clamped * 0.55, pitchJitter: 0.08, rateLimitMs: 70 });
+  }
+
+  /// <summary>
+  /// Plays the throw-release sounds at the start of track playback (roller and remote
+  /// clients alike): a shake/whoosh for dice, the airborne flip shimmer for coins.
+  /// Sample-only — stays silent (no synth equivalent) until the files exist.
+  /// </summary>
+  throwStart(hasDice: boolean, hasCoin: boolean) {
+    if (this.muted) {
+      return;
+    }
+    if (hasDice) {
+      playSfx("dice-throw", { gain: 0.55, pitchJitter: 0.04 });
+    }
+    if (hasCoin) {
+      playSfx("coin-flip", { gain: 0.8, pitchJitter: 0.03 });
+    }
   }
 
   /// <summary>
@@ -202,10 +255,11 @@ export class DiceAudio {
   }
 
   dispose() {
-    if (this.ctx) {
-      void this.ctx.close();
-      this.ctx = null;
-    }
+    // The context is the app-wide shared one — never close it here; just detach this
+    // instance's output so its synth voices can't keep playing into the mix.
+    this.master?.disconnect();
+    this.master = null;
+    this.ctx = null;
   }
 }
 
