@@ -1,20 +1,6 @@
 {
   "rooms": [
     {
-      "roomId": "campaign-e7d37d8f",
-      "name": "Letter Test Room 2",
-      "iconUrl": null,
-      "description": null,
-      "createdAt": 1784429934793
-    },
-    {
-      "roomId": "campaign-08ab2981",
-      "name": "Letter Test Room",
-      "iconUrl": null,
-      "description": null,
-      "createdAt": 1784429842270
-    },
-    {
       "roomId": "campaign1",
       "name": "Campaign 1",
       "iconUrl": "/tokens/campaign1--asset-aca0cc0d.webp",
