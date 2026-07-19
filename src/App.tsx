@@ -1029,7 +1029,7 @@ export default function App() {
         <FloatingCluster
           anchor="top-center"
           plain
-          className={`avatar-strip${dockOpen ? " avatar-strip--dock-open" : ""}`}
+          className="avatar-strip"
         >
           {pcChipSlotIds.map((slotId) => {
             const record = state.sheets[slotId];
