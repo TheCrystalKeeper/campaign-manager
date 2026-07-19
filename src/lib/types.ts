@@ -1427,6 +1427,13 @@ export type GameState = {
    */
   revealSecretRolls: boolean;
   /**
+   * DM master switch: when on, players get the Board / Stats switcher and can open the Roll
+   * Statistics page. Off by default — the switcher is hidden for players (they see only the
+   * board) and only the DM can open Stats. Purely gates the page's visibility; the roll data
+   * players would see there is already secret-roll–redacted (see `revealSecretRolls`).
+   */
+  playersCanSeeStats: boolean;
+  /**
    * DM master switch: when on, the on-board token tray (the top-center strip of PC/NPC portrait
    * chips) is hidden for everyone — the DM included. Off by default. Purely a display toggle; it
    * changes nothing about who's on the board or what they can see.
@@ -1654,6 +1661,8 @@ export type ClientMessage =
   | { type: "SET_REVEAL_SECRET_ROLLS"; enabled: boolean }
   /** Fetch the long roll history for the Stats page (any joined client; server-filtered). */
   | { type: "GET_ROLL_ARCHIVE" }
+  /** DM-only: let players open the Roll Statistics page (and see the Board/Stats switcher). */
+  | { type: "SET_PLAYERS_CAN_SEE_STATS"; enabled: boolean }
   | { type: "SET_HIDE_TOKEN_TRAY"; enabled: boolean }
   /** Replace a scene's whole wall set — bulk ops only (clear all / paste). Granular edits below. */
   | { type: "SET_WALLS"; sceneId: string; walls: Wall[] }
@@ -3085,6 +3094,7 @@ export function normalizeGameState(state: GameState & LegacyGameStateFields): Ga
     // Off by default: only an explicit `true` turns it on (undefined ⇒ off).
     showAllTokenHp: state.showAllTokenHp === true,
     revealSecretRolls: state.revealSecretRolls === true,
+    playersCanSeeStats: state.playersCanSeeStats === true,
     hideTokenTray: state.hideTokenTray === true,
     optimizeUploads: state.optimizeUploads !== false,
     uiOverride: normalizeUiOverride(state.uiOverride),
@@ -3145,6 +3155,7 @@ export function createInitialState(roomId: string): GameState {
     playersCanPoint: true,
     showAllTokenHp: false,
     revealSecretRolls: false,
+    playersCanSeeStats: false,
     hideTokenTray: false,
     optimizeUploads: true,
     uiOverride: null,

@@ -146,11 +146,13 @@
   --surface-slate: #5c7155;
 }
 [data-accent="ember"] {
-  /* Ember & Wine — tavern hearth */
+  /* Ember & Wine — tavern hearth. Header band stays in the warm ember hue (a
+     darkened terracotta) so it reads as the same orange family as the accent,
+     not a separate red. */
   --accent: #b05f33;
   --accent-bright: #d08153;
   --accent-soft: #f2d9c4;
-  --surface-slate: #7a4a52;
+  --surface-slate: #7a4a2e;
 }
 [data-accent="lapis"] {
   /* Tide & Lapis — coastal ruins */
@@ -276,7 +278,7 @@
   --accent-bright: #e7ac85;
   --accent-soft: #4e3327;
   --on-accent: #38200f;
-  --surface-slate: #5c3a40;
+  --surface-slate: #5c3f2a;
 }
 [data-theme="night"][data-accent="lapis"] {
   --accent: #8aa4d8;

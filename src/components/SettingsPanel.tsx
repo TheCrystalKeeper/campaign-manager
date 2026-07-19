@@ -580,6 +580,12 @@ export function SettingsPanel({ ctx }: { ctx: PanelContext }) {
             onToggle={(on) => room.send({ type: "SET_PLAYERS_CAN_DRAW", enabled: on })}
           />
           <ToggleRow
+            label="Players can see stats"
+            hint="Let players open the Roll Statistics page. Off (default) = the Board/Stats switcher is hidden for players and only you can see roll stats. (Secret rolls stay hidden either way — see the Stats page's own reveal switch.)"
+            on={state.playersCanSeeStats}
+            onToggle={(on) => room.send({ type: "SET_PLAYERS_CAN_SEE_STATS", enabled: on })}
+          />
+          <ToggleRow
             label="Show all health bars"
             hint="Show every token's health bar to all players — not just tokens you've individually set to show HP in the Token panel. Off (default) = you control HP visibility per token. Numeric HP values stay per-token either way."
             on={state.showAllTokenHp}

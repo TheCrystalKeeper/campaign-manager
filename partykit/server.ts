@@ -2446,6 +2446,15 @@ export default class GameServer implements Party.Server {
         }
         break;
       }
+      case "SET_PLAYERS_CAN_SEE_STATS": {
+        const enabled = Boolean(parsed.enabled);
+        if (this.state.playersCanSeeStats !== enabled) {
+          this.state.playersCanSeeStats = enabled;
+          this.logEvent(`Stats page ${enabled ? "shown to" : "hidden from"} players by the DM.`);
+          void this.broadcastState();
+        }
+        break;
+      }
       case "SET_UI_OVERRIDE": {
         // DM-forced theme+accent for every client (null = players choose their own).
         const next = parsed.override === null ? null : normalizeUiOverride(parsed.override);

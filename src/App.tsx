@@ -222,9 +222,12 @@ export default function App() {
     setViewingSceneId(null);
   }, [activeSceneId]);
 
-  // Players get exactly two pages: the Board and the Stats page. Everything else
-  // (the DM prep pages) clamps back to the board for them.
-  const activePage: PageId = isDm ? page : page === "stats" ? "stats" : "board";
+  // Players get at most two pages: the Board and — only when the DM has enabled it —
+  // the Stats page. Everything else (the DM prep pages, or Stats while it's disabled
+  // for players) clamps back to the board, so flipping the switch off mid-view pushes
+  // any player who was on Stats straight back to the board.
+  const activePage: PageId =
+    isDm ? page : page === "stats" && state?.playersCanSeeStats ? "stats" : "board";
   const onBoard = activePage === "board";
 
   // Highlight the tray's d20 while this client still owes initiative rolls: a player for
@@ -1086,7 +1089,10 @@ export default function App() {
         </FloatingCluster>
         ) : null}
 
-        {onBoard ? (
+        {/* The DM always gets the page switcher; players get it only when the DM has
+            enabled the Stats page (otherwise the two-button Board/Stats pill vanishes
+            for them — with only the board left there is nothing to switch between). */}
+        {onBoard && (isDm || state.playersCanSeeStats) ? (
           <div className="page-switcher">
             <PageSwitcher
               pages={isDm ? DM_PAGES : PLAYER_PAGES}
