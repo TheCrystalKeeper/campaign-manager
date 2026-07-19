@@ -402,6 +402,18 @@ function clipTokenShape(ctx: Konva.Context, shape: TokenShape, radius: number) {
   ctx.closePath();
 }
 
+/** Picks readable ink for text drawn over an arbitrary token fill color — colors range from
+ *  deep reds to near-white (see TOKEN_COLORS / the free-form color picker) — via the sRGB
+ *  relative-luminance threshold used for WCAG contrast. */
+function readableTextColor(hex: string): string {
+  const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  if (!m) return "#e6e6e8";
+  const [r, g, b] = [m[1], m[2], m[3]].map((h) => parseInt(h, 16) / 255);
+  const lin = (c: number) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+  const luminance = 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+  return luminance > 0.5 ? "#1c1a18" : "#e6e6e8";
+}
+
 /** The token silhouette as a Konva primitive: solid `fill` when given, else stroke-only. */
 function TokenShapePrimitive({
   shape,
@@ -445,6 +457,7 @@ function TokenShapeNode({
   stroke,
   strokeWidth,
   glow,
+  label,
 }: {
   shape: TokenShape;
   radius: number;
@@ -457,10 +470,29 @@ function TokenShapeNode({
   strokeWidth: number;
   /** Soft white hover/selection glow (Phase 7f): Konva shadow props, or none. */
   glow?: Record<string, unknown>;
+  /** Token name; when there's no portrait, its capitalized first letter fills the shape as a
+   *  placeholder instead of a bare color swatch. */
+  label?: string;
 }) {
   if (!img) {
+    const initial = label?.trim().charAt(0).toUpperCase();
     return (
-      <TokenShapePrimitive shape={shape} radius={radius} fill={fill} stroke={stroke} strokeWidth={strokeWidth} glow={glow} />
+      <>
+        <TokenShapePrimitive shape={shape} radius={radius} fill={fill} stroke={stroke} strokeWidth={strokeWidth} glow={glow} />
+        {initial ? (
+          <CrispText
+            text={initial}
+            fontSize={radius * 1.1}
+            fontStyle="bold"
+            fill={readableTextColor(fill)}
+            align="center"
+            width={radius * 4}
+            offsetX={radius * 2}
+            y={-radius * 0.55}
+            listening={false}
+          />
+        ) : null}
+      </>
     );
   }
   // Cover-fit the shape's bounding square preserving aspect (overflow clipped), then apply the
@@ -979,6 +1011,7 @@ const TokenNode = memo(function TokenNode({
           stroke={img ? token.color : "#00000066"}
           strokeWidth={2}
           glow={glowShadow}
+          label={concealedPortrait ? undefined : token.label}
         />
       )}
       {concealedPortrait ? (
