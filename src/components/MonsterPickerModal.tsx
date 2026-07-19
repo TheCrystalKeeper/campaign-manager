@@ -9,6 +9,13 @@ const MONSTER_TYPES = [
   "Fiend", "Giant", "Humanoid", "Monstrosity", "Ooze", "Plant", "Undead",
 ];
 
+// Rank maps for the CR and Size columns — both are small text (a fraction, a size name) that
+// sorts wrong as plain text ("10" before "2"; "Gargantuan" before "Tiny"), so the column-sort
+// needs the real domain order instead of alphabetical.
+const CR_RANK: Record<string, number> = Object.fromEntries(CR_ORDER.map((cr, i) => [cr, i]));
+const SIZE_ORDER = ["Tiny", "Small", "Medium", "Large", "Huge", "Gargantuan"];
+const SIZE_RANK: Record<string, number> = Object.fromEntries(SIZE_ORDER.map((s, i) => [s, i]));
+
 const ABILITY_ROW: Array<[string, string]> = [
   ["str", "STR"], ["dex", "DEX"], ["con", "CON"], ["int", "INT"], ["wis", "WIS"], ["cha", "CHA"],
 ];
@@ -33,9 +40,9 @@ export function MonsterPickerModal({
       title="Create NPC from a compendium monster"
       load={loadMonsters}
       columns={[
-        { label: "CR", render: (m) => m.cr },
+        { label: "CR", render: (m) => m.cr, sortValue: (m) => CR_RANK[m.cr] ?? 999 },
         { label: "Type", render: (m) => m.type },
-        { label: "Size", render: (m) => m.size },
+        { label: "Size", render: (m) => m.size, sortValue: (m) => SIZE_RANK[m.size] ?? 999 },
       ]}
       getSearchText={(m) => `${m.type} ${m.size} cr ${m.cr}`}
       filters={

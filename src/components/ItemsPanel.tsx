@@ -95,7 +95,7 @@ export function ItemsPanel({ state, dm, openItemSheet, dropItemAt }: ItemsPanelP
       rows={rows}
       createLabel="Create Item"
       extraCreate={{
-        label: "Add from compendium",
+        label: "From Compendium",
         title: "Import items from the compendium",
         icon: <BookOpen size={15} strokeWidth={2.2} />,
         onClick: () => setSrdPickerOpen(true),

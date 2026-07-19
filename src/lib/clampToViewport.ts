@@ -38,3 +38,8 @@ export function clampSizeToViewport(
     h: Math.min(size.h, Math.max(1, window.innerHeight - margin * 2)),
   };
 }
+
+/** Clamps `value` into [min, max], tolerating a max that's temporarily less than min. */
+export function clampNum(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), Math.max(min, max));
+}

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { ChevronLeft, Maximize2, Minimize2, PanelRight, X } from "lucide-react";
-import { clampSizeToViewport, clampToViewport, CLAMP_MARGIN } from "../lib/clampToViewport";
+import { clampNum, clampSizeToViewport, clampToViewport, CLAMP_MARGIN } from "../lib/clampToViewport";
 import { campaignKey } from "../lib/campaignStore";
 
 export type WindowPos = { x: number; y: number };
@@ -73,9 +73,6 @@ function isTypingTarget(target: EventTarget | null): boolean {
     target instanceof HTMLSelectElement
   );
 }
-
-const clampNum = (value: number, min: number, max: number) =>
-  Math.min(Math.max(value, min), Math.max(min, max));
 
 type ResizeDir = "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw";
 const RESIZE_DIRS: ResizeDir[] = ["n", "s", "e", "w", "ne", "nw", "se", "sw"];
