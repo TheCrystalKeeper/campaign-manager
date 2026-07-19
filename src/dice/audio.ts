@@ -6,6 +6,7 @@
 /// </summary>
 
 import { getSfxContext, playSfx, preloadSfx } from "../lib/sfx";
+import { getSoundGain, subscribeSoundVolume } from "../lib/soundVolume";
 
 const STORAGE_KEY = "dice-muted";
 
@@ -15,6 +16,7 @@ export class DiceAudio {
   private noise: AudioBuffer | null = null;
   private muted: boolean;
   private lastImpactAt = 0;
+  private unsubVolume: (() => void) | null = null;
 
   constructor() {
     this.muted = readMuted();
@@ -34,8 +36,15 @@ export class DiceAudio {
     }
     this.ctx = shared;
     this.master = this.ctx.createGain();
-    this.master.gain.value = 0.9;
+    // 0.9 headroom scaled by the user's master volume (gain 1.0 at the 70 % default); kept
+    // live via the slider subscription.
+    this.master.gain.value = 0.9 * getSoundGain();
     this.master.connect(this.ctx.destination);
+    this.unsubVolume = subscribeSoundVolume((gain) => {
+      if (this.master) {
+        this.master.gain.value = 0.9 * gain;
+      }
+    });
 
     const seconds = 0.25;
     const length = Math.floor(this.ctx.sampleRate * seconds);
@@ -257,6 +266,8 @@ export class DiceAudio {
   dispose() {
     // The context is the app-wide shared one — never close it here; just detach this
     // instance's output so its synth voices can't keep playing into the mix.
+    this.unsubVolume?.();
+    this.unsubVolume = null;
     this.master?.disconnect();
     this.master = null;
     this.ctx = null;

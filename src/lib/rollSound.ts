@@ -6,11 +6,14 @@
 /// Respects the same `dice-muted` preference the 3D dice audio uses.
 /// </summary>
 
+import { getSoundGain, subscribeSoundVolume } from "./soundVolume";
+
 const MUTE_KEY = "dice-muted";
 /** Drop a real dice SFX here (mp3/ogg) and it will be used automatically. */
 const SOUND_URL = "/sounds/dice-roll.mp3";
 
 let ctx: AudioContext | null = null;
+let master: GainNode | null = null;
 let noise: AudioBuffer | null = null;
 
 // Probe for an optional audio file once. Until it's confirmed playable we use the synth.
@@ -49,6 +52,16 @@ function ensureCtx(): boolean {
     return false;
   }
   ctx = new Ctor();
+  // Route the synth through a master gain the user's volume drives (subscribed once, since
+  // ensureCtx only builds the context on the first call).
+  master = ctx.createGain();
+  master.gain.value = getSoundGain();
+  master.connect(ctx.destination);
+  subscribeSoundVolume((gain) => {
+    if (master) {
+      master.gain.value = gain;
+    }
+  });
   const length = Math.floor(ctx.sampleRate * 0.25);
   const buffer = ctx.createBuffer(1, length, ctx.sampleRate);
   const data = buffer.getChannelData(0);
@@ -61,7 +74,7 @@ function ensureCtx(): boolean {
 
 /// <summary>Synthesizes a short dice "rattle": several filtered-noise clacks + tocks.</summary>
 function synthRattle() {
-  if (!ensureCtx() || !ctx || !noise) {
+  if (!ensureCtx() || !ctx || !noise || !master) {
     return;
   }
   if (ctx.state === "suspended") {
@@ -88,7 +101,7 @@ function synthRattle() {
     gain.gain.setValueAtTime(0.0001, t);
     gain.gain.linearRampToValueAtTime(vol, t + 0.003);
     gain.gain.exponentialRampToValueAtTime(0.0008, t + 0.11);
-    src.connect(band).connect(lp).connect(gain).connect(ctx.destination);
+    src.connect(band).connect(lp).connect(gain).connect(master);
     src.start(t);
     src.stop(t + 0.14);
 
@@ -102,7 +115,7 @@ function synthRattle() {
     oscGain.gain.setValueAtTime(0.0001, t);
     oscGain.gain.linearRampToValueAtTime(vol * 0.45, t + 0.003);
     oscGain.gain.exponentialRampToValueAtTime(0.0008, t + 0.1);
-    osc.connect(oscGain).connect(ctx.destination);
+    osc.connect(oscGain).connect(master);
     osc.start(t);
     osc.stop(t + 0.12);
   }
@@ -116,7 +129,9 @@ export function playRollSound() {
   if (fileReady && fileEl) {
     // Clone so rapid rolls can overlap; fall back to the synth if playback is blocked.
     const play = fileEl.cloneNode() as HTMLAudioElement;
-    play.volume = 0.7;
+    // 0.7 is this sample's normal level; gain 1.0 at the 70 % default keeps it there. (HTMLAudio
+    // clamps volume at 1.0, so boosting past unity just tops out here rather than getting louder.)
+    play.volume = Math.min(1, 0.7 * getSoundGain());
     play.play().catch(() => synthRattle());
     return;
   }

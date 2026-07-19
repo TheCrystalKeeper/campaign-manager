@@ -9,6 +9,8 @@
 /// Drop files into `public/sounds/` incrementally — nothing ever breaks.
 /// </summary>
 
+import { getSoundGain, subscribeSoundVolume } from "./soundVolume";
+
 export type SfxName =
   | "dice-impact-soft"
   | "dice-impact-hard"
@@ -58,8 +60,16 @@ function ensureCtx(): AudioContext | null {
   }
   ctx = new Ctor();
   master = ctx.createGain();
-  master.gain.value = 0.9;
+  // 0.9 is the mix headroom; the user's master volume scales it (gain 1.0 at the 70 %
+  // default). Subscribed once (ensureCtx only builds the graph on the first call) so the
+  // slider moves this live.
+  master.gain.value = 0.9 * getSoundGain();
   master.connect(ctx.destination);
+  subscribeSoundVolume((gain) => {
+    if (master) {
+      master.gain.value = 0.9 * gain;
+    }
+  });
   return ctx;
 }
 

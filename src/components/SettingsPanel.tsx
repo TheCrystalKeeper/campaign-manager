@@ -16,6 +16,7 @@ import {
 } from "../lib/types";
 import type { CampaignManifest } from "../lib/campaignManifest";
 import { useVisualEffectsLite } from "../lib/visualEffects";
+import { getSoundVolume, setSoundVolume } from "../lib/soundVolume";
 import {
   CAMPAIGN_DESCRIPTION_CAP,
   fetchCampaignRegistry,
@@ -324,6 +325,7 @@ function CampaignSection({ roomId }: { roomId: string }) {
 export function SettingsPanel({ ctx }: { ctx: PanelContext }) {
   const { dice, isDm, state, room } = ctx;
   const [fxLite, setFxLite] = useVisualEffectsLite();
+  const [volume, setVolume] = useState(() => getSoundVolume());
   const [layoutReset, setLayoutReset] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
   const importRef = useRef<HTMLInputElement>(null);
@@ -405,6 +407,22 @@ export function SettingsPanel({ ctx }: { ctx: PanelContext }) {
         on={!dice.muted}
         onToggle={(on) => dice.setMuted(!on)}
       />
+      <div className="field">
+        <label>Volume ({Math.round(volume * 100)}%)</label>
+        <input
+          type="range"
+          min={0}
+          max={1}
+          step={0.05}
+          value={volume}
+          title="Master loudness for every sound — dice, coins, tokens. Turn off individual sounds above."
+          onChange={(e) => {
+            const next = Number(e.target.value);
+            setVolume(next);
+            setSoundVolume(next);
+          }}
+        />
+      </div>
       <ToggleRow
         label="Snap to grid"
         hint="Dropped and dragged tokens land on cell centers."
