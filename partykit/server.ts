@@ -82,6 +82,19 @@ type ClientMeta = {
   joined: boolean;
 };
 
+/**
+ * Move a token to the END of the tokens array — tokens render in array order (later = on top),
+ * so the last one moved lifts above the minis it was stacked under and stays there once placed.
+ * Mutates in place; no-op if the token is missing or already last. Called on every committed
+ * MOVE_TOKEN so grabbing a token consistently brings it to the front.
+ */
+function bringTokenToFront(tokens: GameState["tokens"], tokenId: string): void {
+  const idx = tokens.findIndex((token) => token.id === tokenId);
+  if (idx < 0 || idx === tokens.length - 1) return;
+  const [token] = tokens.splice(idx, 1);
+  tokens.push(token);
+}
+
 const ROOM_KEY = "room-key";
 /** Roll-archive storage keys (Stats page): meta + fixed-size record chunks. */
 const ARCHIVE_META_KEY = "rollarchive:meta";
@@ -1005,6 +1018,7 @@ export default class GameServer implements Party.Server {
         if (parsed.facing !== undefined) {
           token.facing = normalizeFacing(parsed.facing);
         }
+        bringTokenToFront(this.state.tokens, token.id);
         void this.broadcastState();
         return;
       }
@@ -2040,6 +2054,7 @@ export default class GameServer implements Party.Server {
           if (parsed.facing !== undefined) {
             token.facing = normalizeFacing(parsed.facing);
           }
+          bringTokenToFront(this.state.tokens, token.id);
           void this.broadcastState();
         }
         break;

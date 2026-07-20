@@ -2233,6 +2233,19 @@ export function MapCanvas({
     () => sceneTokens.filter((token) => token.vision?.enabled),
     [sceneTokens],
   );
+  // Render order for the token layer: tokens draw in array order (later = on top), so the
+  // token being picked up is moved LAST here — it lifts above the minis it was stacked under
+  // for the whole drag (driven by draggingLabelId, set on pickup and held through the settle).
+  // The server reorders state.tokens on the committed move, so it STAYS on top once placed.
+  const renderTokens = useMemo(() => {
+    if (!draggingLabelId) return sceneTokens;
+    const idx = sceneTokens.findIndex((token) => token.id === draggingLabelId);
+    if (idx < 0 || idx === sceneTokens.length - 1) return sceneTokens;
+    const ordered = sceneTokens.slice();
+    const [lifted] = ordered.splice(idx, 1);
+    ordered.push(lifted);
+    return ordered;
+  }, [sceneTokens, draggingLabelId]);
 
   // Stable dispatchers for the memoized <TokenNode>s. A ref holds the latest (often unstable)
   // callbacks + derived board data so each dispatcher keeps a constant identity — otherwise
@@ -3144,7 +3157,7 @@ export function MapCanvas({
         </Layer>
 
         <Layer listening={activeTool.id === "select"}>
-          {sceneTokens.map((token) => {
+          {renderTokens.map((token) => {
             // Darkness gate: tokens the viewer can't see (out of LOS/light/darkvision, no
             // override) don't render at all — not merely dimmed by the mask.
             if (visibleTokenIds && !visibleTokenIds.has(token.id)) return null;
