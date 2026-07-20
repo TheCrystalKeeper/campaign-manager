@@ -378,6 +378,10 @@ export type Token = {
   nameConcealed?: boolean;
   /** DM-concealed art: players get imageUrl null + a "?" glyph (server-stripped). */
   portraitConcealed?: boolean;
+  /** DM display toggle: suppress this token's name caption on the board for everyone (DM
+   *  included). Purely visual — unlike `nameConcealed` it doesn't rewrite the label, so
+   *  combat/log/editor still show the real name. */
+  nameHidden?: boolean;
   /**
    * Darkness visibility override (enemy/item tokens, client-enforced): absent = "auto"
    * (each viewer's vision/lights/LOS decide), "always" = rendered for everyone even in
@@ -1787,11 +1791,12 @@ export function playerTokenColorForSlot(slotId: string, slots: PlayerSlot[]): st
 }
 
 /// <summary>
-/// Derives a token's image (and, for player tokens, label/color/sheet-link) from the entity
-/// it's linked to, so a linked token never needs its own uploaded copy — no duplication and
-/// the reference is counted. A player token mirrors its owner's PC sheet (full sync); any
-/// other sheet-linked token (NPC/character) takes that sheet's portrait; an item token takes
-/// its catalog item's icon. Unlinked tokens (or ones whose entity has no image) keep their own.
+/// Derives a token's image and label (and, for player tokens, color/sheet-link) from the
+/// entity it's linked to, so a linked token never needs its own uploaded copy or a stale
+/// name. A player token mirrors its owner's PC sheet (full sync); any other sheet-linked
+/// token (NPC/character) mirrors that sheet's name and portrait; an item token mirrors its
+/// catalog item's name and icon. Unlinked tokens (or ones whose entity has no image) keep
+/// their own.
 /// </summary>
 export function syncTokenFromState(token: Token, state: GameState): Token {
   const normalized = normalizeToken(token);
@@ -1808,20 +1813,21 @@ export function syncTokenFromState(token: Token, state: GameState): Token {
       imageUrl: sheet ? (sheet.iconUrl ?? null) : normalized.imageUrl,
     };
   }
-  // NPC / character token linked to a sheet → mirror that sheet's portrait exactly. Uploads
-  // for a linked token always write the sheet's portrait (see TokenEditor), so the token never
-  // owns an independent image — a null portrait must clear the token, not fall back to a stale copy.
+  // NPC / character token linked to a sheet → mirror that sheet's name and portrait exactly.
+  // Uploads for a linked token always write the sheet's portrait (see TokenEditor), so the
+  // token never owns an independent image — a null portrait must clear the token, not fall
+  // back to a stale copy. Renaming the sheet likewise updates every token already placed for it.
   if (normalized.sheetId) {
     const sheet = state.sheets[normalized.sheetId]?.data;
     if (sheet) {
-      return { ...normalized, imageUrl: sheet.iconUrl ?? null };
+      return { ...normalized, label: sheet.characterName?.trim() || normalized.label, imageUrl: sheet.iconUrl ?? null };
     }
   }
-  // Item token → mirror its catalog item's icon exactly (kept live if the item's icon changes).
+  // Item token → mirror its catalog item's name and icon exactly (kept live if the item changes).
   if (normalized.itemId) {
     const item = state.items[normalized.itemId];
     if (item) {
-      return { ...normalized, imageUrl: item.iconUrl ?? null };
+      return { ...normalized, label: item.name?.trim() || normalized.label, imageUrl: item.iconUrl ?? null };
     }
   }
   return normalized;
@@ -1879,6 +1885,7 @@ export function normalizeToken(token: Token): Token {
     ...(token.hidden ? { hidden: true } : { hidden: undefined }),
     ...(token.nameConcealed ? { nameConcealed: true } : { nameConcealed: undefined }),
     ...(token.portraitConcealed ? { portraitConcealed: true } : { portraitConcealed: undefined }),
+    ...(token.nameHidden ? { nameHidden: true } : { nameHidden: undefined }),
     dmVisibility: token.dmVisibility === "always" ? "always" : undefined,
     revealTo: (() => {
       if (!Array.isArray(token.revealTo)) return undefined;

@@ -39,6 +39,7 @@ import {
   type Light,
   type TemplateKind,
   type TemplateShape,
+  type Token,
   type TokenShape,
   type Viewport,
   type Wall,
@@ -681,10 +682,15 @@ const TokenNode = memo(function TokenNode({
     const diff = Math.abs(((serverDeg - dragFacing + 540) % 360) - 180);
     if (diff < 0.5) setDragFacing(null);
   }, [token, dragFacing]);
+  // A "raw" image token (frame-in-shape disabled) renders as the bare picture — no shape
+  // frame, and none of the shape-derived furniture (resting drop shadow / black caster ring /
+  // facing arrow), so it reads as just the image itself.
+  const rawImage = Boolean(crispImg) && token.imageFit === "raw";
   // Creatures show a facing indicator; it's visible to everyone once a facing is set, and
   // to controllers (DM / owner) even before — so it can always be grabbed to rotate. Items
-  // never show it. (No selection/double-click needed: the arrow itself is the handle.)
-  const showArrow = token.kind !== "item" && (token.facing !== undefined || canRotate);
+  // and raw-image tokens never show it. (No selection/double-click needed: the arrow itself
+  // is the handle.)
+  const showArrow = token.kind !== "item" && !rawImage && (token.facing !== undefined || canRotate);
 
   // Facing indicator, drawn pointing UP (the wrapping Group rotates it by `facingDeg`):
   // a wide arrowhead flowing into two tapering fins that hug the rim on each side, set off
@@ -907,7 +913,10 @@ const TokenNode = memo(function TokenNode({
     >
       {/* Ground shadow: stays on the table (outside the lift group) and separates down-right from
           the token as it rises. A radial-gradient fill, not Konva shadowBlur (which would re-blur
-          the whole token every frame). Hidden until a lift begins. */}
+          the whole token every frame). Hidden until a lift begins. Skipped for raw-image tokens
+          (their transparent art would show this dark blob through it mid-drag) — the lift helpers
+          all null-guard a missing shadow node, so the pick-up animation still runs without it. */}
+      {!rawImage ? (
       <Circle
         ref={shadowRef}
         visible={false}
@@ -919,6 +928,7 @@ const TokenNode = memo(function TokenNode({
         fillRadialGradientEndRadius={radius * 1.05}
         fillRadialGradientColorStops={[0, "rgba(0,0,0,1)", 0.6, "rgba(0,0,0,0.55)", 1, "rgba(0,0,0,0)"]}
       />
+      ) : null}
       {/* Every visual child lives in this inner group so the lift/wobble transform (scale, tilt,
           rise offset) applies to the whole miniature without touching the outer group's
           Konva-drag-managed x/y. */}
@@ -930,7 +940,9 @@ const TokenNode = memo(function TokenNode({
           purpose: a filled disc would show through transparent cutout art as a hard black shape;
           the thin caster ring hides under the token edge and only its blurred shadow spills out.
           While the mini is lifted (dragging) the wrapper shrinks + fades it, so a placed token
-          casts a fuller shadow than one being carried. */}
+          casts a fuller shadow than one being carried. Skipped for raw-image tokens, whose art
+          has no shape edge for the ring to hide under — it would just read as a stray black ring. */}
+      {!rawImage ? (
       <Group
         listening={false}
         opacity={dragging ? 0.5 : 1}
@@ -952,6 +964,7 @@ const TokenNode = memo(function TokenNode({
           }}
         />
       </Group>
+      ) : null}
       {isCurrentTurn ? (
         <Circle radius={radius + 4} stroke={CURRENT_TURN_COLOR} strokeWidth={2.5} listening={false} />
       ) : null}
@@ -1148,6 +1161,9 @@ function TokenNameLabel({
   showBar: boolean;
   showHpValues: boolean;
 }) {
+  // DM display toggle: no name caption on the board (for everyone). Gated here so both the
+  // in-token label and the above-darkness bright copy honor it from one place.
+  if (token.nameHidden) return null;
   const labelY = radius + (showBar ? HP_BAR_TOP_GAP + HP_BAR_HEIGHT + 2 : 2);
   return (
     <CrispText
@@ -1324,6 +1340,9 @@ export function MapCanvas({
   const [hoveredWallId, setHoveredWallId] = useState<string | null>(null);
   /** Token under the cursor (DM only) — powers the X-to-delete-token hotkey. */
   const [hoveredTokenId, setHoveredTokenId] = useState<string | null>(null);
+  /** Copy/paste buffer (DM only): the last token copied with Ctrl/Cmd+C, so Ctrl/Cmd+V can
+   *  duplicate it. Cascades on repeat paste (each paste stores its own offset copy). */
+  const tokenClipboardRef = useRef<Token | null>(null);
 
   /**
    * Snap a world point for wall placement/editing: first to a nearby existing endpoint (so chains
@@ -1876,6 +1895,40 @@ export function MapCanvas({
         onCloneWalls();
         return;
       }
+      // Copy / paste a token (DM). Ctrl/Cmd+C copies the selected — or, failing that, the
+      // hovered — token; Ctrl/Cmd+V drops a duplicate one grid cell down-right (cascading on
+      // repeat) onto the CURRENT scene and selects it. Sharing a sheet is intentional (a swarm
+      // of goblins off one stat block). Undoable via the ADD_TOKEN history entry.
+      if (isDm && (event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey) {
+        const pk = physicalKey(event);
+        if (pk === "c") {
+          const copyId = selectedTokenId ?? hoveredTokenId;
+          const tok = copyId ? state.tokens.find((item) => item.id === copyId) : undefined;
+          if (tok) {
+            tokenClipboardRef.current = tok;
+            event.preventDefault();
+          }
+          return;
+        }
+        if (pk === "v") {
+          const clip = tokenClipboardRef.current;
+          if (clip) {
+            const off = scene?.gridSize ?? 50;
+            const dup: Token = {
+              ...clip,
+              id: `token-${crypto.randomUUID().slice(0, 8)}`,
+              sceneId,
+              x: clip.x + off,
+              y: clip.y + off,
+            };
+            tokenClipboardRef.current = dup; // next paste offsets from this copy → staircase
+            send({ type: "ADD_TOKEN", token: dup });
+            onSelectToken?.(dup.id);
+            event.preventDefault();
+          }
+          return;
+        }
+      }
       if (event.ctrlKey || event.metaKey || event.altKey) {
         return;
       }
@@ -1955,6 +2008,9 @@ export function MapCanvas({
     hoveredWallId,
     hoveredTokenId,
     send,
+    scene,
+    sceneId,
+    onSelectToken,
     onCloneWalls,
     deleteHoveredOrSelectedWalls,
     keybinds,

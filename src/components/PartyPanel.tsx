@@ -42,6 +42,8 @@ export function PartyPanel({ state, dm, onViewSheet }: PartyPanelProps) {
           <div className="party-slot" key={slot.id}>
             <span className={`status-dot ${onlineIds.has(slot.id) ? "online" : ""}`} />
             <input
+              // Remounts with the new name after an external rename commits.
+              key={slot.name}
               defaultValue={slot.name}
               onBlur={(e) => {
                 const name = e.target.value.trim();

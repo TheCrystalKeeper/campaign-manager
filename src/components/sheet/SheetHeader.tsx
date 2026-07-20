@@ -59,6 +59,9 @@ export function SheetHeader({
             value={value.characterName}
             placeholder="Name"
             onChange={(e) => update({ characterName: e.target.value })}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") e.currentTarget.blur();
+            }}
           />
         ) : (
           <div className="sheet-name">{value.characterName || (sheet.value ? "" : "???")}</div>

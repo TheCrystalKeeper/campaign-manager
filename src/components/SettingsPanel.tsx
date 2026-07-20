@@ -638,7 +638,7 @@ export function SettingsPanel({ ctx }: { ctx: PanelContext }) {
             <input
               type="range"
               min={0.5}
-              max={4}
+              max={8}
               step={0.25}
               value={state.defaultTokenSize ?? DEFAULT_TOKEN_SIZE}
               onChange={(e) => ctx.dm.setDefaultTokenSize(Number(e.target.value))}

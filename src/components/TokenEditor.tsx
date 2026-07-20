@@ -49,6 +49,9 @@ export function TokenEditor({ token, state, dm, openSheet, openItemSheet, onClos
   // kind "enemy" and keeps its own identity; only its movement follows the player.
   const isPlayerChar = token.kind === "player";
   const isItem = token.kind === "item";
+  // Linked tokens (sheet or item) mirror their entity's name live (see syncTokenFromState) —
+  // editing the Label here would just get overwritten on the next sync.
+  const isLinked = isPlayerChar || Boolean(token.sheetId) || Boolean(token.itemId);
   const controllerSlot = token.ownerPlayerId
     ? state.playerSlots.find((slot) => slot.id === token.ownerPlayerId)
     : undefined;
@@ -180,13 +183,29 @@ export function TokenEditor({ token, state, dm, openSheet, openItemSheet, onClos
     <div className="panel">
       <div className="panel-body stack">
         <div className="field">
-          <label>Label</label>
+          <label>
+            Label{isLinked ? " (from linked sheet/item — rename that to change this)" : ""}
+          </label>
           <input
             defaultValue={token.label}
             key={token.id + token.label}
-            disabled={isPlayerChar}
+            disabled={isLinked}
             onBlur={(e) => dm.updateToken({ ...token, label: e.target.value })}
           />
+        </div>
+        <div className="row" style={{ justifyContent: "space-between" }}>
+          <label
+            style={{ margin: 0 }}
+            title="Show or hide this token's name caption on the board (affects everyone). The real name still appears in combat, the log, and here."
+          >
+            Name on board
+          </label>
+          <button
+            className={token.nameHidden ? "btn-active" : ""}
+            onClick={() => dm.updateToken({ ...token, nameHidden: !token.nameHidden })}
+          >
+            {token.nameHidden ? "Hidden" : "Shown"}
+          </button>
         </div>
         <div className="row">
           <div style={{ flex: 1 }}>
@@ -237,7 +256,7 @@ export function TokenEditor({ token, state, dm, openSheet, openItemSheet, onClos
           <input
             type="range"
             min={0.5}
-            max={4}
+            max={8}
             step={0.25}
             value={token.size ?? state.defaultTokenSize ?? DEFAULT_TOKEN_SIZE}
             disabled={token.size === undefined}
