@@ -28,6 +28,7 @@ teardown artifact.
 - `smoke-phase6.mjs` — dynamic vision: walls/doors + lights are DM-only, reach players (client-side LOS), enforce caps (600 walls / 50 lights), drop degenerate segments; door toggle (players open unlocked doors, locked refused); global-illumination + token-vision propagation
 - `smoke-walls-move.mjs` — Phase 6.9 wall movement collision: a player can't drag a token through a movement wall (server rejects, token stays), a clear path is allowed, `wallsBlockMovement` off lets it pass, and the DM bypasses collision
 - `smoke-scenes.mjs` — Phase 6.5 prep secrecy + fog brush: players receive ONLY the active scene + its tokens, Set Live swaps atomically; brush/cover/inverted fog round-trips (points trimmed at 240) and stays DM-only; full-scene UPDATE_SCENE (the editor's Apply path) carries walls+lights+fog at once
+- `smoke-rename.mjs` — name-sync after a character-sheet rename: a player renaming via their sheet immediately updates slot.name + the online roster, and every newly stamped name follows (chat `from`, freeform-roll actor/rollerName, live MEASURE ruler label) with no reconnect; a mid-combat rename heals the initiative entry for both the player token and an NPC sheet, while a name-concealed combatant still reads "???" in the player frame
 - `smoke-phase7.mjs` — Phase 7 game-content depth: UPDATE_SHEET 20KB cap, SET_TOKEN_CONDITIONS + REST authz, ROLL_CHECK color-part breakdown (+ secret no-leak), ADJUST_HP clamp/temp-first/authz, MOVE_TOKEN facing (both paths), TEMPLATE transient relay (coalesce/clear/oversize-drop), coin flip (values ∈{1,2}, secret strip, Heads/Tails log), DM-only map pins stripped from players, pre-staged tokens hidden until Set Live, and the EXPORT→mutate→IMPORT v2 round-trip (+ player-export deny)
 - `smoke-automation.mjs` — AUTOMATION_PLAN Tiers 1–3 end-to-end: ROLL_CHECK derives dot×prof + overrides server-side, poisoned-token disadvantage, CAST_SPELL slot spend (absent-entry=full, 0-slot reject, authz), USE_FEATURE/USE_ITEM_CHARGE decrements, short rest (hit-dice spend + sr recharge) and long rest (full HP/half dice/all slots/saves reset), DEATH_SAVE server roll, APPLY_DAMAGE resistance/immunity math + DM-only
 
@@ -59,4 +60,8 @@ crit thresholds + crit damage dice, engine↔resolver consistency —
 `unit-scene-editor.test.ts` — Phase 6.5 fog-brush sanitization, `fog.inverted`, the
 `applySceneMessage` staging reducer incl. caps, and active-scene-only player redaction —
 and `unit-history.test.ts` — the DM undo/redo command/inverse builder for scene edits +
-token ops.)
+token ops — and `unit-live-names.test.ts` — `syncCombatNames` re-derives initiative
+names from the live token label / linked sheet (player rename, NPC rename, direct label
+edit, token removed → sheet fallback, orphan keeps stored name, idempotent byref return),
+and the healing stays server-side so a client re-normalizing a redacted frame keeps a
+concealed combatant masked as "???".)

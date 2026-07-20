@@ -40,6 +40,7 @@ import {
   sanitizeLight,
   sanitizeWall,
   SHEET_SECTIONS,
+  syncCombatNames,
   syncTokenFromState,
   ARCHIVE_CHUNK_SIZE,
   MAX_ARCHIVE_ROLLS,
@@ -639,6 +640,10 @@ export default class GameServer implements Party.Server {
   async broadcastState() {
     this.clearStaleDm();
     this.state = normalizeGameState(this.state);
+    // Heal combat entry names against the full-truth state before per-client redaction, so a
+    // mid-combat rename reaches the initiative tracker. Kept out of the shared normalize path
+    // because clients re-normalize redacted frames (where a masked "???" entry would unmask).
+    this.state.combat = syncCombatNames(this.state.combat, this.state.tokens, this.state.sheets);
     await this.persistState();
     for (const connection of this.room.getConnections()) {
       const meta = this.clients.get(connection.id);
@@ -682,6 +687,23 @@ export default class GameServer implements Party.Server {
         clientMeta.displayName = name;
       }
     }
+  }
+
+  /// <summary>
+  /// A player's current display name, resolved live from the source of truth at stamp time:
+  /// their PC sheet's characterName, then the seat label, then the login-time cache. The
+  /// cache (`meta.displayName`) only refreshes on join / slot rename, so reading it directly
+  /// leaves chat, rolls, and ruler labels stamped with a stale name after a character-sheet
+  /// rename. DM clients have no slot and fall through to their cached name unchanged.
+  /// </summary>
+  displayNameFor(meta: ClientMeta): string | null {
+    if (meta.role === "player" && meta.playerId) {
+      const sheetName = this.state.sheets[meta.playerId]?.data.characterName?.trim();
+      if (sheetName) return sheetName;
+      const slotName = this.state.playerSlots.find((slot) => slot.id === meta.playerId)?.name?.trim();
+      if (slotName) return slotName;
+    }
+    return meta.displayName?.trim() || null;
   }
 
   /// <summary>
@@ -873,9 +895,8 @@ export default class GameServer implements Party.Server {
     }
 
     if (meta?.joined && meta.displayName) {
-      this.logEvent(
-        meta.role === "dm" ? `${meta.displayName} (DM) left.` : `${meta.displayName} left.`,
-      );
+      const who = this.displayNameFor(meta) ?? meta.displayName;
+      this.logEvent(meta.role === "dm" ? `${who} (DM) left.` : `${who} left.`);
     }
 
     this.syncConnectedPlayers();
@@ -996,6 +1017,12 @@ export default class GameServer implements Party.Server {
       // player tabs, token editor, log attribution, stats, avatar strip, lobby seat
       // picker). normalizeGameState folds it back onto the owning slot on the broadcast
       // below, so every slot.name reader stays in step — no per-site plumbing needed.
+      // Also refresh the session display-name cache so a rename here reaches readers that
+      // resolve through it (e.g. reconnect defaults); displayNameFor covers the live path.
+      const renamedTo = nextData.characterName?.trim();
+      if (record.ownerSlotId && renamedTo) {
+        this.setSlotDisplayName(record.ownerSlotId, renamedTo);
+      }
       // Keep linked tokens mirroring this sheet: player tokens via the owning
       // slot, NPC/character tokens via their direct sheet link.
       this.state.tokens = this.state.tokens.map((token) =>
@@ -1305,7 +1332,7 @@ export default class GameServer implements Party.Server {
       data.deathSaves = ds;
       const roll: DiceRoll = {
         id: `roll-${crypto.randomUUID().slice(0, 8)}`,
-        rollerName: meta.displayName?.trim() || "Unknown",
+        rollerName: this.displayNameFor(meta) ?? "Unknown",
         rollerId: meta.playerId ?? "unknown",
         expression: "1d20",
         rolls: [d20],
@@ -1391,7 +1418,7 @@ export default class GameServer implements Party.Server {
       // Sheet-integrated rolls are attributed to the character (DM rolls as any
       // NPC/PC; players only as themselves).
       let actor: { name: string; sheetId?: string } = {
-        name: meta.displayName?.trim() || "Unknown",
+        name: this.displayNameFor(meta) ?? "Unknown",
       };
       const sheetId = parsed.context?.sheetId;
       if (sheetId) {
@@ -1415,7 +1442,7 @@ export default class GameServer implements Party.Server {
         const result = advResult ?? rollDiceExpression(parsed.expression, secureRandInt);
         const roll: DiceRoll = {
           id: `roll-${crypto.randomUUID().slice(0, 8)}`,
-          rollerName: meta.displayName?.trim() || "Unknown",
+          rollerName: this.displayNameFor(meta) ?? "Unknown",
           rollerId: meta.playerId ?? "unknown",
           expression: result.expression,
           rolls: result.rolls,
@@ -1488,7 +1515,7 @@ export default class GameServer implements Party.Server {
       });
       const roll: DiceRoll = {
         id: `roll-${crypto.randomUUID().slice(0, 8)}`,
-        rollerName: meta.displayName?.trim() || "Unknown",
+        rollerName: this.displayNameFor(meta) ?? "Unknown",
         rollerId: meta.playerId ?? "unknown",
         expression: resolved.expression,
         rolls: resolved.rolls,
@@ -1505,7 +1532,7 @@ export default class GameServer implements Party.Server {
         t: roll.timestamp,
         kind: "roll",
         roll,
-        actor: { name: record.data.characterName?.trim() || meta.displayName?.trim() || "Unknown", sheetId: parsed.sheetId },
+        actor: { name: record.data.characterName?.trim() || this.displayNameFor(meta) || "Unknown", sheetId: parsed.sheetId },
         label: resolved.label,
         category: CHECK_CATEGORY[parsed.check.kind],
         ...(parsed.private ? { dmOnly: true } : {}),
@@ -1548,7 +1575,7 @@ export default class GameServer implements Party.Server {
         entry.dexScore = dexScore;
         const roll: DiceRoll = {
           id: `roll-${crypto.randomUUID().slice(0, 8)}`,
-          rollerName: meta.displayName?.trim() || "Unknown",
+          rollerName: this.displayNameFor(meta) ?? "Unknown",
           rollerId: playerId,
           expression: `1d20${bonus >= 0 ? `+${bonus}` : bonus}`,
           rolls: [d20],
@@ -1588,7 +1615,7 @@ export default class GameServer implements Party.Server {
 
       // Same attribution rules as ROLL_DICE: DM rolls as any sheet, players as their own.
       let actor: { name: string; sheetId?: string } = {
-        name: meta.displayName?.trim() || "Unknown",
+        name: this.displayNameFor(meta) ?? "Unknown",
       };
       const sheetId = parsed.context?.sheetId;
       if (sheetId) {
@@ -1613,7 +1640,7 @@ export default class GameServer implements Party.Server {
       const isCoin = specs.length > 0 && specs.every((spec) => spec.kind === "coin");
       const roll: DiceRoll = {
         id: `roll-${crypto.randomUUID().slice(0, 8)}`,
-        rollerName: meta.displayName?.trim() || "Unknown",
+        rollerName: this.displayNameFor(meta) ?? "Unknown",
         rollerId: meta.playerId ?? "unknown",
         expression: throwExpression,
         rolls,
@@ -1724,7 +1751,7 @@ export default class GameServer implements Party.Server {
         id: `log-${crypto.randomUUID().slice(0, 8)}`,
         t: Date.now(),
         kind: "chat",
-        from: meta.displayName?.trim() || "Unknown",
+        from: this.displayNameFor(meta) ?? "Unknown",
         fromId: meta.playerId ?? "unknown",
         text,
         ...(whisperTo ? { whisperTo } : {}),
@@ -1759,7 +1786,7 @@ export default class GameServer implements Party.Server {
         {
           type: "MEASURE",
           clientId: sender.id,
-          name: meta.displayName?.trim() || "?",
+          name: this.displayNameFor(meta) ?? "?",
           color,
           sceneId: parsed.sceneId,
           points,
@@ -1796,7 +1823,7 @@ export default class GameServer implements Party.Server {
         {
           type: "TEMPLATE",
           clientId: sender.id,
-          name: meta.displayName?.trim() || "?",
+          name: this.displayNameFor(meta) ?? "?",
           color,
           sceneId: parsed.sceneId,
           shape,
@@ -2269,7 +2296,7 @@ export default class GameServer implements Party.Server {
           entry.hasRolled = true;
           const roll: DiceRoll = {
             id: `roll-${crypto.randomUUID().slice(0, 8)}`,
-            rollerName: meta.displayName?.trim() || "DM",
+            rollerName: this.displayNameFor(meta) ?? "DM",
             rollerId: meta.playerId ?? "dm",
             expression: `1d20${bonus >= 0 ? `+${bonus}` : bonus}`,
             rolls: [d20],

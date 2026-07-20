@@ -1952,6 +1952,34 @@ export function normalizeCombat(combat: CombatState | null | undefined): CombatS
   return { round, turnIndex, entries };
 }
 
+/**
+ * Re-derive each combat entry's display name from its live source, so a token/character/NPC
+ * renamed mid-combat updates in the initiative tracker instead of showing the name frozen at
+ * COMBAT_START. Prefers the linked token's (already-healed) label, then the linked sheet's
+ * characterName; keeps the stored name when both sources are gone (e.g. token removed).
+ *
+ * Server-only — call after normalizeGameState in broadcastState, NOT inside the shared
+ * normalize path. The client re-normalizes redacted frames, where the sheetId→characterName
+ * fallback would resolve a hidden PC combatant that redaction masked to "???".
+ */
+export function syncCombatNames(
+  combat: CombatState | null,
+  tokens: Token[],
+  sheets: Record<string, SheetRecord>,
+): CombatState | null {
+  if (!combat) return null;
+  const labelByTokenId = new Map(tokens.map((token) => [token.id, token.label]));
+  return {
+    ...combat,
+    entries: combat.entries.map((entry) => {
+      const live =
+        (entry.tokenId ? labelByTokenId.get(entry.tokenId)?.trim() : undefined) ||
+        (entry.sheetId ? sheets[entry.sheetId]?.data.characterName?.trim() : undefined);
+      return live && live !== entry.name ? { ...entry, name: live } : entry;
+    }),
+  };
+}
+
 export function createDefaultSheet(name: string): CharacterSheet {
   return {
     characterName: name,
