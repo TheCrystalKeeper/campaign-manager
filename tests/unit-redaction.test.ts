@@ -3,6 +3,7 @@
 import {
   createInitialState,
   createNpcSheetRecord,
+  createPcSheetRecord,
   normalizeGameState,
   type GameState,
   type LogEntry,
@@ -139,6 +140,30 @@ check(
   lobbyView.folders.length === 0 && Object.keys(lobbyView.items).length === 0,
 );
 check("DM keeps directories", redactStateFor(withDirs, { role: "dm" }).folders.length === 2);
+
+// ---------------------------------------------------------------------------
+// 4b. Lobby slot picker shows the character's name, not the bare seat label
+// ---------------------------------------------------------------------------
+const withCharacterName = normalizeGameState({
+  ...createInitialState("room-name"),
+  playerSlots: [
+    { id: "p1", name: "Player 1" },
+    { id: "p2", name: "Player 2" },
+  ],
+  sheets: {
+    p1: createPcSheetRecord("p1", "Aragorn"),
+  },
+} as unknown as GameState);
+const nameLobbyView = redactStateFor(withCharacterName, null);
+check(
+  "lobby slot with a named character shows the character name",
+  nameLobbyView.playerSlots.find((s) => s.id === "p1")?.name === "Aragorn",
+);
+check(
+  "lobby slot without a character name keeps the seat label",
+  nameLobbyView.playerSlots.find((s) => s.id === "p2")?.name === "Player 2",
+);
+check("lobby still carries no sheet data", Object.keys(nameLobbyView.sheets).length === 0);
 
 // ---------------------------------------------------------------------------
 // 5. Token art is never a secret: NPC portraits survive redaction, and items

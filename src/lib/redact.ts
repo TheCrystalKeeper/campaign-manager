@@ -68,9 +68,16 @@ export function redactStateFor(state: GameState, view: StateView): GameState {
 
   if (view === null) {
     // Lobby connections only need enough to pick a character slot and show
-    // live player counts — not the campaign content.
+    // live player counts — not the campaign content. The slot's own "name" is
+    // a DM-assigned seat label (e.g. "Player 1"); swap in the sheet's actual
+    // character name where one has been set, so players pick their seat by
+    // the character they're playing rather than an arbitrary slot label.
     return {
       ...state,
+      playerSlots: state.playerSlots.map((slot) => {
+        const characterName = state.sheets[slot.id]?.data.characterName?.trim();
+        return characterName ? { ...slot, name: characterName } : slot;
+      }),
       scenes: [],
       tokens: [],
       sheets: {},

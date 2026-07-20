@@ -702,11 +702,9 @@ const TokenNode = memo(function TokenNode({
   // Creatures show a facing indicator; it's visible to everyone once a facing is set, and
   // to controllers (DM / owner) even before — so it can always be grabbed to rotate. (No
   // selection/double-click needed: the arrow itself is the handle.) Raw-image tokens rotate
-  // the picture itself, so the arrow is purely the controller's grab handle there — other
-  // viewers read the facing off the art — and it applies to every kind, items included.
-  const showArrow = rawImage
-    ? canRotate
-    : token.kind !== "item" && (token.facing !== undefined || canRotate);
+  // the picture itself instead — the art shows facing directly, so the arrow would be a
+  // redundant second indicator — and get their own selected-only rotate ring (below).
+  const showArrow = !rawImage && token.kind !== "item" && (token.facing !== undefined || canRotate);
 
   // Facing indicator, drawn pointing UP (the wrapping Group rotates it by `facingDeg`):
   // a wide arrowhead flowing into two tapering fins that hug the rim on each side, set off
@@ -739,7 +737,7 @@ const TokenNode = memo(function TokenNode({
   }, [radius, reach]);
 
   /** Grab the arrow and drag to rotate: live preview, commit on pointer-up (never per-frame). */
-  const startRotate = (e: Konva.KonvaEventObject<MouseEvent | TouchEvent>) => {
+  const startRotate = (e: Konva.KonvaEventObject<MouseEvent | TouchEvent>, relative = false) => {
     if (!onRotate) return;
     e.cancelBubble = true; // don't select or drag the token underneath
     rotatingRef.current = true;
@@ -747,14 +745,28 @@ const TokenNode = memo(function TokenNode({
     const stage = grp?.getStage();
     if (!grp || !stage) return;
     const container = stage.container();
-    const degAt = (clientX: number, clientY: number, shiftKey: boolean) => {
+    // Raw angle (deg, 0 = up, clockwise) from the token center to a screen point.
+    const rawDegAt = (clientX: number, clientY: number) => {
       const rect = container.getBoundingClientRect();
       const local = grp
         .getAbsoluteTransform()
         .copy()
         .invert()
         .point({ x: clientX - rect.left, y: clientY - rect.top });
-      let deg = (Math.atan2(local.x, -local.y) * 180) / Math.PI;
+      return (Math.atan2(local.x, -local.y) * 180) / Math.PI;
+    };
+    // Relative mode (the raw-image ring handle): anchor on the grab point and the token's
+    // current facing, then turn the token BY the angle the pointer sweeps around the center
+    // — so grabbing anywhere on the ring never snaps the facing to the click position; it
+    // just rotates along with the drag. Absolute mode (the facing arrow) points the facing
+    // straight at the pointer, since you grab the arrow at the facing direction itself.
+    const anchorEvt = "touches" in e.evt && e.evt.touches.length ? e.evt.touches[0] : (e.evt as MouseEvent);
+    const startAngle = rawDegAt(anchorEvt.clientX, anchorEvt.clientY);
+    const startFacing = facingDeg;
+    const degAt = (clientX: number, clientY: number, shiftKey: boolean) => {
+      let deg = relative
+        ? startFacing + (rawDegAt(clientX, clientY) - startAngle)
+        : rawDegAt(clientX, clientY);
       deg = ((deg % 360) + 360) % 360;
       return shiftKey ? (Math.round(deg / 45) * 45) % 360 : deg;
     };
@@ -1069,6 +1081,33 @@ const TokenNode = memo(function TokenNode({
           label={concealedPortrait ? undefined : token.label}
         />
       )}
+      {rawImage && selected && canRotate ? (
+        // Raw-image rotate handle: a thin amber dotted ring, sized proportionally to the
+        // token (70% of its radius) so it never exceeds the token's own footprint and scales
+        // with it. It has no `fill`, so Konva only hit-tests the stroke itself (widened via
+        // hitStrokeWidth for an easier grab) — grabbing the ring rotates (relative, no snap),
+        // while clicks inside it fall through to the draggable token underneath and move it.
+        <Circle
+          radius={radius * 0.7}
+          stroke="#f5a623"
+          strokeWidth={Math.max(1, radius * 0.02)}
+          hitStrokeWidth={Math.max(12, radius * 0.22)}
+          dash={[Math.max(3, radius * 0.14), Math.max(2.5, radius * 0.1)]}
+          shadowColor="#000000"
+          shadowBlur={Math.max(1, radius * 0.04)}
+          shadowOpacity={0.7}
+          onMouseEnter={(e) => {
+            const c = e.target.getStage()?.container();
+            if (c) c.style.cursor = "grab";
+          }}
+          onMouseLeave={(e) => {
+            const c = e.target.getStage()?.container();
+            if (c) c.style.cursor = "";
+          }}
+          onMouseDown={(e) => startRotate(e, true)}
+          onTouchStart={(e) => startRotate(e, true)}
+        />
+      ) : null}
       {concealedPortrait ? (
         // Player view of concealed art: a big "?" over the plain shape fill.
         <CrispText
