@@ -3015,7 +3015,9 @@ export function normalizeHandout(value: unknown): Handout | null {
 /// <summary>
 /// Normalizes full game state (fills missing arrays, syncs player tokens) on load.
 /// Migrates legacy `characterSheets` (keyed by slot) into first-class `sheets`
-/// records, and preserves NPC sheets alongside per-slot PC sheets.
+/// records, and preserves NPC sheets alongside per-slot PC sheets. Folds each PC's
+/// character name onto its slot label (and online display name) so every reader of
+/// `slot.name` shows the one name the DM set on the sheet.
 /// </summary>
 export function normalizeGameState(state: GameState & LegacyGameStateFields): GameState {
   const playerSlots = (state.playerSlots ?? []).map((slot) => normalizePlayerSlot(slot));
@@ -3042,6 +3044,18 @@ export function normalizeGameState(state: GameState & LegacyGameStateFields): Ga
       );
     }
   }
+  // A PC's character name is the single display name for that player everywhere the
+  // slot label is read (party panel, player tabs, token editor, log attribution,
+  // stats, avatar strip, lobby seat picker). Fold it back onto the seat label so all
+  // those readers stay in step with the sheet without per-site plumbing; a blank
+  // character name keeps the existing seat label as a fallback.
+  for (const slot of playerSlots) {
+    const characterName = sheets[slot.id]?.data.characterName?.trim();
+    if (characterName) {
+      slot.name = characterName;
+    }
+  }
+  const slotNameById = new Map(playerSlots.map((slot) => [slot.id, slot.name]));
 
   // Legacy migration: fold the roll-only publicDiceLog into the unified log.
   const log: LogEntry[] = Array.isArray(state.log)
@@ -3092,7 +3106,13 @@ export function normalizeGameState(state: GameState & LegacyGameStateFields): Ga
     viewport: state.viewport ?? { ...DEFAULT_VIEWPORT },
     playerSlots,
     sheets,
-    connectedPlayers: state.connectedPlayers ?? [],
+    // Online players' display names track their (healed) seat label, so the avatar
+    // strip — which reads displayName first — follows a character-sheet rename too.
+    connectedPlayers: (state.connectedPlayers ?? []).map((player) =>
+      slotNameById.has(player.playerId)
+        ? { ...player, displayName: slotNameById.get(player.playerId)! }
+        : player,
+    ),
     log: log.slice(-MAX_LOG_ENTRIES),
     dmNotes: typeof state.dmNotes === "string" ? state.dmNotes : "",
     combat: normalizeCombat(state.combat),

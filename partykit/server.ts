@@ -669,6 +669,22 @@ export default class GameServer implements Party.Server {
   }
 
   /// <summary>
+  /// Mirrors a slot's name onto the live connected-player roster and client meta,
+  /// so a rename — from the party panel, a player tab, or a synced character-sheet
+  /// edit — reaches every reader of the player's display name.
+  /// </summary>
+  setSlotDisplayName(slotId: string, name: string) {
+    const connected = this.state.connectedPlayers.find((player) => player.playerId === slotId);
+    if (connected) {
+      connected.displayName = name;
+      const clientMeta = this.clients.get(connected.clientId);
+      if (clientMeta) {
+        clientMeta.displayName = name;
+      }
+    }
+  }
+
+  /// <summary>
   /// Returns whether a player slot is already claimed by another connection.
   /// </summary>
   isSlotTaken(slotId: string, exceptClientId?: string): boolean {
@@ -976,6 +992,10 @@ export default class GameServer implements Party.Server {
         return;
       }
       record.data = nextData;
+      // A PC's character name is the player's one display name everywhere (party panel,
+      // player tabs, token editor, log attribution, stats, avatar strip, lobby seat
+      // picker). normalizeGameState folds it back onto the owning slot on the broadcast
+      // below, so every slot.name reader stays in step — no per-site plumbing needed.
       // Keep linked tokens mirroring this sheet: player tokens via the owning
       // slot, NPC/character tokens via their direct sheet link.
       this.state.tokens = this.state.tokens.map((token) =>
@@ -2907,15 +2927,14 @@ export default class GameServer implements Party.Server {
           return;
         }
         this.state.playerSlots[index] = parsed.slot;
-        const connected = this.state.connectedPlayers.find(
-          (player) => player.playerId === parsed.slot.id,
-        );
-        if (connected) {
-          connected.displayName = parsed.slot.name;
-          const clientMeta = this.clients.get(connected.clientId);
-          if (clientMeta) {
-            clientMeta.displayName = parsed.slot.name;
-          }
+        this.setSlotDisplayName(parsed.slot.id, parsed.slot.name);
+        // Seat label and the linked PC's character name are one name: fold the rename
+        // onto the sheet so it sticks (normalizeGameState mirrors the character name back
+        // onto the slot) and reaches the sheet view, token labels, and roster.
+        const linkedSheet = this.state.sheets[parsed.slot.id];
+        const slotName = parsed.slot.name.trim();
+        if (linkedSheet?.kind === "pc" && slotName) {
+          linkedSheet.data.characterName = slotName;
         }
         void this.broadcastState();
         break;
