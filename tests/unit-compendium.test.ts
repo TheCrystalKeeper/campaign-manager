@@ -5,6 +5,7 @@
 import { readFileSync } from "node:fs";
 import {
   MAX_SHEET_BYTES,
+  SHEET_ROW_CAPS,
   createDefaultSheet,
   normalizeCharacterSheet,
 } from "@lib/types";
@@ -28,8 +29,10 @@ import {
   inventoryRowFromMagicItem,
   monsterSheetPatch,
   multiclassPrereqFailures,
+  npcHasContent,
   speciesAutofillPatch,
   spellEntryFromCompendium,
+  statblockPatch,
 } from "@lib/compendiumMap";
 import { computeDerived, multiclassSlotMaxes } from "@lib/rules5e";
 
@@ -228,6 +231,50 @@ const elf = species.find((s) => s.id === "elf")!;
     derived.values["save-wis"] === -1, `save-wis=${derived.values["save-wis"]}`);
   check("goblin boss: scimitar attack row parsed",
     sheet.attacks.some((a) => a.name === "Scimitar" && a.toHit === 4 && a.damage === "1d6+2"));
+}
+
+// --- statblockPatch: apply a monster onto an *existing* NPC -------------------
+{
+  const gob = monsters.find((m) => m.id === "goblin-boss")!;
+  const monsterAttacks = monsterSheetPatch(gob).attacks ?? [];
+
+  // A customized NPC: its own name, a hand-made action, and a raised STR.
+  const base = normalizeCharacterSheet(
+    {
+      ...createDefaultSheet("Gerald"),
+      attacks: [{ id: "atk-custom", name: "Signature Move", toHit: 5, damage: "2d6" }],
+      abilityScores: { str: 16, dex: 10, con: 10, int: 10, wis: 10, cha: 10 },
+    },
+    "Gerald",
+  );
+
+  check("npcHasContent: fresh NPC is empty", npcHasContent(createDefaultSheet("Blank")) === false);
+  check("npcHasContent: customized NPC has content", npcHasContent(base) === true);
+
+  // replace: keeps the NPC's name/alignment off the patch, overwrites lists + numbers.
+  const rep = statblockPatch(base, gob, "replace");
+  check("statblock replace: patch omits characterName + alignment",
+    !("characterName" in rep) && !("alignment" in rep));
+  check("statblock replace: applies AC/HP and overwrites the action list",
+    rep.ac === 17 && rep.hp?.max === 21 &&
+      !!rep.attacks && !rep.attacks.some((a) => a.name === "Signature Move"));
+
+  // add: appends the monster's actions on top of the NPC's own.
+  const add = statblockPatch(base, gob, "add");
+  check("statblock add: keeps the custom action and adds the monster's",
+    !!add.attacks && add.attacks.some((a) => a.name === "Signature Move") &&
+      add.attacks.some((a) => a.name === "Scimitar") &&
+      add.attacks.length === base.attacks.length + monsterAttacks.length,
+    `${add.attacks?.length} rows`);
+  check("statblock add: still replaces the numbers", add.ac === 17 && add.hp?.max === 21);
+  check("statblock add: attacks stay within the cap", (add.attacks ?? []).length <= SHEET_ROW_CAPS.attacks);
+
+  // stats: leaves the NPC's lists untouched but still applies the numbers.
+  const statsOnly = statblockPatch(base, gob, "stats");
+  check("statblock stats: omits attacks/features from the patch",
+    !("attacks" in statsOnly) && !("features" in statsOnly));
+  check("statblock stats: still applies AC/HP/abilities",
+    statsOnly.ac === 17 && statsOnly.hp?.max === 21 && statsOnly.abilityScores?.str === gob.abilities.str);
 }
 
 // --- multiclassing -----------------------------------------------------------

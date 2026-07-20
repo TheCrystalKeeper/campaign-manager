@@ -7,6 +7,8 @@ import {
   type FeatureEntry,
 } from "../../../lib/types";
 import { attackModParts, sumParts } from "../../../lib/rules5e";
+import { statblockPatch, npcHasContent } from "../../../lib/compendiumMap";
+import type { CompendiumMonster } from "../../../lib/compendium";
 import { NumberInput } from "../../NumberInput";
 import { RowTable, type RowGroup } from "../RowTable";
 import { UsesCell } from "../atoms";
@@ -15,7 +17,9 @@ import { BackgroundPickerModal } from "../BackgroundPickerModal";
 import { ClassPickerModal } from "../ClassPickerModal";
 import { FeatPickerModal } from "../FeatPickerModal";
 import { ManageClassesModal } from "../ManageClassesModal";
+import { MonsterPickerModal } from "../../MonsterPickerModal";
 import { SpeciesPickerModal } from "../SpeciesPickerModal";
+import { StatblockApplyModal } from "../StatblockApplyModal";
 import { AbilityRow, SavesRow } from "./MainPage";
 
 
@@ -92,6 +96,8 @@ export function FeaturesPage({ sheet }: { sheet: SheetEdit }) {
   const [speciesPickerOpen, setSpeciesPickerOpen] = useState(false);
   const [backgroundPickerOpen, setBackgroundPickerOpen] = useState(false);
   const [featPickerOpen, setFeatPickerOpen] = useState(false);
+  const [statblockPickerOpen, setStatblockPickerOpen] = useState(false);
+  const [pendingMonster, setPendingMonster] = useState<CompendiumMonster | null>(null);
 
   // 2+ classes: the chip shows the composed list and opens the multiclass manager.
   const multiclassed = value.classes.length >= 2;
@@ -181,6 +187,16 @@ export function FeaturesPage({ sheet }: { sheet: SheetEdit }) {
             >
               {value.characterClass ? classChipText : "＋ Class"}
               <ChevronDown size={12} strokeWidth={2.2} />
+            </button>
+          ) : null}
+          {canEdit ? (
+            <button
+              type="button"
+              className="class-chip class-chip--btn"
+              title="Apply a compendium monster's stat block to this NPC"
+              onClick={() => setStatblockPickerOpen(true)}
+            >
+              ＋ Statblock
             </button>
           ) : null}
         </div>
@@ -291,6 +307,29 @@ export function FeaturesPage({ sheet }: { sheet: SheetEdit }) {
       {speciesPickerOpen ? <SpeciesPickerModal sheet={sheet} onClose={() => setSpeciesPickerOpen(false)} /> : null}
       {backgroundPickerOpen ? <BackgroundPickerModal sheet={sheet} onClose={() => setBackgroundPickerOpen(false)} /> : null}
       {featPickerOpen ? <FeatPickerModal sheet={sheet} onClose={() => setFeatPickerOpen(false)} /> : null}
+      {statblockPickerOpen ? (
+        <MonsterPickerModal
+          title="Apply a stat block to this NPC"
+          pickLabel="Choose"
+          onClose={() => setStatblockPickerOpen(false)}
+          onPick={(m) => {
+            setStatblockPickerOpen(false);
+            // A blank NPC has nothing to lose — apply outright. Otherwise ask how to merge.
+            if (npcHasContent(value)) setPendingMonster(m);
+            else update(statblockPatch(value, m, "replace"));
+          }}
+        />
+      ) : null}
+      {pendingMonster ? (
+        <StatblockApplyModal
+          monsterName={pendingMonster.name}
+          onClose={() => setPendingMonster(null)}
+          onChoose={(mode) => {
+            update(statblockPatch(value, pendingMonster, mode));
+            setPendingMonster(null);
+          }}
+        />
+      ) : null}
 
       <RowTable
         groups={[{ id: "actions", title: isNpc ? "Actions" : "Attacks & Actions", rows: attackRows, onAdd: canEdit ? addAttack : undefined }]}

@@ -28,16 +28,20 @@ const ABILITY_ROW: Array<[string, string]> = [
 export function MonsterPickerModal({
   onPick,
   onClose,
+  title = "Create NPC from a compendium monster",
+  pickLabel = "Create NPC",
 }: {
   onPick: (monster: CompendiumMonster) => void;
   onClose: () => void;
+  title?: string;
+  pickLabel?: string;
 }) {
   const [crFilter, setCrFilter] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
 
   return (
     <CompendiumPickerModal<CompendiumMonster>
-      title="Create NPC from a compendium monster"
+      title={title}
       load={loadMonsters}
       columns={[
         { label: "CR", render: (m) => m.cr, sortValue: (m) => CR_RANK[m.cr] ?? 999 },
@@ -101,7 +105,7 @@ export function MonsterPickerModal({
           ) : null}
         </div>
       )}
-      pickLabel="Create NPC"
+      pickLabel={pickLabel}
       onPick={onPick}
       onClose={onClose}
     />

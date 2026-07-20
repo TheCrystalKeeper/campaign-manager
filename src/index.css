@@ -1114,6 +1114,34 @@ textarea,
   user-select: none;
 }
 
+/* Stat-block apply modal — a vertical list of "how should this apply?" choices. */
+.statblock-apply-choice {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  width: 100%;
+  padding: 0.5rem 0.65rem;
+  text-align: left;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-inset);
+  cursor: pointer;
+  color: inherit;
+}
+.statblock-apply-choice:hover,
+.statblock-apply-choice:focus-visible {
+  background: var(--surface-2);
+  border-color: var(--accent);
+}
+.statblock-apply-choice-label {
+  font-family: var(--font-display);
+  font-size: 0.9rem;
+}
+.statblock-apply-choice-hint {
+  font-size: 0.76rem;
+  line-height: 1.25;
+}
+
 /* --- Image crop modal ----------------------------------------------------- */
 .image-crop-modal {
   width: min(680px, 96vw);

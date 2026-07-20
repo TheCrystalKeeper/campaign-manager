@@ -17,6 +17,7 @@ import type {
   CompendiumTrait,
 } from "./compendium";
 import {
+  DEFAULT_ABILITY_SCORE,
   DEFAULT_SHEET_TEMPLATE,
   DESC_CAP,
   NAME_CAP,
@@ -483,4 +484,72 @@ export function monsterSheetPatch(m: CompendiumMonster): Partial<CharacterSheet>
     patch = buildMonsterPatch(m, 500);
   }
   return patch;
+}
+
+/**
+ * How `statblockPatch` applies a monster to an *existing* NPC:
+ * - "replace": the monster's lists overwrite the NPC's.
+ * - "add":     the monster's list rows are appended on top of the NPC's.
+ * - "stats":   the NPC's lists are left untouched; only singular stats change.
+ * In every mode the singular stats (HP/AC/abilities/speed/CR/...) are replaced and
+ * the NPC's own `characterName`/`alignment` are preserved.
+ */
+export type StatblockApplyMode = "replace" | "add" | "stats";
+
+// The "add/remove" collections a monster patch can carry. Everything else in the
+// patch is a singular stat and is always replaced.
+const STATBLOCK_LIST_KEYS = [
+  "attacks",
+  "features",
+  "languages",
+  "resistances",
+  "immunities",
+  "conditionImmunities",
+  "vulnerabilities",
+] as const;
+
+/**
+ * Apply a monster stat block onto an *existing* NPC sheet (see `StatblockApplyMode`).
+ * Unlike `monsterSheetPatch` (used to spawn a fresh NPC), this preserves the NPC's
+ * name and alignment and lets the caller control how the list collections merge.
+ */
+export function statblockPatch(
+  existing: CharacterSheet,
+  m: CompendiumMonster,
+  mode: StatblockApplyMode,
+): Partial<CharacterSheet> {
+  const base = monsterSheetPatch(m);
+  // Always keep the NPC's own name + alignment.
+  const { characterName: _name, alignment: _alignment, ...patch } = base;
+  if (mode === "replace") return patch;
+  if (mode === "stats") {
+    for (const key of STATBLOCK_LIST_KEYS) delete (patch as Record<string, unknown>)[key];
+    return patch;
+  }
+  // "add": append the monster's list rows on top of the NPC's existing ones.
+  return {
+    ...patch,
+    attacks: [...existing.attacks, ...(patch.attacks ?? [])].slice(0, SHEET_ROW_CAPS.attacks),
+    features: [...existing.features, ...(patch.features ?? [])].slice(0, SHEET_ROW_CAPS.features),
+    languages: unionPills(existing.languages, patch.languages),
+    resistances: unionPills(existing.resistances, patch.resistances),
+    immunities: unionPills(existing.immunities, patch.immunities),
+    conditionImmunities: unionPills(existing.conditionImmunities, patch.conditionImmunities),
+    vulnerabilities: unionPills(existing.vulnerabilities, patch.vulnerabilities),
+  };
+}
+
+/**
+ * True when an NPC already carries meaningful content that a stat block would
+ * overwrite — any actions, any features, or non-default ability scores. Used to
+ * decide whether to prompt for an apply mode or just replace outright.
+ */
+export function npcHasContent(s: CharacterSheet): boolean {
+  return (
+    s.attacks.length > 0 ||
+    s.features.length > 0 ||
+    DEFAULT_SHEET_TEMPLATE.abilities.some(
+      (a) => (s.abilityScores[a.id] ?? DEFAULT_ABILITY_SCORE) !== DEFAULT_ABILITY_SCORE,
+    )
+  );
 }
