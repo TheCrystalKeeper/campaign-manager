@@ -541,7 +541,11 @@ export function useDmActions(room: GameRoom) {
       moveToken: (tokenId: string, x: number, y: number) =>
         send({ type: "MOVE_TOKEN", tokenId, x, y }),
       updateToken: (token: Token) => send({ type: "UPDATE_TOKEN", token }),
+      /** Batch upsert — multi-select bulk edits land as one broadcast + one undo step. */
+      updateTokens: (tokens: Token[]) => send({ type: "UPDATE_TOKENS", tokens }),
       removeToken: (tokenId: string) => send({ type: "REMOVE_TOKEN", tokenId }),
+      /** Batch remove — multi-select delete as one broadcast + one undo step. */
+      removeTokens: (tokenIds: string[]) => send({ type: "REMOVE_TOKENS", tokenIds }),
       importCampaign: (manifest: CampaignManifest) =>
         send({ type: "IMPORT_CAMPAIGN", manifest }),
       addPlayerSlot: (name: string) => send({ type: "ADD_PLAYER_SLOT", name }),

@@ -1537,7 +1537,16 @@ export type ClientMessage =
   | { type: "ADD_TOKEN"; token: Token }
   | { type: "MOVE_TOKEN"; tokenId: string; x: number; y: number; facing?: number }
   | { type: "UPDATE_TOKEN"; token: Token }
+  /**
+   * Batch upsert (multi-select bulk edits, group moves, group paste): each token replaces
+   * its id's entry; unknown ids APPEND — that append semantic is what lets REMOVE_TOKENS'
+   * undo (and a group paste) restore/insert whole sets through this one message. One
+   * broadcast + one history entry instead of N.
+   */
+  | { type: "UPDATE_TOKENS"; tokens: Token[] }
   | { type: "REMOVE_TOKEN"; tokenId: string }
+  /** Batch remove (multi-select delete): one broadcast + one history entry. */
+  | { type: "REMOVE_TOKENS"; tokenIds: string[] }
   | { type: "SET_TOKEN_CONDITIONS"; tokenId: string; conditions: string[] }
   /** Partial patch: the server merges over the stored sheet, so editors send only touched fields. */
   | { type: "UPDATE_SHEET"; sheetId: string; sheet: Partial<CharacterSheet> }

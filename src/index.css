@@ -1699,6 +1699,12 @@ button.mod.roll-btn {
   font-size: 0.9rem;
   text-align: center;
 }
+/* Multi-token editor: SOME (not all) of the selection has this condition/grant — a
+   half-strength accent so it reads as "partially on". Clicking completes the set. */
+.cond-chip--partial {
+  background-color: color-mix(in srgb, var(--accent) 40%, transparent);
+  border-color: var(--border);
+}
 
 /* --- Accent swatches (Settings: pick the interaction accent) ---------------- */
 .accent-swatches {

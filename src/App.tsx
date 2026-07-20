@@ -11,6 +11,7 @@ import { HandoutViewer } from "./components/HandoutsPanel";
 import { LogToasts } from "./components/LogToasts";
 import { SceneSwitcher } from "./components/SceneSwitcher";
 import { TokenEditor } from "./components/TokenEditor";
+import { MultiTokenEditor } from "./components/MultiTokenEditor";
 import { CroppableImage } from "./components/CroppableImage";
 import { dockPanelsForRole, PANELS, type PanelContext, type PanelId, type SettingsView } from "./panels/registry";
 import { PlayersPage } from "./pages/PlayersPage";
@@ -151,7 +152,10 @@ function ChipHpBar({ hp }: { hp: HitPoints }) {
 export default function App() {
   const [session, setSession] = useState<SessionParams | null>(null);
   const [viewport, setViewport] = useState<Viewport>(DEFAULT_VIEWPORT);
-  const [selectedTokenId, setSelectedTokenId] = useState<string | null>(null);
+  // Board token selection (DM multi-select capable): [] = none, [id] = the single-token
+  // editor, 2+ = the bulk MultiTokenEditor. Ids only — tokens are re-derived from state
+  // every render so deletions/undo prune the selection automatically.
+  const [selectedTokenIds, setSelectedTokenIds] = useState<string[]>([]);
   const [dockOpen, setDockOpen] = useState(true);
   const [dockTab, setDockTab] = useState<PanelId>("log");
   const [popped, setPopped] = useState<PanelId[]>([]);
@@ -221,6 +225,17 @@ export default function App() {
   useEffect(() => {
     setViewingSceneId(null);
   }, [activeSceneId]);
+
+  // Scene switch: clear a MULTI-selection (a surviving one would make "Delete N tokens" a
+  // cross-scene foot-gun). A single selection survives, matching today's behavior of the
+  // token editor staying open across scene changes.
+  const prevSceneRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (prevSceneRef.current !== null && prevSceneRef.current !== displayedSceneId) {
+      setSelectedTokenIds((current) => (current.length >= 2 ? [] : current));
+    }
+    prevSceneRef.current = displayedSceneId;
+  }, [displayedSceneId]);
 
   // Players get at most two pages: the Board and — only when the DM has enabled it —
   // the Stats page. Everything else (the DM prep pages, or Stats while it's disabled
@@ -482,7 +497,7 @@ export default function App() {
     setOpenHandoutIds([]);
     handoutPushRef.current.clear();
     setSettingsOpen(false);
-    setSelectedTokenId(null);
+    setSelectedTokenIds([]);
     setSecretRolls(false);
     setDockTab("log");
     setDockOpen(true);
@@ -717,7 +732,15 @@ export default function App() {
     return <LoadingScreen label="Connecting to room…" />;
   }
 
-  const selectedToken = state.tokens.find((token) => token.id === selectedTokenId) ?? null;
+  // Selection derivations. Filtering against live state prunes deleted tokens automatically
+  // (undo, another client, scene import) — a 3-selection that shrinks to 1 degrades to the
+  // single-token editor with no bookkeeping.
+  const selectedTokens = state.tokens.filter((token) => selectedTokenIds.includes(token.id));
+  const selectedToken = selectedTokens.length === 1 ? selectedTokens[0] : null;
+  // MapCanvas gets only ids that exist in live state (never ids still in flight — e.g. a
+  // just-pasted trio whose STATE echo hasn't landed), so its batch delete/copy hotkeys
+  // always operate on real tokens and their history inverses can snapshot them.
+  const liveSelectedTokenIds = selectedTokens.map((token) => token.id);
 
   const openSheet = (sheetId: string) => {
     // Open a window for this sheet if one isn't already up (each stays open independently).
@@ -736,7 +759,7 @@ export default function App() {
     if (closeTokenWithSheet && isDm && selectedToken) {
       const linkedSheetId = selectedToken.sheetId ?? selectedToken.ownerPlayerId ?? null;
       if (linkedSheetId === id) {
-        setSelectedTokenId(null);
+        setSelectedTokenIds([]);
       }
     }
   };
@@ -762,9 +785,23 @@ export default function App() {
     setOpenHandoutIds((current) => current.filter((id) => id !== handoutId));
   };
 
-  /** Single-click a token: just select it (the DM's Token panel shows). No sheet. */
-  const selectToken = (tokenId: string | null) => {
-    setSelectedTokenId(tokenId);
+  /** Single-click a token: select it (the DM's Token panel shows). `toggle` (Alt+click)
+   *  adds/removes it from the multi-selection instead of replacing. No sheet. */
+  const selectToken = (tokenId: string | null, mods?: { toggle?: boolean }) => {
+    if (tokenId === null) {
+      setSelectedTokenIds([]);
+    } else if (mods?.toggle) {
+      setSelectedTokenIds((current) =>
+        current.includes(tokenId) ? current.filter((id) => id !== tokenId) : [...current, tokenId],
+      );
+    } else {
+      setSelectedTokenIds([tokenId]);
+    }
+  };
+
+  /** Marquee select (Alt+drag): replace the whole selection. */
+  const selectTokens = (tokenIds: string[]) => {
+    setSelectedTokenIds(tokenIds);
   };
 
   /** Double-click a token: open its linked sheet — item sheet for item tokens, else character. */
@@ -1010,8 +1047,9 @@ export default function App() {
           (isDm ? historySend : room.send)({ type: "MOVE_TOKEN", tokenId, x, y, ...(facing !== undefined ? { facing } : {}) })
         }
         onSelectToken={selectToken}
+        onSelectTokens={selectTokens}
         onOpenTokenSheet={openTokenSheet}
-        selectedTokenId={selectedTokenId}
+        selectedTokenIds={liveSelectedTokenIds}
         send={isDm ? historySend : room.send}
         subscribeMeasure={room.subscribeMeasure}
         subscribeTemplate={room.subscribeTemplate}
@@ -1331,7 +1369,7 @@ export default function App() {
             // Clear of the left map toolbar (fixed to the left edge, vertically centered);
             // draggable like every window, and its position is remembered per campaign.
             defaultPos={(_vw, vh) => ({ x: 72, y: Math.max(12, Math.round(vh / 2) - 320) })}
-            onClose={() => setSelectedTokenId(null)}
+            onClose={() => setSelectedTokenIds([])}
           >
             <TokenEditor
               token={selectedToken}
@@ -1339,7 +1377,34 @@ export default function App() {
               dm={dm}
               openSheet={openSheet}
               openItemSheet={openItemSheet}
-              onClose={() => setSelectedTokenId(null)}
+              onClose={() => setSelectedTokenIds([])}
+            />
+          </FloatingWindow>
+        ) : null}
+
+        {/* Multi-selection (Alt+click / Alt+drag marquee): bulk editor in the same window
+            slot. Mutually exclusive with the single-token block above (length 1 vs 2+), and
+            the shared id keeps the remembered position. Deliberately NOT gated on
+            tokenPanelOnClick — that setting suppresses the auto-popup on every single click,
+            but a multi-selection is a deliberate act whose only UI is this panel. */}
+        {onBoard && isDm && selectedTokens.length >= 2 ? (
+          <FloatingWindow
+            key={`token-editor:${layoutEpoch}`}
+            id="token-editor"
+            roomId={session.roomId}
+            title={`${selectedTokens.length} tokens`}
+            width={300}
+            height={640}
+            minWidth={264}
+            minHeight={280}
+            defaultPos={(_vw, vh) => ({ x: 72, y: Math.max(12, Math.round(vh / 2) - 320) })}
+            onClose={() => setSelectedTokenIds([])}
+          >
+            <MultiTokenEditor
+              tokens={selectedTokens}
+              state={state}
+              dm={dm}
+              onClose={() => setSelectedTokenIds([])}
             />
           </FloatingWindow>
         ) : null}

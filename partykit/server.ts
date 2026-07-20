@@ -2050,11 +2050,47 @@ export default class GameServer implements Party.Server {
         );
         void this.broadcastState();
         break;
+      case "UPDATE_TOKENS": {
+        // Batch upsert (multi-select bulk edit / group move / group paste): mirrors
+        // UPDATE_WALLS — one broadcast for the whole set. Unknown ids APPEND on purpose:
+        // REMOVE_TOKENS' undo re-inserts its snapshots through here, and a group paste
+        // adds its duplicates the same way. Derived fields (label/portrait sync) are
+        // reconciled by broadcastState's normalizeGameState pass.
+        if (!Array.isArray(parsed.tokens)) {
+          this.sendTo(sender, { type: "ERROR", message: "Invalid tokens." });
+          return;
+        }
+        const byId = new Map(this.state.tokens.map((token) => [token.id, token]));
+        for (const raw of parsed.tokens) {
+          if (!raw || typeof raw !== "object" || typeof raw.id !== "string") continue;
+          byId.set(raw.id, normalizeToken(raw));
+        }
+        this.state.tokens = Array.from(byId.values());
+        void this.broadcastState();
+        break;
+      }
       case "REMOVE_TOKEN": {
         const removed = this.state.tokens.find((token) => token.id === parsed.tokenId);
         this.state.tokens = this.state.tokens.filter((token) => token.id !== parsed.tokenId);
         if (removed) {
           this.logEvent(`Token “${(removed.nameConcealed ? "???" : removed.label) || "Token"}” removed.`);
+        }
+        void this.broadcastState();
+        break;
+      }
+      case "REMOVE_TOKENS": {
+        // Batch remove (multi-select delete): one broadcast, one neutral log line — a
+        // per-name list could leak concealed identities to the shared log.
+        if (!Array.isArray(parsed.tokenIds)) {
+          this.sendTo(sender, { type: "ERROR", message: "Invalid token ids." });
+          return;
+        }
+        const ids = new Set(parsed.tokenIds.filter((id): id is string => typeof id === "string"));
+        const before = this.state.tokens.length;
+        this.state.tokens = this.state.tokens.filter((token) => !ids.has(token.id));
+        const count = before - this.state.tokens.length;
+        if (count > 0) {
+          this.logEvent(count === 1 ? "1 token removed." : `${count} tokens removed.`);
         }
         void this.broadcastState();
         break;

@@ -69,6 +69,28 @@ export function buildInverse(
       const token = state.tokens.find((t) => t.id === msg.token.id);
       return token ? { undo: { type: "UPDATE_TOKEN", token }, redo: msg } : null;
     }
+    case "UPDATE_TOKENS": {
+      // One entry for the whole batch: restore pre-edit snapshots of the ids that existed;
+      // ids the batch INSERTED (group paste — the server upserts unknown ids by appending)
+      // are undone by removing them again.
+      const snapshots = msg.tokens
+        .map((t) => state.tokens.find((existing) => existing.id === t.id))
+        .filter((t): t is NonNullable<typeof t> => Boolean(t));
+      const known = new Set(snapshots.map((t) => t.id));
+      const insertedIds = msg.tokens.map((t) => t.id).filter((id) => !known.has(id));
+      const undo: ClientMessage[] = [];
+      if (snapshots.length > 0) undo.push({ type: "UPDATE_TOKENS", tokens: snapshots });
+      if (insertedIds.length > 0) undo.push({ type: "REMOVE_TOKENS", tokenIds: insertedIds });
+      return undo.length > 0 ? { undo: undo.length === 1 ? undo[0] : undo, redo: msg } : null;
+    }
+    case "REMOVE_TOKENS": {
+      // Undo re-inserts the removed snapshots through UPDATE_TOKENS' append-on-unknown-id
+      // upsert — one message, one broadcast, instead of N ADD_TOKENs.
+      const snapshots = state.tokens.filter((t) => msg.tokenIds.includes(t.id));
+      return snapshots.length > 0
+        ? { undo: { type: "UPDATE_TOKENS", tokens: snapshots }, redo: msg }
+        : null;
+    }
     // Directory entities (NPCs page / Items page). Ids are client-generated, so a
     // deleted record can be recreated under its old id and re-filled. Continuous
     // field edits (UPDATE_SHEET / UPDATE_ITEM) are deliberately NOT recorded —

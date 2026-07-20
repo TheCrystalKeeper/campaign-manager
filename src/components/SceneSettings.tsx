@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Image, RotateCw, X } from "lucide-react";
 import type { Scene } from "../lib/types";
 import { BOARD_BACKDROP_PRESETS } from "../lib/types";
-import { gridSizeForMapHeight } from "../lib/sceneUtils";
+import { gridSizeForMapHeight, loadImageDimensions } from "../lib/sceneUtils";
 import { uploadBackdropImage, uploadMapImage } from "../lib/uploadAsset";
 import { AssetPickerModal } from "./AssetPickerModal";
 
@@ -145,8 +145,19 @@ export function SceneSettings({ scene, roomId, onPatch, onSetFog, onResetFog, on
     }
   };
 
+  const handleMapPick = async (url: string) => {
+    setError(null);
+    try {
+      const { width, height } = await loadImageDimensions(url);
+      onPatch({ mapUrl: url, width, height, gridSize: gridSizeForMapHeight(height) });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't read that image.");
+    }
+  };
+
   const [backdropBusy, setBackdropBusy] = useState(false);
   const [libOpen, setLibOpen] = useState(false);
+  const [mapLibOpen, setMapLibOpen] = useState(false);
   const handleBackdropUpload = async (file: File) => {
     setBackdropBusy(true);
     setError(null);
@@ -167,29 +178,47 @@ export function SceneSettings({ scene, roomId, onPatch, onSetFog, onResetFog, on
         <TextInput value={scene.name} onCommit={(name) => onPatch({ name })} />
       </div>
 
-      <label className={`map-upload${busy ? " map-upload--busy" : ""}`}>
-        {scene.mapUrl ? (
-          <img className="map-upload-thumb" src={scene.mapUrl} alt="" draggable={false} />
-        ) : (
-          <span className="map-upload-ico" aria-hidden>
-            <Image size={22} strokeWidth={2.2} />
+      <div className="row">
+        <label className={`map-upload${busy ? " map-upload--busy" : ""}`} style={{ flex: 1 }}>
+          {scene.mapUrl ? (
+            <img className="map-upload-thumb" src={scene.mapUrl} alt="" draggable={false} />
+          ) : (
+            <span className="map-upload-ico" aria-hidden>
+              <Image size={22} strokeWidth={2.2} />
+            </span>
+          )}
+          <span className="map-upload-text">
+            {busy ? "Uploading…" : scene.mapUrl ? "Replace map image" : "Upload map image"}
+            <small>Click to choose a file</small>
           </span>
-        )}
-        <span className="map-upload-text">
-          {busy ? "Uploading…" : scene.mapUrl ? "Replace map image" : "Upload map image"}
-          <small>Click to choose a file</small>
-        </span>
-        <input
-          type="file"
-          accept="image/*"
-          style={{ display: "none" }}
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (file) void handleMapUpload(file);
-          }}
-        />
-      </label>
+          <input
+            type="file"
+            accept="image/*"
+            style={{ display: "none" }}
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) void handleMapUpload(file);
+            }}
+          />
+        </label>
+        <button
+          className="btn-ghost"
+          title="Reuse an already-uploaded image as the map"
+          onClick={() => setMapLibOpen(true)}
+        >
+          Add from library
+        </button>
+      </div>
       {error ? <span className="muted" style={{ color: "var(--danger-text)" }}>{error}</span> : null}
+      {mapLibOpen ? (
+        <AssetPickerModal
+          roomId={roomId}
+          title="Choose a map image"
+          includeMaps
+          onPick={(url) => void handleMapPick(url)}
+          onClose={() => setMapLibOpen(false)}
+        />
+      ) : null}
 
       {onRotate && scene.mapUrl ? (
         <div className="row" style={{ justifyContent: "space-between" }}>

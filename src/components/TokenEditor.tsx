@@ -354,7 +354,13 @@ export function TokenEditor({ token, state, dm, openSheet, openItemSheet, onClos
             <button
               className={token.imageFit === "raw" ? "btn-active" : ""}
               onClick={() =>
-                dm.updateToken({ ...token, imageFit: token.imageFit === "raw" ? "framed" : "raw" })
+                dm.updateToken(
+                  token.imageFit === "raw"
+                    ? // Facing spins the raw picture; back in a frame the portrait must sit
+                      // upright again, so returning to framed also resets the facing.
+                      { ...token, imageFit: "framed", facing: undefined }
+                    : { ...token, imageFit: "raw" },
+                )
               }
             >
               {token.imageFit === "raw" ? "Raw image" : "Framed in shape"}

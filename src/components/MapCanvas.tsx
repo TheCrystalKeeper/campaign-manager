@@ -196,6 +196,9 @@ type RemoteTemplate = {
 };
 
 const CURRENT_TURN_COLOR = "#e9c176";
+/** Selection ring color — matches the Alt+drag marquee rectangle, so the same blue reads as
+ *  "selected" whether it came from the marquee or a click. */
+const SELECTION_COLOR = "#5fc4ff";
 
 const CONDITION_EMOJI = new Map<string, string>(
   CONDITIONS.map((condition) => [condition.id, condition.emoji]),
@@ -225,10 +228,13 @@ type MapCanvasProps = {
   /** Provided for the DM (pan/zoom enabled); omitted for players (read-only mirror). */
   onViewportChange?: (viewport: Viewport) => void;
   onMoveToken: (tokenId: string, x: number, y: number, facing?: number) => void;
-  onSelectToken?: (tokenId: string | null) => void;
+  /** `toggle` (Alt+click) adds/removes the token from the multi-selection instead of replacing. */
+  onSelectToken?: (tokenId: string | null, mods?: { toggle?: boolean }) => void;
+  /** Marquee select (Alt+drag): replaces the whole selection. Absent = multi-select disabled. */
+  onSelectTokens?: (tokenIds: string[]) => void;
   /** Double-click a token: open its linked sheet (character or item). */
   onOpenTokenSheet?: (token: GameState["tokens"][number]) => void;
-  selectedTokenId?: string | null;
+  selectedTokenIds?: string[];
   /** When set, the next map click places a token at the returned world coords. */
   onPlaceToken?: (x: number, y: number) => void;
   /** Room send — map tools commit their work as ordinary room messages. */
@@ -616,7 +622,8 @@ const TokenNode = memo(function TokenNode({
   /** HP to display under the token, or null to show no bar. */
   hp: HitPoints | null;
   showHpValues: boolean;
-  onSelect?: (token: GameState["tokens"][number]) => void;
+  /** Click select. `toggle` (Alt+click) adds/removes from the multi-selection. */
+  onSelect?: (token: GameState["tokens"][number], mods: { toggle: boolean }) => void;
   /** Double-click: open the linked sheet (character or item). */
   onOpenSheet?: (token: GameState["tokens"][number]) => void;
   onMove: (token: GameState["tokens"][number], x: number, y: number) => void;
@@ -656,13 +663,19 @@ const TokenNode = memo(function TokenNode({
   const canRotate = Boolean(onRotate);
   const facingDeg = dragFacing ?? token.facing ?? 0;
   const shape = token.shape ?? (shapeDefaults ?? DEFAULT_TOKEN_SHAPES)[token.kind];
-  // How far the token's silhouette reaches from center: the square spans the full diameter
-  // (corners at radius·√2, outside the circle); every other shape sits within `radius`. The
-  // facing arrow is offset past this so it never overlaps the token.
-  const reach = shape === "square" ? radius * Math.SQRT2 : radius;
-  // A soft white glow around the token (and its arrow) when hovered or selected — eased
-  // in/out so it fades rather than snapping. Applies to every token kind, items included.
-  const glow = useGlowFade(hovered || selected ? 1 : 0);
+  // A "raw" image token (frame-in-shape disabled) renders as the bare picture — no shape
+  // frame, and none of the shape-derived furniture (resting drop shadow / black caster
+  // ring), so it reads as just the image itself. Facing rotates the picture directly.
+  const rawImage = Boolean(crispImg) && token.imageFit === "raw";
+  // How far the token's silhouette reaches from center: the square shape and the raw image's
+  // 2r×2r picture span the full diameter (corners at radius·√2, outside the circle); every
+  // other shape sits within `radius`. The facing arrow is offset past this so it never
+  // overlaps the token.
+  const reach = shape === "square" || rawImage ? radius * Math.SQRT2 : radius;
+  // A soft white glow around the token (and its arrow) on hover only — eased in/out so it
+  // fades rather than snapping. Selection gets its own distinct ring (below) so the two
+  // states are never confused with each other.
+  const glow = useGlowFade(hovered ? 1 : 0);
   const glowShadow =
     glow > 0.01
       ? {
@@ -672,6 +685,10 @@ const TokenNode = memo(function TokenNode({
           shadowForStrokeEnabled: true,
         }
       : undefined;
+  // Selection ring: a bright solid ring in the marquee's blue, eased in/out like the hover
+  // glow but visually unambiguous — a colored ring reads as "selected" at a glance, where
+  // the old shared white glow was easy to mistake for mere hover.
+  const selectFade = useGlowFade(selected ? 1 : 0);
   // Once a committed rotation is echoed back by the server, drop the local preview so we
   // follow authoritative state again. We hold it (rather than clearing on pointer-up) so
   // the arrow never flashes to the pre-rotation facing during the round-trip. The angle
@@ -682,15 +699,14 @@ const TokenNode = memo(function TokenNode({
     const diff = Math.abs(((serverDeg - dragFacing + 540) % 360) - 180);
     if (diff < 0.5) setDragFacing(null);
   }, [token, dragFacing]);
-  // A "raw" image token (frame-in-shape disabled) renders as the bare picture — no shape
-  // frame, and none of the shape-derived furniture (resting drop shadow / black caster ring /
-  // facing arrow), so it reads as just the image itself.
-  const rawImage = Boolean(crispImg) && token.imageFit === "raw";
   // Creatures show a facing indicator; it's visible to everyone once a facing is set, and
-  // to controllers (DM / owner) even before — so it can always be grabbed to rotate. Items
-  // and raw-image tokens never show it. (No selection/double-click needed: the arrow itself
-  // is the handle.)
-  const showArrow = token.kind !== "item" && !rawImage && (token.facing !== undefined || canRotate);
+  // to controllers (DM / owner) even before — so it can always be grabbed to rotate. (No
+  // selection/double-click needed: the arrow itself is the handle.) Raw-image tokens rotate
+  // the picture itself, so the arrow is purely the controller's grab handle there — other
+  // viewers read the facing off the art — and it applies to every kind, items included.
+  const showArrow = rawImage
+    ? canRotate
+    : token.kind !== "item" && (token.facing !== undefined || canRotate);
 
   // Facing indicator, drawn pointing UP (the wrapping Group rotates it by `facingDeg`):
   // a wide arrowhead flowing into two tapering fins that hug the rim on each side, set off
@@ -870,11 +886,11 @@ const TokenNode = memo(function TokenNode({
       y={token.y}
       draggable={draggable}
       opacity={token.hidden ? 0.4 : dead ? 0.55 : 1}
-      onClick={() => {
+      onClick={(e) => {
         if (rotatingRef.current) return; // a rotate gesture, not a select
-        onSelect?.(token);
+        onSelect?.(token, { toggle: e.evt.altKey });
       }}
-      onTap={() => onSelect?.(token)}
+      onTap={() => onSelect?.(token, { toggle: false })}
       onMouseEnter={() => {
         setHovered(true);
         onHover?.(token, true);
@@ -886,8 +902,10 @@ const TokenNode = memo(function TokenNode({
       onDblClick={() => onOpenSheet?.(token)}
       onDblTap={() => onOpenSheet?.(token)}
       onDragStart={(e) => {
-        // Shift-drag draws a pointer arrow; grabbing the facing arrow rotates instead of moving.
-        if (e.evt.shiftKey || rotatingRef.current) {
+        // Shift-drag draws a pointer arrow; grabbing the facing arrow rotates instead of
+        // moving; Alt is the selection modifier — an Alt+drag that starts on a token runs
+        // the stage marquee underneath, never a move.
+        if (e.evt.shiftKey || e.evt.altKey || rotatingRef.current) {
           e.target.stopDrag();
           return;
         }
@@ -968,6 +986,22 @@ const TokenNode = memo(function TokenNode({
       {isCurrentTurn ? (
         <Circle radius={radius + 4} stroke={CURRENT_TURN_COLOR} strokeWidth={2.5} listening={false} />
       ) : null}
+      {selectFade > 0.01 ? (
+        // DM multi-select indicator: a bright solid ring, outermost of the token's rings so
+        // it's never hidden behind the current-turn/controller circles. Eased in/out (fades
+        // with the same spring as the hover glow) rather than popping on/off.
+        <Circle
+          radius={reach + 9}
+          stroke={SELECTION_COLOR}
+          strokeWidth={2.5}
+          opacity={selectFade}
+          shadowColor={SELECTION_COLOR}
+          shadowBlur={6 * selectFade}
+          shadowOpacity={0.7 * selectFade}
+          shadowForStrokeEnabled
+          listening={false}
+        />
+      ) : null}
       {controllerColor ? (
         // A player controls this NPC ("mind control"): a dashed ring in their colour so it
         // reads as player-controlled rather than a DM-only token.
@@ -1011,13 +1045,15 @@ const TokenNode = memo(function TokenNode({
       ) : null}
       {crispImg && token.imageFit === "raw" ? (
         // Raw image token: the bare picture, no shape frame — just a soft white glow halo
-        // that fades in on hover/select.
+        // that fades in on hover/select. Facing spins the picture itself (offset puts the
+        // rotation pivot at the image center).
         <KonvaImage
           image={crispImg}
           width={radius * 2}
           height={radius * 2}
           offsetX={radius}
           offsetY={radius}
+          rotation={facingDeg}
           {...(glowShadow ?? {})}
         />
       ) : (
@@ -1200,8 +1236,9 @@ export function MapCanvas({
   onViewportChange,
   onMoveToken,
   onSelectToken,
+  onSelectTokens,
   onOpenTokenSheet,
-  selectedTokenId,
+  selectedTokenIds,
   onPlaceToken,
   send,
   subscribeMeasure,
@@ -1218,6 +1255,11 @@ export function MapCanvas({
   const stageRef = useRef<Konva.Stage>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const { width: stageW, height: stageH } = useElementSize(rootRef);
+  // Selection views: `soleSelectedId` feeds the single-token consumers (rotate hotkey, copy
+  // source) — null while 0 or 2+ tokens are selected; the memoized Set feeds the render loop.
+  const soleSelectedId =
+    selectedTokenIds && selectedTokenIds.length === 1 ? selectedTokenIds[0] : null;
+  const selectedIdSet = useMemo(() => new Set(selectedTokenIds ?? []), [selectedTokenIds]);
   // Konva canvases default to imageSmoothingQuality "low", which visibly softens downscaled
   // images (token portraits, the map) even at normal zoom. Bump them all to "high". Crucially
   // this must include the STAGE's shared buffer canvas: a token has fill + stroke, so Konva
@@ -1340,9 +1382,18 @@ export function MapCanvas({
   const [hoveredWallId, setHoveredWallId] = useState<string | null>(null);
   /** Token under the cursor (DM only) — powers the X-to-delete-token hotkey. */
   const [hoveredTokenId, setHoveredTokenId] = useState<string | null>(null);
-  /** Copy/paste buffer (DM only): the last token copied with Ctrl/Cmd+C, so Ctrl/Cmd+V can
-   *  duplicate it. Cascades on repeat paste (each paste stores its own offset copy). */
-  const tokenClipboardRef = useRef<Token | null>(null);
+  /** Copy/paste buffer (DM only): the token(s) copied with Ctrl/Cmd+C (a multi-selection
+   *  copies the whole group), so Ctrl/Cmd+V can duplicate them with formation preserved.
+   *  Cascades on repeat paste (each paste stores its own offset copies). */
+  const tokenClipboardRef = useRef<Token[] | null>(null);
+  // ---- Alt+drag marquee selection (DM only) ----
+  /** World-coord anchor of the in-flight marquee; null = no marquee. The gesture truth. */
+  const marqueeRef = useRef<{ startX: number; startY: number } | null>(null);
+  /** Normalized live rect driving the dashed preview (world coords). */
+  const [marqueeRect, setMarqueeRect] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
+  /** Set for one tick after a marquee commits: Konva fires token-click then stage-click after
+   *  our pointerup, and both would mangle the fresh selection without this guard. */
+  const marqueeJustEndedRef = useRef(false);
 
   /**
    * Snap a world point for wall placement/editing: first to a nearby existing endpoint (so chains
@@ -1693,6 +1744,8 @@ export function MapCanvas({
 
   // ---- Shift-drag pointer arrow (always available; fades ~10s, like v1) ----
   const [shiftHeld, setShiftHeld] = useState(false);
+  /** Alt held: suppresses stage panning so Alt+drag runs the selection marquee instead. */
+  const [altHeld, setAltHeld] = useState(false);
   const [arrowDraft, setArrowDraft] = useState<number[] | null>(null);
   /** Id of our just-committed arrow: its server echo is hidden while the preview shows. */
   const [pendingArrowId, setPendingArrowId] = useState<string | null>(null);
@@ -1712,14 +1765,24 @@ export function MapCanvas({
 
   const playersCanDraw = state.playersCanDraw;
 
-  // Track Shift so the stage stops panning while an arrow is being drawn.
+  // Track Shift so the stage stops panning while an arrow is being drawn, and Alt so it
+  // stops panning under an Alt+drag marquee. Lives OUTSIDE the main keydown handler on
+  // purpose: that handler early-returns on Alt chords, which would eat the tracking. The
+  // preventDefault on Alt stops the browser (Windows/Firefox menu bar) stealing focus.
   useEffect(() => {
     const sync = (event: KeyboardEvent) => {
       if (event.key === "Shift") {
         setShiftHeld(event.type === "keydown");
       }
+      if (event.key === "Alt") {
+        setAltHeld(event.type === "keydown");
+        event.preventDefault();
+      }
     };
-    const clear = () => setShiftHeld(false);
+    const clear = () => {
+      setShiftHeld(false);
+      setAltHeld(false);
+    };
     window.addEventListener("keydown", sync);
     window.addEventListener("keyup", sync);
     window.addEventListener("blur", clear);
@@ -1895,35 +1958,44 @@ export function MapCanvas({
         onCloneWalls();
         return;
       }
-      // Copy / paste a token (DM). Ctrl/Cmd+C copies the selected — or, failing that, the
-      // hovered — token; Ctrl/Cmd+V drops a duplicate one grid cell down-right (cascading on
-      // repeat) onto the CURRENT scene and selects it. Sharing a sheet is intentional (a swarm
-      // of goblins off one stat block). Undoable via the ADD_TOKEN history entry.
+      // Copy / paste tokens (DM). Ctrl/Cmd+C copies the multi-selection — or the single
+      // selected / hovered token; Ctrl/Cmd+V drops duplicates one grid cell down-right
+      // (cascading on repeat, formation preserved) onto the CURRENT scene and selects
+      // them. Sharing a sheet is intentional (a swarm of goblins off one stat block).
+      // One UPDATE_TOKENS per paste = one broadcast + one undo step (its history inverse
+      // emits REMOVE_TOKENS for the freshly inserted ids).
       if (isDm && (event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey) {
         const pk = physicalKey(event);
         if (pk === "c") {
-          const copyId = selectedTokenId ?? hoveredTokenId;
-          const tok = copyId ? state.tokens.find((item) => item.id === copyId) : undefined;
-          if (tok) {
-            tokenClipboardRef.current = tok;
+          const copied =
+            (selectedTokenIds?.length ?? 0) >= 2
+              ? state.tokens.filter((item) => selectedTokenIds!.includes(item.id))
+              : (() => {
+                  const copyId = soleSelectedId ?? hoveredTokenId;
+                  const tok = copyId ? state.tokens.find((item) => item.id === copyId) : undefined;
+                  return tok ? [tok] : [];
+                })();
+          if (copied.length > 0) {
+            tokenClipboardRef.current = copied;
             event.preventDefault();
           }
           return;
         }
         if (pk === "v") {
           const clip = tokenClipboardRef.current;
-          if (clip) {
+          if (clip && clip.length > 0) {
             const off = scene?.gridSize ?? 50;
-            const dup: Token = {
-              ...clip,
+            const dups: Token[] = clip.map((t) => ({
+              ...t,
               id: `token-${crypto.randomUUID().slice(0, 8)}`,
               sceneId,
-              x: clip.x + off,
-              y: clip.y + off,
-            };
-            tokenClipboardRef.current = dup; // next paste offsets from this copy → staircase
-            send({ type: "ADD_TOKEN", token: dup });
-            onSelectToken?.(dup.id);
+              x: t.x + off,
+              y: t.y + off,
+            }));
+            tokenClipboardRef.current = dups; // next paste offsets from these copies → staircase
+            send({ type: "UPDATE_TOKENS", tokens: dups }); // unknown ids append server-side
+            if (dups.length === 1) onSelectToken?.(dups[0].id);
+            else onSelectTokens?.(dups.map((t) => t.id));
             event.preventDefault();
           }
           return;
@@ -1932,10 +2004,12 @@ export function MapCanvas({
       if (event.ctrlKey || event.metaKey || event.altKey) {
         return;
       }
-      // Escape always resets the active tool to Select (kept fixed — it's the universal cancel key).
+      // Escape always resets the active tool to Select (kept fixed — it's the universal cancel
+      // key) and clears the token selection (single or marquee'd multi).
       if (event.key === "Escape") {
         setActiveToolId("select");
         setDraft(null);
+        onSelectToken?.(null);
         return;
       }
       const isDelete =
@@ -1947,6 +2021,14 @@ export function MapCanvas({
       if (activeToolId === "walls" && (selectedWallIds.length > 0 || hoveredWallId) && isDelete) {
         event.preventDefault();
         deleteHoveredOrSelectedWalls();
+        return;
+      }
+      // Delete with a MULTI-selection (DM): remove every selected token as one message —
+      // one broadcast, one undo step. Takes precedence over the hovered-token delete below.
+      if (isDm && (selectedTokenIds?.length ?? 0) >= 2 && isDelete) {
+        event.preventDefault();
+        send({ type: "REMOVE_TOKENS", tokenIds: selectedTokenIds! });
+        onSelectToken?.(null);
         return;
       }
       // Delete over a token (DM): remove the TOKEN only — the linked character/item
@@ -1969,12 +2051,13 @@ export function MapCanvas({
       }
       // Rotate the selected token's facing: the bound keys ([ / ]) nudge 15°, Shift makes it 45°.
       // Matched on the physical key (ignoring Shift's printed variant) so Shift+[ still rotates.
-      if (selectedTokenId) {
+      // Single selection only — rotating a whole formation at once is more surprise than feature.
+      if (soleSelectedId) {
         const pk = physicalKey(event);
         const ccw = pk === keybinds.rotateCcw.key;
         const cw = pk === keybinds.rotateCw.key;
         if (ccw || cw) {
-          const tok = state.tokens.find((item) => item.id === selectedTokenId);
+          const tok = state.tokens.find((item) => item.id === soleSelectedId);
           if (tok && (isDm || tok.ownerPlayerId === yourPlayerId)) {
             const step = event.shiftKey ? 45 : 15;
             const dir = ccw ? -1 : 1;
@@ -1998,7 +2081,8 @@ export function MapCanvas({
   }, [
     availableTools,
     hotkeysEnabled,
-    selectedTokenId,
+    soleSelectedId,
+    selectedTokenIds,
     state.tokens,
     isDm,
     yourPlayerId,
@@ -2115,7 +2199,7 @@ export function MapCanvas({
   // callbacks + derived board data so each dispatcher keeps a constant identity — otherwise
   // every render would hand tokens fresh closures and defeat their `memo` on pan/zoom.
   const tokenCbRef = useRef<{
-    onSelectToken?: (id: string | null) => void;
+    onSelectToken?: (id: string | null, mods?: { toggle?: boolean }) => void;
     onOpenTokenSheet?: (token: GameState["tokens"][number]) => void;
     onMoveToken: (id: string, x: number, y: number, facing?: number) => void;
     setTokenDragActive: (id: string, active: boolean) => void;
@@ -2124,18 +2208,61 @@ export function MapCanvas({
     wallsBlockMovement: boolean;
     movementSegs: ReturnType<typeof movementSegments>;
     snapPoint: (x: number, y: number) => { x: number; y: number };
+    selectedTokenIds: string[];
+    send: (message: ClientMessage) => void;
   }>(null!);
-  const handleTokenSelect = useCallback(
-    (token: GameState["tokens"][number]) => tokenCbRef.current.onSelectToken?.(token.id),
-    [],
-  );
+  // ─── Group drag (DM): dragging one SELECTED token carries the whole selection ────────
+  // Armed at drag start when the grabbed token is part of a 2+ selection; every follower
+  // keeps its own start position so the anchor's delta preserves the formation. The drop
+  // commits ONE UPDATE_TOKENS (single broadcast + single undo step); mid-drag the follower
+  // nodes are moved imperatively and streamed as ordinary TOKEN_DRAG frames.
+  const groupDragRef = useRef<{
+    anchorId: string;
+    anchorStartX: number;
+    anchorStartY: number;
+    followers: Array<{ id: string; startX: number; startY: number }>;
+  } | null>(null);
+  /** Follower ids of the live group drag — suppresses their above-darkness name copies
+   *  (like `draggingLabelId` for the anchor) so labels don't trail the moving nodes. */
+  const [groupDragIds, setGroupDragIds] = useState<ReadonlySet<string>>(EMPTY_ID_SET);
+  const handleTokenSelect = useCallback((token: GameState["tokens"][number], mods: { toggle: boolean }) => {
+    // A marquee just committed: Konva still fires a click for the token under the pointer
+    // (down/up on the same node has no movement threshold) — swallowing it protects the
+    // fresh selection from being instantly toggled.
+    if (marqueeJustEndedRef.current) return;
+    tokenCbRef.current.onSelectToken?.(token.id, mods);
+  }, []);
   const handleTokenOpenSheet = useCallback(
     (token: GameState["tokens"][number]) => tokenCbRef.current.onOpenTokenSheet?.(token),
     [],
   );
   const handleTokenDragActive = useCallback(
-    (token: GameState["tokens"][number], active: boolean) =>
-      tokenCbRef.current.setTokenDragActive(token.id, active),
+    (token: GameState["tokens"][number], active: boolean) => {
+      const cb = tokenCbRef.current;
+      cb.setTokenDragActive(token.id, active);
+      // Arm the group drag when the DM grabs a token that's part of a 2+ selection:
+      // snapshot every selected token's start position so the anchor's delta moves the
+      // whole formation. NOT disarmed on active=false — TokenNode fires dragActive(false)
+      // BEFORE onMove, and the commit in handleTokenMove needs the snapshot; it disarms.
+      if (active && cb.isDm && cb.selectedTokenIds.length >= 2 && cb.selectedTokenIds.includes(token.id)) {
+        const byId = new Map(stateRef.current.tokens.map((t) => [t.id, t]));
+        const followers: Array<{ id: string; startX: number; startY: number }> = [];
+        for (const id of cb.selectedTokenIds) {
+          if (id === token.id) continue;
+          const t = byId.get(id);
+          if (t) followers.push({ id, startX: t.x, startY: t.y });
+        }
+        groupDragRef.current = {
+          anchorId: token.id,
+          anchorStartX: token.x,
+          anchorStartY: token.y,
+          followers,
+        };
+        setGroupDragIds(new Set(followers.map((f) => f.id)));
+      } else if (active) {
+        groupDragRef.current = null;
+      }
+    },
     [],
   );
   const handleTokenHover = useCallback(
@@ -2154,6 +2281,28 @@ export function MapCanvas({
     (token: GameState["tokens"][number], x: number, y: number) => {
       const cb = tokenCbRef.current;
       const snapped = cb.snapPoint(x, y);
+      // Group drop (DM): snap the ANCHOR only and carry every follower by the same final
+      // delta — per-token snapping would crumple the formation. Committed as ONE
+      // UPDATE_TOKENS: single broadcast, single undo step.
+      const group = groupDragRef.current;
+      if (group && group.anchorId === token.id) {
+        groupDragRef.current = null;
+        setGroupDragIds(EMPTY_ID_SET);
+        const dx = snapped.x - group.anchorStartX;
+        const dy = snapped.y - group.anchorStartY;
+        const byId = new Map(stateRef.current.tokens.map((t) => [t.id, t]));
+        const moved: Token[] = [];
+        const anchor = byId.get(token.id);
+        if (anchor) moved.push({ ...anchor, x: snapped.x, y: snapped.y });
+        for (const f of group.followers) {
+          const t = byId.get(f.id);
+          if (t) moved.push({ ...t, x: f.startX + dx, y: f.startY + dy });
+        }
+        if (moved.length > 0) {
+          cb.send({ type: "UPDATE_TOKENS", tokens: moved });
+        }
+        return;
+      }
       // Players can't drag a token through a movement-blocking wall; the DM bypasses.
       // A rejected move sends the OLD position so the server echo snaps the node back.
       const target =
@@ -2177,15 +2326,48 @@ export function MapCanvas({
   const dragRelayRef = useRef(0);
   const handleTokenDragFrame = useCallback(
     (token: GameState["tokens"][number], pos: { x: number; y: number } | null) => {
+      const group = groupDragRef.current?.anchorId === token.id ? groupDragRef.current : null;
       if (pos === null) {
         dragRelayRef.current = 0;
         send({ type: "TOKEN_DRAG", tokenId: token.id, pos: null });
+        // Group drag: clear the followers' remote frames too, so receivers reconcile
+        // everyone with the authoritative UPDATE_TOKENS echo that follows.
+        if (group) {
+          for (const f of group.followers) {
+            send({ type: "TOKEN_DRAG", tokenId: f.id, pos: null });
+          }
+        }
         return;
+      }
+      // Group drag: carry every follower's Konva node by the anchor's delta each frame
+      // (imperative — never React state, per PERFORMANCE_PLAN.md). Konva's auto-draw
+      // repaints the layer; the explicit batchDraw just makes it deterministic.
+      if (group) {
+        const dx = pos.x - group.anchorStartX;
+        const dy = pos.y - group.anchorStartY;
+        let layer: Konva.Layer | null = null;
+        for (const f of group.followers) {
+          const handle = tokenNodesRef.current.get(f.id);
+          if (!handle) continue;
+          handle.group.x(f.startX + dx);
+          handle.group.y(f.startY + dy);
+          layer = handle.group.getLayer() ?? layer;
+        }
+        layer?.batchDraw();
       }
       const now = Date.now();
       if (now - dragRelayRef.current < TOKEN_DRAG_RELAY_MS) return;
       dragRelayRef.current = now;
       send({ type: "TOKEN_DRAG", tokenId: token.id, pos });
+      // Stream the followers on the same throttle gate so remote clients mirror the
+      // whole group through the ordinary remote-drag loop.
+      if (group) {
+        const dx = pos.x - group.anchorStartX;
+        const dy = pos.y - group.anchorStartY;
+        for (const f of group.followers) {
+          send({ type: "TOKEN_DRAG", tokenId: f.id, pos: { x: f.startX + dx, y: f.startY + dy } });
+        }
+      }
     },
     [send],
   );
@@ -2410,6 +2592,8 @@ export function MapCanvas({
     wallsBlockMovement: scene.wallsBlockMovement !== false,
     movementSegs,
     snapPoint,
+    selectedTokenIds: selectedTokenIds ?? [],
+    send,
   };
 
   /** Routes a stage pointer event to the active tool in world coordinates. */
@@ -2613,6 +2797,17 @@ export function MapCanvas({
     if (toolActive || drawingArrow.current || arrowDraft) {
       return; // tools/arrow own the pointer; don't deselect/place underneath them
     }
+    // A marquee just committed — Konva still fires this stage click after our pointerup,
+    // and letting it through would clear the fresh selection. Also ignore any Alt+click
+    // outright: Alt is the selection modifier, so a fumbled Alt+click on empty board
+    // must not wipe a multi-selection the DM just built.
+    if (marqueeJustEndedRef.current) {
+      marqueeJustEndedRef.current = false;
+      return;
+    }
+    if ((e.evt as MouseEvent).altKey) {
+      return;
+    }
     if (placing) {
       const point = stageRef.current?.getRelativePointerPosition();
       if (point && onPlaceToken) {
@@ -2627,8 +2822,9 @@ export function MapCanvas({
     }
   };
 
-  // Shift disables the pan-drag so a shift-drag draws an arrow instead of panning.
-  const stageDraggable = canControlView && !placing && !toolActive && !shiftHeld;
+  // Shift disables the pan-drag so a shift-drag draws an arrow instead of panning; Alt
+  // does the same so an Alt+drag runs the DM's selection marquee.
+  const stageDraggable = canControlView && !placing && !toolActive && !shiftHeld && !(isDm && altHeld);
   const sceneRulers = Object.entries(rulers).filter(
     ([, ruler]) => ruler.sceneId === scene.id,
   );
@@ -2746,6 +2942,28 @@ export function MapCanvas({
             startArrow();
             return;
           }
+          // Alt+drag (DM): rubber-band marquee selection. Armed BEFORE the map-handle
+          // opt-out so a drag starting over a door glyph still marquees (an Alt+CLICK on
+          // one stays a click — the release threshold below treats it as a no-op). Tokens
+          // under the pointer stop their own drag on Alt (TokenNode), so the gesture
+          // always reaches here through Konva's bubbling.
+          if (isDm && onSelectTokens && e.evt.altKey && !toolActive && !placing && e.evt.button === 0) {
+            const pos = stageRef.current?.getRelativePointerPosition();
+            if (pos) {
+              marqueeRef.current = { startX: pos.x, startY: pos.y };
+              setMarqueeRect({ x: pos.x, y: pos.y, w: 0, h: 0 });
+              // Capture the pointer so the marquee survives the cursor crossing the dock,
+              // toolbar, or window edge (same rationale as the tool gesture below).
+              if (e.evt.pointerId !== undefined) {
+                try {
+                  (e.evt.target as Element | null)?.setPointerCapture?.(e.evt.pointerId);
+                } catch {
+                  // Best-effort — never break the gesture.
+                }
+              }
+            }
+            return;
+          }
           // Clicking an existing wall/light marker or map pin interacts with it
           // (drag/toggle/delete/edit) rather than placing a new one underneath.
           if (typeof e.target?.hasName === "function" && e.target.hasName("map-handle")) {
@@ -2766,6 +2984,19 @@ export function MapCanvas({
           }
         }}
         onPointerMove={(e) => {
+          if (marqueeRef.current) {
+            const pos = stageRef.current?.getRelativePointerPosition();
+            if (pos) {
+              const { startX, startY } = marqueeRef.current;
+              setMarqueeRect({
+                x: Math.min(startX, pos.x),
+                y: Math.min(startY, pos.y),
+                w: Math.abs(pos.x - startX),
+                h: Math.abs(pos.y - startY),
+              });
+            }
+            return;
+          }
           if (drawingArrow.current) {
             extendArrow();
             return;
@@ -2775,6 +3006,36 @@ export function MapCanvas({
           }
         }}
         onPointerUp={(e) => {
+          if (marqueeRef.current) {
+            const rect = marqueeRect;
+            marqueeRef.current = null;
+            setMarqueeRect(null);
+            // A near-zero drag (screen px, so zoom doesn't change the feel) is a plain
+            // Alt+click: the token underneath already toggled via its own click handler,
+            // and an Alt+click on empty board is a deliberate no-op — never a selection wipe.
+            if (!rect || Math.max(rect.w, rect.h) * viewport.scale < 3) {
+              return;
+            }
+            // Select every token on this scene whose silhouette touches the rect (exact
+            // circle-vs-rect: clamp the center into the rect, compare to the radius).
+            // Hidden tokens are included — the DM sees them ghosted and may edit them.
+            const ids = sceneTokens
+              .filter((token) => {
+                const r = tokenRadius(scene.gridSize, token.size ?? state.defaultTokenSize ?? 1);
+                const nx = Math.min(Math.max(token.x, rect.x), rect.x + rect.w);
+                const ny = Math.min(Math.max(token.y, rect.y), rect.y + rect.h);
+                return (token.x - nx) ** 2 + (token.y - ny) ** 2 <= r * r;
+              })
+              .map((token) => token.id);
+            onSelectTokens?.(ids);
+            // Konva fires token-click + stage-click after this pointerup; swallow both so
+            // they can't toggle/clear the selection we just committed.
+            marqueeJustEndedRef.current = true;
+            setTimeout(() => {
+              marqueeJustEndedRef.current = false;
+            }, 0);
+            return;
+          }
           if (drawingArrow.current) {
             commitArrow();
             return;
@@ -2893,7 +3154,7 @@ export function MapCanvas({
                 shapeDefaults={state.tokenShapeDefaults}
                 radius={radius}
                 draggable={draggable}
-                selected={selectedTokenId === token.id}
+                selected={selectedIdSet.has(token.id)}
                 isCurrentTurn={currentTurnTokenId === token.id}
                 hp={hp}
                 showHpValues={token.showHp === "values"}
@@ -2970,7 +3231,7 @@ export function MapCanvas({
               // Skip the bright copy for a token being dragged — locally, or by a remote player we're
               // mirroring: the in-token label carries it live meanwhile, so the two never separate
               // into a trailing duplicate pinned to the not-yet-updated React position.
-              if (token.id === draggingLabelId || remoteDragIds.has(token.id)) return null;
+              if (token.id === draggingLabelId || remoteDragIds.has(token.id) || groupDragIds.has(token.id)) return null;
               const linkedSheetId = token.sheetId ?? token.ownerPlayerId;
               const sheet = linkedSheetId ? state.sheets[linkedSheetId] : undefined;
               const sheetHp = sheet?.data.hp;
@@ -3083,6 +3344,20 @@ export function MapCanvas({
             <MapAnnotationArrow points={arrowDraft} opacity={1} />
           ) : null}
           {activeTool.renderDraft?.(draft, runtime)}
+          {marqueeRect ? (
+            // Alt+drag selection marquee (styled after the fog tool's rect draft).
+            <Rect
+              x={marqueeRect.x}
+              y={marqueeRect.y}
+              width={marqueeRect.w}
+              height={marqueeRect.h}
+              stroke="#9ad1ff"
+              strokeWidth={1.5}
+              dash={[6, 4]}
+              fill="rgba(154,209,255,0.22)"
+              listening={false}
+            />
+          ) : null}
         </Layer>
         </MapRenderCtx.Provider>
       </Stage>
