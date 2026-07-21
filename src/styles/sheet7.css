@@ -1057,6 +1057,12 @@
   color: var(--accent);
   font-family: var(--font-display);
 }
+.npc-class-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
 .class-chip {
   align-self: flex-start;
   padding: 0.2rem 0.6rem;

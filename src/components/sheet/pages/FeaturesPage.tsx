@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ChevronDown, Search } from "lucide-react";
+import { Search } from "lucide-react";
 import {
   DEFAULT_SHEET_TEMPLATE,
   rowId,
@@ -179,25 +179,24 @@ export function FeaturesPage({ sheet }: { sheet: SheetEdit }) {
           <AbilityRow sheet={sheet} />
           <SavesRow sheet={sheet} />
           {canEdit ? (
-            <button
-              type="button"
-              className="class-chip class-chip--btn"
-              title="Set a class from the compendium (optional for NPCs)"
-              onClick={openClassEditor}
-            >
-              {value.characterClass ? classChipText : "＋ Class"}
-              <ChevronDown size={12} strokeWidth={2.2} />
-            </button>
-          ) : null}
-          {canEdit ? (
-            <button
-              type="button"
-              className="class-chip class-chip--btn"
-              title="Apply a compendium monster's stat block to this NPC"
-              onClick={() => setStatblockPickerOpen(true)}
-            >
-              ＋ Statblock
-            </button>
+            <div className="npc-class-row">
+              <button
+                type="button"
+                className="class-chip class-chip--btn"
+                title="Set a class from the compendium (optional for NPCs)"
+                onClick={openClassEditor}
+              >
+                {value.characterClass ? classChipText : "＋ Class"}
+              </button>
+              <button
+                type="button"
+                className="class-chip class-chip--btn"
+                title="Apply a compendium monster's stat block to this NPC"
+                onClick={() => setStatblockPickerOpen(true)}
+              >
+                ＋ Statblock
+              </button>
+            </div>
           ) : null}
         </div>
       ) : (
@@ -214,7 +213,6 @@ export function FeaturesPage({ sheet }: { sheet: SheetEdit }) {
               onClick={openClassEditor}
             >
               {classChipText}
-              <ChevronDown size={12} strokeWidth={2.2} />
             </button>
           ) : (
             <div className="class-chip class-chip--edit">

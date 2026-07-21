@@ -146,6 +146,19 @@ export function ClassPickerModal({
               Add as multiclass (keep {sheet.value.characterClass})
             </label>
           ) : null}
+          {hasClass && !forceAdd ? (
+            <button
+              type="button"
+              className="btn-ghost"
+              title="Remove the class entirely, leaving it unset"
+              onClick={() => {
+                sheet.update({ characterClass: "", subclass: "", classAutofill: false, classes: [] });
+                onClose();
+              }}
+            >
+              Clear class
+            </button>
+          ) : null}
           <label>
             Subclass
             <select value={subclassId} onChange={(e) => setSubclassId(e.target.value)}>
