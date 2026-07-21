@@ -553,3 +553,35 @@ export function npcHasContent(s: CharacterSheet): boolean {
     )
   );
 }
+
+/**
+ * Resets everything a stat block fills in (AC/HP/abilities/senses/actions/features/...)
+ * back to a blank NPC's baseline. Leaves identity fields (name, alignment, race,
+ * background, notes, inventory, class...) untouched — those aren't part of the block.
+ */
+export function clearStatblockPatch(): Partial<CharacterSheet> {
+  return {
+    creatureType: "",
+    size: "",
+    cr: "",
+    xp: 0,
+    source: "",
+    ac: 0,
+    hp: { current: 0, max: 0 },
+    hitDice: { current: 0, max: 0, die: "d8" },
+    speed: 30,
+    proficiencyBonus: 2,
+    initiative: 0,
+    abilityScores: {},
+    saveMods: {},
+    skillMods: {},
+    senses: "",
+    languages: [],
+    vulnerabilities: [],
+    resistances: [],
+    immunities: [],
+    conditionImmunities: [],
+    attacks: [],
+    features: [],
+  };
+}

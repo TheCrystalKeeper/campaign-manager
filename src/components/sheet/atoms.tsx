@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, type ReactNode } from "react";
 import { NumberInput } from "../NumberInput";
 import { formatModifier } from "../../lib/types";
 
@@ -26,6 +26,71 @@ export function Field({
         onChange={(e) => onChange(e.target.value)}
       />
     </div>
+  );
+}
+
+/**
+ * A textarea that grows to fit its content instead of scrolling — its height tracks the
+ * text's scrollHeight, recomputed on edit and whenever the field's width changes (e.g. the
+ * sheet sidebar is dragged narrower). Manual resize is disabled since the height is managed.
+ */
+export function AutoGrowTextarea({
+  value,
+  disabled,
+  placeholder,
+  rows = 1,
+  className,
+  ariaLabel,
+  onChange,
+}: {
+  value: string;
+  disabled?: boolean;
+  placeholder?: string;
+  rows?: number;
+  className?: string;
+  ariaLabel?: string;
+  onChange: (value: string) => void;
+}) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+
+  const fit = () => {
+    const el = ref.current;
+    if (!el) return;
+    // Collapse first so scrollHeight reflects the content, not the current box.
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  };
+
+  // Fit on mount and whenever the text changes.
+  useLayoutEffect(fit, [value]);
+
+  // Re-fit when the field's own width changes (wrapping shifts). Guard on width so our
+  // height writes above don't retrigger the observer into a loop.
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    let lastWidth = el.clientWidth;
+    const observer = new ResizeObserver(() => {
+      if (el.clientWidth !== lastWidth) {
+        lastWidth = el.clientWidth;
+        fit();
+      }
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <textarea
+      ref={ref}
+      className={`textarea-autogrow${className ? ` ${className}` : ""}`}
+      value={value}
+      rows={rows}
+      disabled={disabled}
+      placeholder={placeholder}
+      aria-label={ariaLabel}
+      onChange={(e) => onChange(e.target.value)}
+    />
   );
 }
 

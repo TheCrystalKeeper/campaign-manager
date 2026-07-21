@@ -103,25 +103,26 @@ export function JoinScreen({ onJoin, nightMode, onToggleNight }: JoinScreenProps
                 <span className="muted">No campaigns yet — create one.</span>
               ) : null}
               {campaigns.map((campaign) => (
-                <button
-                  key={campaign.roomId}
-                  className={`campaign-item${campaign.roomId === selectedRoomId ? " selected" : ""}`}
-                  onClick={() => setSelectedRoomId(campaign.roomId)}
-                >
-                  {campaign.iconUrl ? <img src={campaign.iconUrl} alt="" /> : null}
-                  <span>{campaign.name}</span>
-                </button>
+                <div key={campaign.roomId} className="campaign-entry">
+                  <button
+                    className={`campaign-item${campaign.roomId === selectedRoomId ? " selected" : ""}`}
+                    onClick={() => setSelectedRoomId(campaign.roomId)}
+                  >
+                    {campaign.iconUrl ? <img src={campaign.iconUrl} alt="" /> : null}
+                    <span>{campaign.name}</span>
+                  </button>
+                  {campaign.roomId === selectedRoomId ? (
+                    <div className="campaign-description">
+                      {campaign.description ? (
+                        campaign.description
+                      ) : (
+                        <span className="muted">No description yet.</span>
+                      )}
+                    </div>
+                  ) : null}
+                </div>
               ))}
             </div>
-            {selectedCampaign ? (
-              <div className="campaign-description">
-                {selectedCampaign.description ? (
-                  selectedCampaign.description
-                ) : (
-                  <span className="muted">No description yet.</span>
-                )}
-              </div>
-            ) : null}
           </div>
 
           <div className="stack">

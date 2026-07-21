@@ -5,7 +5,7 @@ import { CroppableImage } from "../CroppableImage";
 import { ImageCropModal } from "../ImageCropModal";
 import { AssetPickerModal } from "../AssetPickerModal";
 import { NumberInput } from "../NumberInput";
-import { BarMeter, DerivedNumber, StatBadge } from "./atoms";
+import { AutoGrowTextarea, BarMeter, DerivedNumber, StatBadge } from "./atoms";
 import { DeathSaveTracker } from "./DeathSaveTracker";
 import type { RevealControl } from "./SheetHeader";
 import type { SheetEdit } from "./context";
@@ -269,7 +269,7 @@ export function SheetSidebar({
           <div className="vitals-block">
             <label className="vitals-label">Senses</label>
             {canEdit ? (
-              <input value={value.senses} placeholder="Blindsight 60 ft…" onChange={(e) => update({ senses: e.target.value })} />
+              <AutoGrowTextarea value={value.senses} placeholder="Blindsight 60 ft…" ariaLabel="Senses" onChange={(senses) => update({ senses })} />
             ) : (
               <span className="muted">{value.senses || "—"}</span>
             )}

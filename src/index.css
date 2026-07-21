@@ -365,6 +365,13 @@ textarea {
   resize: vertical;
   min-height: 3.25rem;
 }
+/* Auto-growing textarea (JS sets an exact height to fit the content): drop the manual
+   resize grip and the multi-line floor, and hide the transient scrollbar while measuring. */
+.textarea-autogrow {
+  resize: none;
+  min-height: 0;
+  overflow: hidden;
+}
 /* When a textarea grows a scrollbar, the corner where the scrollbar meets the resize grip
    defaults to a bright white box that clashes with the parchment and hides the normal grip.
    Making that corner transparent lets the browser's usual resize grip show through unchanged. */
@@ -1010,8 +1017,14 @@ textarea,
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
-  max-height: 320px;
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
+}
+.campaign-entry {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
 }
 .campaign-item {
   display: flex;
@@ -1019,6 +1032,8 @@ textarea,
   gap: 0.6rem;
   text-align: left;
   width: 100%;
+  /* Icon rows are 2rem tall; match that height on icon-less rows so every button lines up. */
+  min-height: calc(2rem + 0.48rem + 4px);
 }
 .campaign-item.selected {
   border-color: var(--accent);
@@ -1029,14 +1044,12 @@ textarea,
   border-radius: var(--radius);
   object-fit: cover;
 }
-/* Read-only blurb for the selected campaign, shown under the list on the join screen.
+/* Read-only blurb for the selected campaign, nested right under its own button.
    pre-wrap preserves the DM's line breaks; a max-height keeps long blurbs from pushing
    the card taller than the viewport. */
 .campaign-description {
-  margin-top: 0.1rem;
   padding: 0.45rem 0.55rem;
-  flex: 1 1 auto;
-  min-height: 3.25rem;
+  max-height: 8rem;
   overflow-y: auto;
   font-size: 0.95rem;
   line-height: 1.5;

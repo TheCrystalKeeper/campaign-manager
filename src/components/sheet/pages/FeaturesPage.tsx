@@ -7,12 +7,13 @@ import {
   type FeatureEntry,
 } from "../../../lib/types";
 import { attackModParts, sumParts } from "../../../lib/rules5e";
-import { statblockPatch, npcHasContent } from "../../../lib/compendiumMap";
+import { statblockPatch, npcHasContent, clearStatblockPatch } from "../../../lib/compendiumMap";
 import type { CompendiumMonster } from "../../../lib/compendium";
 import { NumberInput } from "../../NumberInput";
 import { RowTable, type RowGroup } from "../RowTable";
 import { UsesCell } from "../atoms";
 import { advFromEvent, ROLL_HINT, type SheetEdit } from "../context";
+import { confirmAction } from "../../ConfirmActionDialog";
 import { BackgroundPickerModal } from "../BackgroundPickerModal";
 import { ClassPickerModal } from "../ClassPickerModal";
 import { FeatPickerModal } from "../FeatPickerModal";
@@ -196,6 +197,24 @@ export function FeaturesPage({ sheet }: { sheet: SheetEdit }) {
               >
                 ＋ Statblock
               </button>
+              {npcHasContent(value) ? (
+                <button
+                  type="button"
+                  className="class-chip class-chip--btn"
+                  title="Reset AC/HP/abilities/actions/features back to blank"
+                  onClick={async () => {
+                    const ok = await confirmAction({
+                      title: "Clear stat block?",
+                      body: "Resets AC, HP, abilities, senses, actions, and features back to blank. The NPC's name, class, and story fields are kept.",
+                      confirmLabel: "Clear",
+                      danger: true,
+                    });
+                    if (ok) update(clearStatblockPatch());
+                  }}
+                >
+                  Clear Statblock
+                </button>
+              ) : null}
             </div>
           ) : null}
         </div>
