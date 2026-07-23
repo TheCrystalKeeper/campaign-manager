@@ -1037,7 +1037,8 @@ textarea,
 .campaign-entry {
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
+  /* Description tucks flush against its button below — no gap between them. */
+  gap: 0;
 }
 .campaign-item {
   display: flex;
@@ -1050,6 +1051,9 @@ textarea,
 }
 .campaign-item.selected {
   border-color: var(--accent);
+  /* Square the bottom so the connected description sits flush beneath it. */
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
 }
 .campaign-item img {
   width: 2rem;
@@ -1057,21 +1061,24 @@ textarea,
   border-radius: var(--radius);
   object-fit: cover;
 }
-/* Read-only blurb for the selected campaign, nested right under its own button.
-   pre-wrap preserves the DM's line breaks; a max-height keeps long blurbs from pushing
-   the card taller than the viewport. */
+/* Read-only blurb for the selected campaign, connected directly beneath its own button.
+   Top corners are squared and the top border dropped so it and the button read as one
+   panel; the button's bottom border becomes the seam. pre-wrap preserves the DM's line
+   breaks; the full description is shown (no scroll). */
 .campaign-description {
   padding: 0.45rem 0.55rem;
-  max-height: 8rem;
-  overflow-y: auto;
   font-size: 0.95rem;
   line-height: 1.5;
   color: var(--text);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   background-color: var(--surface-2);
-  border: 1.5px solid var(--border-subtle);
+  /* 2px matches the button's border width so the shared side edges line up exactly. */
+  border: 2px solid var(--border-subtle);
+  border-top: none;
   border-radius: var(--r-wob-sm);
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
   box-shadow: var(--shadow-well);
 }
 /* Small square icon preview in the DM's Campaign settings (upload / change / remove). */

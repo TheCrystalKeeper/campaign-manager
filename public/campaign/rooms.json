@@ -1,6 +1,13 @@
 {
   "rooms": [
     {
+      "roomId": "campaign-12ac92f9",
+      "name": "Test",
+      "iconUrl": null,
+      "description": "test",
+      "createdAt": 1784840616877
+    },
+    {
       "roomId": "campaign1",
       "name": "Campaign 1",
       "iconUrl": "/tokens/campaign1--asset-aca0cc0d.webp",
