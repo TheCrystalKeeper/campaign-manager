@@ -23,6 +23,7 @@ import { DM_PAGES, PLAYER_PAGES, PageSwitcher, type PageId } from "./pages/PageS
 import { StatsPage } from "./pages/StatsPage";
 import { useDiceOverlay } from "./dice/useDiceOverlay";
 import { useDmActions, useGameRoom, type JoinParams } from "./hooks/useGameRoom";
+import { buildHomebrewContext, HomebrewProvider } from "./hooks/useHomebrew";
 import { buildInverse, useHistory } from "./lib/history";
 import { readLocalFlag, writeLocalFlag } from "./lib/localFlags";
 import { Dices, IdCard, Settings, X } from "lucide-react";
@@ -712,6 +713,11 @@ export default function App() {
     };
   }, [state]);
 
+  // Homebrew read-context for the compendium pickers (however deep they mount). Must
+  // stay ABOVE the early returns — hooks after a conditional return break hook order
+  // on the lobby → joined transition.
+  const homebrewCtx = useMemo(() => (state ? buildHomebrewContext(state) : null), [state]);
+
   if (!session) {
     return <JoinScreen onJoin={setSession} nightMode={nightMode} onToggleNight={setNightMode} />;
   }
@@ -1033,6 +1039,9 @@ export default function App() {
   };
 
   return (
+    // homebrewCtx is only null before `state` exists, and the LoadingScreen return
+    // above has already handled that case.
+    <HomebrewProvider value={homebrewCtx!}>
     <div className="app">
       <ConfirmDeleteHost onDisableConfirms={() => setConfirmDeletesState(false)} />
       <ConfirmActionHost />
@@ -1445,5 +1454,6 @@ export default function App() {
         {error && status === "joined" ? <div className="error-banner">{error}</div> : null}
       </div>
     </div>
+    </HomebrewProvider>
   );
 }

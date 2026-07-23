@@ -1,9 +1,17 @@
 import { useEffect, useState } from "react";
 import { loadSpecies, type CompendiumSpecies } from "../../lib/compendium";
 import { speciesAutofillPatch } from "../../lib/compendiumMap";
+import { useHomebrew } from "../../hooks/useHomebrew";
 import { confirmAction } from "../ConfirmActionDialog";
 import { CompendiumPickerModal } from "../CompendiumPickerModal";
+import { PickerSelect } from "../pickerFilters";
+import { matchesSource } from "./ClassPickerModal";
 import type { SheetEdit } from "./context";
+
+const SOURCE_OPTIONS = [
+  { value: "official", label: "Official" },
+  { value: "homebrew", label: "Homebrew" },
+];
 
 /** Reverse-map a `race` display string ("Elf (Drow)") to species + subspecies ids. */
 function matchSpecies(
@@ -35,9 +43,16 @@ export function SpeciesPickerModal({ sheet, onClose }: { sheet: SheetEdit; onClo
   const [current, setCurrent] = useState<CompendiumSpecies | null>(null);
   const [subspeciesId, setSubspeciesId] = useState("");
   const [autofill, setAutofill] = useState(sheet.value.speciesAutofill);
+  const [sourceFilter, setSourceFilter] = useState("");
+  const { homebrew } = useHomebrew();
+  const hbSpecies = Object.values(homebrew.species);
 
   useEffect(() => {
-    void loadSpecies().then(setSpecies, () => setSpecies([]));
+    void loadSpecies().then(
+      (rows) => setSpecies([...rows, ...hbSpecies]),
+      () => setSpecies(hbSpecies),
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Wait for the species list so the pre-selection is stable at mount (loadSpecies
@@ -56,8 +71,21 @@ export function SpeciesPickerModal({ sheet, onClose }: { sheet: SheetEdit; onClo
   return (
     <CompendiumPickerModal<CompendiumSpecies>
       title="Choose a species"
-      load={loadSpecies}
+      load={async () => [...(await loadSpecies()), ...hbSpecies]}
       initialSelectedId={initial.speciesId}
+      badge={(s) => (s.homebrew ? "Homebrew" : null)}
+      filters={
+        hbSpecies.length ? (
+          <PickerSelect
+            label="Filter by source"
+            value={sourceFilter}
+            onChange={setSourceFilter}
+            allLabel="All sources"
+            options={SOURCE_OPTIONS}
+          />
+        ) : undefined
+      }
+      filterFn={(s) => matchesSource(sourceFilter, s)}
       columns={[
         { label: "Size", render: (s) => s.size },
         { label: "Speed", render: (s) => `${s.speed} ft.` },

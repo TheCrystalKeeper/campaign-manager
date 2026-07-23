@@ -33,7 +33,7 @@ const CASTER_TYPE_LABELS: Record<CasterType, string> = {
  * derives slot maximums from level.
  */
 export function SpellsPage({ sheet }: { sheet: SheetEdit }) {
-  const { value, canEdit, isDm, derived, setOverride, update, actions } = sheet;
+  const { value, canEdit, derived, setOverride, update, actions } = sheet;
   const [srdPickerOpen, setSrdPickerOpen] = useState(false);
 
   const patchSpell = (id: string, patch: Partial<SpellEntry>) =>
@@ -178,16 +178,14 @@ export function SpellsPage({ sheet }: { sheet: SheetEdit }) {
         <div className="spell-add-bar">
           <button type="button" className="btn-ghost" onClick={() => addSpell(0)}>＋ Cantrip</button>
           <button type="button" className="btn-ghost" onClick={() => addSpell(1)}>＋ Spell</button>
-          {isDm ? (
-            <button
-              type="button"
-              className="btn-ghost"
-              title="Browse the full compendium spell list (DM only)"
-              onClick={() => setSrdPickerOpen(true)}
-            >
-              ＋ From compendium
-            </button>
-          ) : null}
+          <button
+            type="button"
+            className="btn-ghost"
+            title="Browse the full compendium spell list"
+            onClick={() => setSrdPickerOpen(true)}
+          >
+            ＋ From compendium
+          </button>
         </div>
       ) : null}
       {srdPickerOpen ? <SpellPickerModal sheet={sheet} onClose={() => setSrdPickerOpen(false)} /> : null}

@@ -1094,6 +1094,11 @@ button.class-chip--btn:hover {
   background: var(--surface-2);
   border-color: var(--border);
 }
+/* Toggled-on chip (e.g. "In compendium" — NPC published as a homebrew statblock). */
+button.class-chip--on {
+  color: var(--accent);
+  border-color: var(--accent);
+}
 /* Identity chips + SRD-add buttons above the Features tables. */
 .chip-row {
   display: flex;

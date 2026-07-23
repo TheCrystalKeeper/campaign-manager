@@ -142,7 +142,8 @@ export function ItemsPanel({ state, dm, openItemSheet, dropItemAt }: ItemsPanelP
         void confirmDelete({
           kind: "item",
           name,
-          detail: "Sheet inventories keep their copies. Undoable with the undo button.",
+          detail:
+            "Board tokens of this item are removed too; sheet inventories keep their copies. Undoable with the undo button.",
         }).then((ok) => {
           if (ok) ids.forEach((id) => dm.deleteItem(id));
         });
@@ -163,7 +164,8 @@ export function ItemsPanel({ state, dm, openItemSheet, dropItemAt }: ItemsPanelP
               void confirmDelete({
                 kind: "item",
                 name: state.items[itemId]?.name || "item",
-                detail: "Sheet inventories keep their copies. Undoable with the undo button.",
+                detail:
+            "Board tokens of this item are removed too; sheet inventories keep their copies. Undoable with the undo button.",
               }).then((ok) => {
                 if (ok) dm.deleteItem(itemId);
               });

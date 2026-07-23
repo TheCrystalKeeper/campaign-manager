@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import {
   Backpack,
   Feather,
+  FlaskConical,
   HeartHandshake,
   IdCard,
   Map as MapIcon,
@@ -20,6 +21,7 @@ import { LogPanel } from "../components/LogPanel";
 import { NotesPanel } from "../components/NotesPanel";
 import { PartyPanel } from "../components/PartyPanel";
 import { HandoutsPanel } from "../components/HandoutsPanel";
+import { HomebrewPanel } from "../components/HomebrewPanel";
 import { InventoryPanel } from "../components/InventoryPanel";
 import { ScenePanel } from "../components/ScenePanel";
 import { SettingsPanel } from "../components/SettingsPanel";
@@ -39,6 +41,7 @@ export type PanelId =
   | "scenes"
   | "actors"
   | "items"
+  | "homebrew"
   | "party"
   | "handouts"
   | "notes"
@@ -208,6 +211,14 @@ export const PANELS: PanelDef[] = [
           onRollCheck={canEdit ? (check, adv) => ctx.rollCheck(sheetId, check, adv) : undefined}
           onRest={canEdit ? (kind, spendHitDice) => ctx.room.send({ type: "REST", sheetId, kind, spendHitDice }) : undefined}
           conditions={buildConditionsControl(ctx.state.tokens, sheetId, canEdit, ctx.room.send)}
+          homebrewTemplate={
+            ctx.isDm && record?.kind === "npc"
+              ? {
+                  on: Boolean(record.homebrew),
+                  toggle: (on) => ctx.dm.setSheetHomebrew(sheetId, on),
+                }
+              : undefined
+          }
           actions={
             canEdit
               ? {
@@ -233,7 +244,10 @@ export const PANELS: PanelDef[] = [
       return item ? item.name || "Item" : "Item";
     },
     defaultPos: (vw) => ({ x: Math.max(16, vw - 760), y: 96 }),
-    width: 320,
+    // 480 fits the icon-row's six controls (Change icon / Library / Crop / Clear +
+    // 3 icon buttons) on one line; minWidth keeps a drag-resize from wrapping them again.
+    width: 480,
+    minWidth: 460,
     render: (ctx) => {
       const item = ctx.viewItemId ? ctx.state.items[ctx.viewItemId] : null;
       if (!item) {
@@ -363,6 +377,20 @@ export const PANELS: PanelDef[] = [
         dropItemAt={ctx.dropItemAt}
       />
     ),
+  },
+  {
+    id: "homebrew",
+    label: "Homebrew",
+    icon: <FlaskConical size={17} strokeWidth={2.2} />,
+    dockable: true,
+    roles: ["dm"],
+    title: () => "Homebrew",
+    defaultPos: (vw) => ({ x: vw - 392, y: 172 }),
+    width: 360,
+    height: 560,
+    minWidth: 320,
+    minHeight: 320,
+    render: (ctx) => <HomebrewPanel state={ctx.state} dm={ctx.dm} />,
   },
   {
     id: "party",

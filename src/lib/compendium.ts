@@ -24,7 +24,15 @@ export type CompendiumCategory =
 /** Ability-score prerequisite for adding a class (multiclassing). */
 export type ClassPrereq = { abilityIds: string[]; min: number; mode: "and" | "or" };
 
-export type CompendiumClass = {
+/**
+ * Campaign-created entries (stored in GameState.homebrew, merged into pickers next to
+ * the official rows) carry `homebrew: true`; static compendium rows never set it.
+ * A dedicated flag rather than a "source" string — CompendiumMonster.source is already
+ * a book citation.
+ */
+export type HomebrewMark = { homebrew?: boolean };
+
+export type CompendiumClass = HomebrewMark & {
   id: string;
   name: string;
   hitDie: number;
@@ -49,7 +57,7 @@ export type CompendiumClass = {
   };
 };
 
-export type CompendiumSubclass = {
+export type CompendiumSubclass = HomebrewMark & {
   id: string;
   name: string;
   classId: string;
@@ -59,7 +67,7 @@ export type CompendiumSubclass = {
 
 export type CompendiumTrait = { name: string; description: string };
 
-export type CompendiumSpecies = {
+export type CompendiumSpecies = HomebrewMark & {
   id: string;
   name: string;
   creatureType: string;
@@ -69,7 +77,7 @@ export type CompendiumSpecies = {
   subspecies?: Array<{ id: string; name: string; damageType?: string; traits: CompendiumTrait[] }>;
 };
 
-export type CompendiumBackground = {
+export type CompendiumBackground = HomebrewMark & {
   id: string;
   name: string;
   /** The background's two skill proficiencies as sheet skill ids ("skill-insight"). */
@@ -77,7 +85,7 @@ export type CompendiumBackground = {
   description: string;
 };
 
-export type CompendiumFeat = {
+export type CompendiumFeat = HomebrewMark & {
   id: string;
   name: string;
   /** "origin" | "general" | "fighting-style" | "epic-boon" | "maneuver" | "metamagic" | "invocation" */
@@ -85,7 +93,7 @@ export type CompendiumFeat = {
   description: string;
 };
 
-export type CompendiumSpell = {
+export type CompendiumSpell = HomebrewMark & {
   id: string;
   name: string;
   /** 0 = cantrip … 9. */
@@ -105,7 +113,7 @@ export type CompendiumSpell = {
   description: string;
 };
 
-export type CompendiumEquipment = {
+export type CompendiumEquipment = HomebrewMark & {
   id: string;
   name: string;
   category: string;
@@ -124,7 +132,7 @@ export type CompendiumEquipment = {
   description?: string;
 };
 
-export type CompendiumMagicItem = {
+export type CompendiumMagicItem = HomebrewMark & {
   id: string;
   name: string;
   itemType: ItemType;
@@ -148,7 +156,7 @@ export type CompendiumMonsterAction = {
   uses?: { current: number; max: number };
 };
 
-export type CompendiumMonster = {
+export type CompendiumMonster = HomebrewMark & {
   id: string;
   name: string;
   size: string;

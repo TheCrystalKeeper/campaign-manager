@@ -6,6 +6,7 @@ import type {
   Folder,
   GameState,
   Handout,
+  HomebrewCategory,
   ItemRecord,
   JoinMessage,
   Light,
@@ -607,6 +608,12 @@ export function useDmActions(room: GameRoom) {
       duplicateItem: (itemId: string, newItemId: string) =>
         send({ type: "DUPLICATE_ITEM", itemId, newItemId }),
       deleteItem: (itemId: string) => send({ type: "DELETE_ITEM", itemId }),
+      upsertHomebrew: (category: HomebrewCategory, entry: unknown) =>
+        send({ type: "UPSERT_HOMEBREW", category, entry }),
+      deleteHomebrew: (category: HomebrewCategory, id: string) =>
+        send({ type: "DELETE_HOMEBREW", category, id }),
+      setSheetHomebrew: (sheetId: string, homebrew: boolean) =>
+        send({ type: "SET_SHEET_HOMEBREW", sheetId, homebrew }),
       addHandout: (handout: Handout) => send({ type: "ADD_HANDOUT", handout }),
       updateHandout: (handout: Handout) => send({ type: "UPDATE_HANDOUT", handout }),
       removeHandout: (handoutId: string) => send({ type: "REMOVE_HANDOUT", handoutId }),

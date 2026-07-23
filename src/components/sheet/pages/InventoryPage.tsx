@@ -3,6 +3,7 @@ import { Shield } from "lucide-react";
 import {
   createInventoryRow,
   INVENTORY_CATEGORIES,
+  inventoryRowFromItem,
   SHEET_ROW_CAPS,
   type Currency,
   type InventoryCategory,
@@ -39,7 +40,7 @@ const CURRENCY_KEYS: Array<{ key: keyof Currency; label: string }> = [
  * client-side display sum — no rules automation (Phase 7 manual-fields-first).
  */
 export function InventoryPage({ sheet }: { sheet: SheetEdit }) {
-  const { value, canEdit, isDm, derived, setOverride, update, onRollCheck, actions } = sheet;
+  const { value, canEdit, derived, setOverride, update, onRollCheck, actions } = sheet;
   const [srdPickerOpen, setSrdPickerOpen] = useState(false);
 
   const setRows = (rows: InventoryEntry[]) => update({ inventory: rows });
@@ -134,12 +135,12 @@ export function InventoryPage({ sheet }: { sheet: SheetEdit }) {
         ))}
       </div>
 
-      {canEdit && isDm ? (
+      {canEdit ? (
         <div className="spell-add-bar">
           <button
             type="button"
             className="btn-ghost"
-            title="Browse the full compendium item list (DM only)"
+            title="Browse the full compendium item list"
             onClick={() => setSrdPickerOpen(true)}
           >
             ＋ From compendium
@@ -150,6 +151,8 @@ export function InventoryPage({ sheet }: { sheet: SheetEdit }) {
         <SrdItemPickerModal
           onPickEquipment={(eq) => appendRow(inventoryRowFromEquipment(eq))}
           onPickMagicItem={(mi) => appendRow(inventoryRowFromMagicItem(mi))}
+          // Keeps the itemId catalog link, so the row tracks the item's name/icon.
+          onPickHomebrewItem={(item) => appendRow(inventoryRowFromItem(item))}
           onClose={() => setSrdPickerOpen(false)}
         />
       ) : null}

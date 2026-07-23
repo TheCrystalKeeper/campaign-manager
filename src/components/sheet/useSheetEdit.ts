@@ -19,6 +19,7 @@ export function useSheetEdit(
     onRollCheck?: SheetEdit["onRollCheck"];
     conditions?: SheetEdit["conditions"];
     actions?: SheetActions;
+    homebrewTemplate?: SheetEdit["homebrewTemplate"];
   },
 ): {
   sheet: SheetEdit | null;
@@ -71,6 +72,7 @@ export function useSheetEdit(
       onRollCheck: opts.onRollCheck,
       conditions: opts.conditions,
       actions: opts.actions,
+      homebrewTemplate: opts.homebrewTemplate,
     },
     uploading,
     handlePortrait,

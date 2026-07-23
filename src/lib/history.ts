@@ -114,8 +114,17 @@ export function buildInverse(
       if (record.npcFolderId) {
         undo.push({ type: "SET_SHEET_FOLDER", sheetId: msg.sheetId, folderId: record.npcFolderId, tree: "npc" });
       }
-      // Known limitation: board tokens that pointed at this sheet were unlinked by the
-      // delete and stay unlinked after the undo.
+      if (record.homebrew) {
+        // Record-level flag — UPDATE_SHEET patches only `data`, so it needs its own step.
+        undo.push({ type: "SET_SHEET_HOMEBREW", sheetId: msg.sheetId, homebrew: true });
+      }
+      // The delete cascades to the sheet's board tokens — restore them after the sheet
+      // steps so the server re-links labels against the recreated sheet. Silent: N
+      // "Token placed." log lines for one undo would be noise. (Initiative entries
+      // pruned by the cascade are not restored — combat is transient.)
+      for (const token of state.tokens.filter((t) => t.sheetId === msg.sheetId)) {
+        undo.push({ type: "ADD_TOKEN", token, silent: true });
+      }
       return { undo, redo: msg };
     }
     case "CREATE_ITEM":
@@ -127,13 +136,15 @@ export function buildInverse(
       if (!item) {
         return null;
       }
-      return {
-        undo: [
-          { type: "CREATE_ITEM", itemId: msg.itemId, name: item.name },
-          { type: "UPDATE_ITEM", item },
-        ],
-        redo: msg,
-      };
+      const undo: ClientMessage[] = [
+        { type: "CREATE_ITEM", itemId: msg.itemId, name: item.name },
+        { type: "UPDATE_ITEM", item },
+      ];
+      // The delete cascades to the item's board tokens — restore them (silently) too.
+      for (const token of state.tokens.filter((t) => t.itemId === msg.itemId)) {
+        undo.push({ type: "ADD_TOKEN", token, silent: true });
+      }
+      return { undo, redo: msg };
     }
     default:
       return null;

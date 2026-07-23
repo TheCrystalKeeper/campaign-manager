@@ -21,6 +21,11 @@ import {
   MAX_SHEET_BYTES,
   MAX_TEMPLATE_EXTENT,
   MAX_WALLS,
+  HOMEBREW_CAP,
+  HOMEBREW_CATEGORIES,
+  HOMEBREW_MAX_BYTES,
+  upsertHomebrewEntry,
+  deleteHomebrewEntry,
   TEMPLATE_KINDS,
   TOKEN_SFX_NAMES,
   type CampaignExport,
@@ -58,6 +63,7 @@ import {
   type Scene,
   type ServerMessage,
   type SheetRecord,
+  type Token,
 } from "../src/lib/types";
 import { buildRollRecord, deriveRollCategory, type RollLogEntry } from "../src/lib/rollStats";
 import { clampMove, movementSegments } from "../src/lib/visibility";
@@ -160,6 +166,12 @@ export default class GameServer implements Party.Server {
         });
       }
     }
+    // One-time orphan sweep: before DELETE_ITEM cascaded, deleting an item left its
+    // tokens behind with a dangling itemId. A dangling itemId is unambiguous (unlike a
+    // nulled sheetId, which can mean an intentionally unlinked token), so sweep on load.
+    this.state.tokens = this.state.tokens.filter(
+      (token) => !(token.itemId && !this.state.items[token.itemId]),
+    );
     this.clearStaleDm();
     await this.persistState();
     await this.loadRollArchive();
@@ -409,6 +421,61 @@ export default class GameServer implements Party.Server {
         combat.turnIndex = index;
       }
     }
+  }
+
+  /// <summary>
+  /// Cascade helper: removes every token matching the predicate (all scenes — tokens are
+  /// one flat array) and drops matching combat entries so a deleted entity doesn't linger
+  /// in the initiative order. Combat pruning also matches by the entry's own sheetId,
+  /// since entries keep that link even after their token is gone. Entries removed before
+  /// the current turn shift turnIndex down so the same combatant keeps the turn; an
+  /// emptied combat ends. Returns the removed tokens (callers may log/inspect).
+  /// </summary>
+  cascadeRemoveTokens(
+    matchToken: (token: Token) => boolean,
+    matchSheetId?: string,
+  ): Token[] {
+    const removed = this.state.tokens.filter(matchToken);
+    if (removed.length > 0) {
+      this.state.tokens = this.state.tokens.filter((token) => !matchToken(token));
+    }
+    const combat = this.state.combat;
+    if (combat) {
+      const removedIds = new Set(removed.map((token) => token.id));
+      const matchEntry = (entry: CombatEntry) =>
+        (entry.tokenId !== null && removedIds.has(entry.tokenId)) ||
+        // The sheetId arm only fires when the entry's token is already gone — a
+        // combat entry's sheetId is frozen at COMBAT_START, so a token re-linked to
+        // a different sheet mid-combat must keep its entry when the OLD sheet dies.
+        (matchSheetId !== undefined &&
+          entry.sheetId === matchSheetId &&
+          (entry.tokenId === null ||
+            !this.state.tokens.some((token) => token.id === entry.tokenId)));
+      let turnIndex = combat.turnIndex;
+      const kept: CombatEntry[] = [];
+      combat.entries.forEach((entry, index) => {
+        if (matchEntry(entry)) {
+          if (index < combat.turnIndex) {
+            turnIndex -= 1;
+          }
+        } else {
+          kept.push(entry);
+        }
+      });
+      if (kept.length !== combat.entries.length) {
+        if (kept.length === 0) {
+          this.state.combat = null;
+          this.logEvent("Combat ended.");
+        } else {
+          combat.entries = kept;
+          // Removing the current combatant passes the turn to the NEXT entry; when
+          // that runs off the end of the order, the turn wraps to the top (a clamp
+          // would hand the turn BACK to someone who already acted this round).
+          combat.turnIndex = turnIndex >= kept.length ? 0 : Math.max(turnIndex, 0);
+        }
+      }
+    }
+    return removed;
   }
 
   /// <summary>
@@ -2114,7 +2181,10 @@ export default class GameServer implements Party.Server {
         const token = syncTokenFromState(normalizeToken(parsed.token), this.state);
         this.state.tokens.push(token);
         // Log entries are shared with players — a concealed name must not leak here.
-        this.logEvent(`Token “${(token.nameConcealed ? "???" : token.label) || "Token"}” placed.`);
+        // Undo restores send silent=true so re-adding N tokens doesn't spam the log.
+        if (!parsed.silent) {
+          this.logEvent(`Token “${(token.nameConcealed ? "???" : token.label) || "Token"}” placed.`);
+        }
         void this.broadcastState();
         break;
       }
@@ -2428,9 +2498,9 @@ export default class GameServer implements Party.Server {
           return;
         }
         delete this.state.sheets[parsed.sheetId];
-        this.state.tokens = this.state.tokens.map((token) =>
-          token.sheetId === parsed.sheetId ? { ...token, sheetId: null } : token,
-        );
+        // The entity is gone — its board tokens (every scene) and initiative entries go
+        // with it, mirroring REMOVE_PLAYER_SLOT's cascade for player tokens.
+        this.cascadeRemoveTokens((token) => token.sheetId === parsed.sheetId, parsed.sheetId);
         void this.broadcastState();
         break;
       }
@@ -2864,8 +2934,75 @@ export default class GameServer implements Party.Server {
         break;
       }
       case "DELETE_ITEM": {
-        // Sheet inventories keep their name copies, so this is always safe.
+        // Guard before the cascade: non-item tokens carry itemId undefined, so an
+        // absent/empty id in a malformed message would match (and delete) every one.
+        if (typeof parsed.itemId !== "string" || !parsed.itemId) {
+          break;
+        }
+        // Sheet inventories keep their name copies, so those survive; board tokens
+        // linked to the item cascade away with it.
         delete this.state.items[parsed.itemId];
+        this.cascadeRemoveTokens((token) => token.itemId === parsed.itemId);
+        void this.broadcastState();
+        break;
+      }
+      case "UPSERT_HOMEBREW": {
+        if (!HOMEBREW_CATEGORIES.includes(parsed.category)) {
+          this.sendTo(sender, { type: "ERROR", message: "Unknown homebrew category." });
+          return;
+        }
+        const store = this.state.homebrew[parsed.category] as Record<string, unknown>;
+        const entryId =
+          parsed.entry && typeof parsed.entry === "object"
+            ? (parsed.entry as { id?: unknown }).id
+            : undefined;
+        const isNew = typeof entryId !== "string" || !store[entryId];
+        if (isNew && Object.keys(store).length >= HOMEBREW_CAP) {
+          this.sendTo(sender, {
+            type: "ERROR",
+            message: `Homebrew limit reached (${HOMEBREW_CAP} per category). Remove some first.`,
+          });
+          return;
+        }
+        const next = upsertHomebrewEntry(this.state.homebrew, parsed.category, parsed.entry);
+        if (!next) {
+          this.sendTo(sender, { type: "ERROR", message: "Invalid homebrew entry." });
+          return;
+        }
+        if (JSON.stringify(next).length > HOMEBREW_MAX_BYTES) {
+          this.sendTo(sender, {
+            type: "ERROR",
+            message: "Homebrew storage is full — shorten some descriptions or remove entries.",
+          });
+          return;
+        }
+        this.state.homebrew = next;
+        void this.broadcastState();
+        break;
+      }
+      case "DELETE_HOMEBREW": {
+        if (!HOMEBREW_CATEGORIES.includes(parsed.category)) {
+          break;
+        }
+        const store = this.state.homebrew[parsed.category] as Record<string, unknown>;
+        if (!store[parsed.id]) {
+          break;
+        }
+        this.state.homebrew = deleteHomebrewEntry(this.state.homebrew, parsed.category, parsed.id);
+        void this.broadcastState();
+        break;
+      }
+      case "SET_SHEET_HOMEBREW": {
+        const record = this.state.sheets[parsed.sheetId];
+        if (!record || record.kind !== "npc") {
+          this.sendTo(sender, { type: "ERROR", message: "Only NPC sheets can be published as homebrew." });
+          return;
+        }
+        if (parsed.homebrew) {
+          record.homebrew = true;
+        } else {
+          delete record.homebrew;
+        }
         void this.broadcastState();
         break;
       }
@@ -3036,16 +3173,18 @@ export default class GameServer implements Party.Server {
           (slot) => slot.id !== parsed.slotId,
         );
         delete this.state.sheets[parsed.slotId];
-        // The player is gone — their character tokens leave the board with them. NPC
-        // tokens they merely CONTROLLED (mind-control) stay, but revert to DM control.
-        this.state.tokens = this.state.tokens
-          .filter(
-            (token) =>
-              !(token.kind === "player" && (token.ownerPlayerId === parsed.slotId || token.sheetId === parsed.slotId)),
-          )
-          .map((token) =>
-            token.ownerPlayerId === parsed.slotId ? { ...token, ownerPlayerId: null } : token,
-          );
+        // The player is gone — their character tokens (and any token linked to their
+        // sheet) leave the board and initiative with them. NPC tokens they merely
+        // CONTROLLED (mind-control) stay, but revert to DM control.
+        this.cascadeRemoveTokens(
+          (token) =>
+            token.sheetId === parsed.slotId ||
+            (token.kind === "player" && token.ownerPlayerId === parsed.slotId),
+          parsed.slotId,
+        );
+        this.state.tokens = this.state.tokens.map((token) =>
+          token.ownerPlayerId === parsed.slotId ? { ...token, ownerPlayerId: null } : token,
+        );
         void this.broadcastState();
         break;
       }

@@ -1,5 +1,17 @@
 import type { CampaignManifest } from "./campaignManifest";
 import type { DiceTrack, DieSpec, WorldPoint } from "./dice3d";
+// Type-only (compendium.ts imports runtime values from this file; a value import
+// here would create a runtime cycle).
+import type {
+  ClassPrereq,
+  CompendiumBackground,
+  CompendiumClass,
+  CompendiumFeat,
+  CompendiumSpecies,
+  CompendiumSpell,
+  CompendiumSubclass,
+  CompendiumTrait,
+} from "./compendium";
 
 export type Role = "dm" | "player";
 
@@ -654,6 +666,8 @@ export type ItemRecord = {
   equippable?: boolean;
   /** Attack roll bonus for weapons. */
   toHit?: number;
+  /** Published to the item picker as a homebrew item — visible to players (full record survives redaction). */
+  homebrew?: boolean;
 };
 
 /** Inventory row category (Phase 7) — drives the grouped Inventory tables. */
@@ -814,6 +828,12 @@ export type ClassEntry = {
   /** Levels in THIS class (1..20); the sheet's `level` is the sum across entries. */
   level: number;
   isFirstClass: boolean;
+  /**
+   * The class's multiclass slot-pool contribution, stamped when picked from the
+   * compendium. Lets homebrew caster classes pool spell slots — the rules engine
+   * prefers this over its name-keyed official-class lookup.
+   */
+  casterType?: "full" | "half" | "pact";
 };
 
 export const MAX_CLASSES = 5;
@@ -1121,6 +1141,8 @@ export type SheetRecord = {
   npcFolderId?: string | null;
   /** Manual ordering in the NPCs page. */
   npcSortOrder?: number;
+  /** NPC sheets only: published to the monster picker as a homebrew statblock. */
+  homebrew?: boolean;
   /** Set only on outbound copies whose hidden sections were stripped server-side. */
   redacted?: boolean;
 };
@@ -1185,6 +1207,7 @@ export function normalizeSheetRecord(
     ...(typeof record.npcSortOrder === "number" && Number.isFinite(record.npcSortOrder)
       ? { npcSortOrder: record.npcSortOrder }
       : {}),
+    ...(kind === "npc" && record.homebrew ? { homebrew: true } : {}),
     ...(record.redacted ? { redacted: true } : {}),
   };
 }
@@ -1229,7 +1252,329 @@ export function normalizeItem(item: Partial<ItemRecord> & { id: string }): ItemR
     ...(typeof item.toHit === "number" && Number.isFinite(item.toHit)
       ? { toHit: Math.round(item.toHit) }
       : {}),
+    ...(item.homebrew ? { homebrew: true } : {}),
   };
+}
+
+// ---------------------------------------------------------------------------
+// Homebrew compendium entries
+// ---------------------------------------------------------------------------
+
+/// <summary>
+/// DM-authored compendium entries, stored in campaign state so they sync to every
+/// client and persist/export with the campaign, and merged into the pickers next to
+/// the official rows. Entries reuse the exact Compendium* shapes so every existing
+/// mapper (classAutofillPatch, spellEntryFromCompendium, ...) consumes them
+/// unchanged; normalization stamps `homebrew: true` for badges/filters. Homebrew
+/// ITEMS are catalog ItemRecords and homebrew MONSTERS are NPC SheetRecords (each
+/// flagged `homebrew`), not entries here — their existing editors are the authoring UI.
+/// </summary>
+export type HomebrewState = {
+  classes: Record<string, CompendiumClass>;
+  subclasses: Record<string, CompendiumSubclass>;
+  spells: Record<string, CompendiumSpell>;
+  backgrounds: Record<string, CompendiumBackground>;
+  feats: Record<string, CompendiumFeat>;
+  species: Record<string, CompendiumSpecies>;
+};
+
+export type HomebrewCategory = keyof HomebrewState;
+
+export const HOMEBREW_CATEGORIES: HomebrewCategory[] = [
+  "classes",
+  "subclasses",
+  "spells",
+  "backgrounds",
+  "feats",
+  "species",
+];
+
+/** Per-category entry cap; keeps worst-case homebrew bytes well under MAX_CAMPAIGN_BYTES. */
+export const HOMEBREW_CAP = 50;
+/** Whole-store byte budget, enforced on upsert. */
+export const HOMEBREW_MAX_BYTES = 300_000;
+/** Homebrew descriptions get rulebook-length room (sheet rows keep DESC_CAP). */
+const HB_DESC_CAP = 5000;
+
+export function createEmptyHomebrew(): HomebrewState {
+  return { classes: {}, subclasses: {}, spells: {}, backgrounds: {}, feats: {}, species: {} };
+}
+
+const hbStr = (v: unknown, max: number): string =>
+  typeof v === "string" ? v.trim().slice(0, max) : "";
+
+const hbStrList = (v: unknown, maxItems: number, maxLen: number): string[] =>
+  Array.isArray(v)
+    ? v
+        .filter((s): s is string => typeof s === "string" && s.trim().length > 0)
+        .slice(0, maxItems)
+        .map((s) => s.trim().slice(0, maxLen))
+    : [];
+
+const hbNum = (v: unknown, min: number, max: number, fallback: number): number =>
+  typeof v === "number" && Number.isFinite(v)
+    ? Math.min(Math.max(Math.round(v), min), max)
+    : fallback;
+
+const hbTraits = (v: unknown, maxItems: number): CompendiumTrait[] =>
+  Array.isArray(v)
+    ? v
+        .flatMap((t) => {
+          if (!t || typeof t !== "object") return [];
+          const name = hbStr((t as { name?: unknown }).name, NAME_CAP);
+          const description = hbStr((t as { description?: unknown }).description, HB_DESC_CAP);
+          return name ? [{ name, description }] : [];
+        })
+        .slice(0, maxItems)
+    : [];
+
+/** Shared id+name extraction; every homebrew entry needs both to be usable. */
+function hbBase(raw: unknown): { entry: Record<string, unknown>; id: string; name: string } | null {
+  if (!raw || typeof raw !== "object") return null;
+  const entry = raw as Record<string, unknown>;
+  const id = hbStr(entry.id, 80);
+  const name = hbStr(entry.name, NAME_CAP);
+  // Prototype keys would corrupt the plain-object stores (`store["__proto__"] = x`
+  // reassigns the prototype instead of creating a key). Editor ids are "hb-" UUIDs;
+  // only a hand-crafted message can hit this.
+  if (id === "__proto__" || id === "constructor" || id === "prototype") return null;
+  return id && name ? { entry, id, name } : null;
+}
+
+function hbPrereqs(v: unknown): ClassPrereq[] {
+  if (!Array.isArray(v)) return [];
+  return v
+    .flatMap((p) => {
+      if (!p || typeof p !== "object") return [];
+      const abilityIds = hbStrList((p as { abilityIds?: unknown }).abilityIds, 6, 12);
+      if (!abilityIds.length) return [];
+      return [
+        {
+          abilityIds,
+          min: hbNum((p as { min?: unknown }).min, 1, 30, 13),
+          mode: (p as { mode?: unknown }).mode === "or" ? ("or" as const) : ("and" as const),
+        },
+      ];
+    })
+    .slice(0, 4);
+}
+
+function normalizeHomebrewClass(raw: unknown): CompendiumClass | null {
+  const base = hbBase(raw);
+  if (!base) return null;
+  const { entry, id, name } = base;
+  const armorProfs = hbStrList(entry.armorProfs, 12, PILL_CAP);
+  const weaponProfs = hbStrList(entry.weaponProfs, 12, PILL_CAP);
+  const toolProfs = hbStrList(entry.toolProfs, 12, PILL_CAP);
+  const skillRaw = entry.skillChoices as { choose?: unknown; from?: unknown } | undefined;
+  const skillFrom = hbStrList(skillRaw?.from, 30, 40);
+  const spellRaw = entry.spellcasting as { abilityId?: unknown; casterType?: unknown } | undefined;
+  const casterType = (["full", "half", "pact"] as const).find((t) => t === spellRaw?.casterType);
+  const spellAbility = hbStr(spellRaw?.abilityId, 12);
+  const mcRaw = (entry.multiclass ?? {}) as Record<string, unknown>;
+  const mcArmor = hbStrList(mcRaw.armorProfs, 12, PILL_CAP);
+  const mcWeapon = hbStrList(mcRaw.weaponProfs, 12, PILL_CAP);
+  const mcTools = hbStrList(mcRaw.toolProfs, 12, PILL_CAP);
+  const mcSkillRaw = mcRaw.skillChoice as { choose?: unknown; from?: unknown } | undefined;
+  const mcSkillFrom = hbStrList(mcSkillRaw?.from, 30, 40);
+  return {
+    id,
+    name,
+    hitDie: hbNum(entry.hitDie, 4, 20, 8),
+    ...(hbStr(entry.primaryAbility, 40) ? { primaryAbility: hbStr(entry.primaryAbility, 40) } : {}),
+    saves: hbStrList(entry.saves, 6, 12),
+    ...(armorProfs.length ? { armorProfs } : {}),
+    ...(weaponProfs.length ? { weaponProfs } : {}),
+    ...(toolProfs.length ? { toolProfs } : {}),
+    ...(skillFrom.length
+      ? { skillChoices: { choose: hbNum(skillRaw?.choose, 1, 10, 2), from: skillFrom } }
+      : {}),
+    ...(casterType && spellAbility
+      ? { spellcasting: { abilityId: spellAbility, casterType } }
+      : {}),
+    subclassIds: hbStrList(entry.subclassIds, HOMEBREW_CAP, 80),
+    subclassLevel: hbNum(entry.subclassLevel, 1, 20, 3),
+    multiclass: {
+      prereqs: hbPrereqs(mcRaw.prereqs),
+      ...(mcArmor.length ? { armorProfs: mcArmor } : {}),
+      ...(mcWeapon.length ? { weaponProfs: mcWeapon } : {}),
+      ...(mcTools.length ? { toolProfs: mcTools } : {}),
+      ...(mcSkillFrom.length
+        ? { skillChoice: { choose: hbNum(mcSkillRaw?.choose, 1, 10, 1), from: mcSkillFrom } }
+        : {}),
+    },
+    homebrew: true,
+  };
+}
+
+function normalizeHomebrewSubclass(raw: unknown): CompendiumSubclass | null {
+  const base = hbBase(raw);
+  if (!base) return null;
+  const { entry, id, name } = base;
+  const classId = hbStr(entry.classId, 80);
+  if (!classId) return null;
+  const summary = hbStr(entry.summary, 200);
+  return {
+    id,
+    name,
+    classId,
+    ...(summary ? { summary } : {}),
+    description: hbStr(entry.description, HB_DESC_CAP),
+    homebrew: true,
+  };
+}
+
+function normalizeHomebrewSpell(raw: unknown): CompendiumSpell | null {
+  const base = hbBase(raw);
+  if (!base) return null;
+  const { entry, id, name } = base;
+  const roll = hbStr(entry.roll, SHORT_CAP);
+  const saveAbility = hbStr(entry.saveAbility, 12);
+  return {
+    id,
+    name,
+    level: hbNum(entry.level, 0, 9, 0),
+    school: hbStr(entry.school, 40),
+    time: hbStr(entry.time, 80),
+    range: hbStr(entry.range, 80),
+    components: hbStr(entry.components, 120),
+    duration: hbStr(entry.duration, 80),
+    ...(entry.concentration ? { concentration: true } : {}),
+    ...(entry.ritual ? { ritual: true } : {}),
+    classes: hbStrList(entry.classes, 20, 80),
+    ...(roll ? { roll } : {}),
+    ...(saveAbility ? { saveAbility } : {}),
+    description: hbStr(entry.description, HB_DESC_CAP),
+    homebrew: true,
+  };
+}
+
+function normalizeHomebrewBackground(raw: unknown): CompendiumBackground | null {
+  const base = hbBase(raw);
+  if (!base) return null;
+  const { entry, id, name } = base;
+  return {
+    id,
+    name,
+    skills: hbStrList(entry.skills, 4, 40),
+    description: hbStr(entry.description, HB_DESC_CAP),
+    homebrew: true,
+  };
+}
+
+const HB_FEAT_CATEGORIES = [
+  "origin",
+  "general",
+  "fighting-style",
+  "epic-boon",
+  "maneuver",
+  "metamagic",
+  "invocation",
+];
+
+function normalizeHomebrewFeat(raw: unknown): CompendiumFeat | null {
+  const base = hbBase(raw);
+  if (!base) return null;
+  const { entry, id, name } = base;
+  const category = hbStr(entry.category, 40);
+  return {
+    id,
+    name,
+    category: HB_FEAT_CATEGORIES.includes(category) ? category : "general",
+    description: hbStr(entry.description, HB_DESC_CAP),
+    homebrew: true,
+  };
+}
+
+function normalizeHomebrewSpecies(raw: unknown): CompendiumSpecies | null {
+  const base = hbBase(raw);
+  if (!base) return null;
+  const { entry, id, name } = base;
+  const subspecies = Array.isArray(entry.subspecies)
+    ? entry.subspecies
+        .flatMap((s) => {
+          const sub = hbBase(s);
+          if (!sub) return [];
+          const damageType = hbStr(sub.entry.damageType, 40);
+          return [
+            {
+              id: sub.id,
+              name: sub.name,
+              ...(damageType ? { damageType } : {}),
+              traits: hbTraits(sub.entry.traits, 12),
+            },
+          ];
+        })
+        .slice(0, 12)
+    : [];
+  return {
+    id,
+    name,
+    creatureType: hbStr(entry.creatureType, 40) || "Humanoid",
+    size: hbStr(entry.size, 40) || "Medium",
+    speed: hbNum(entry.speed, 0, 120, 30),
+    traits: hbTraits(entry.traits, 20),
+    ...(subspecies.length ? { subspecies } : {}),
+    homebrew: true,
+  };
+}
+
+const HOMEBREW_NORMALIZERS: {
+  [C in HomebrewCategory]: (raw: unknown) => HomebrewState[C][string] | null;
+} = {
+  classes: normalizeHomebrewClass,
+  subclasses: normalizeHomebrewSubclass,
+  spells: normalizeHomebrewSpell,
+  backgrounds: normalizeHomebrewBackground,
+  feats: normalizeHomebrewFeat,
+  species: normalizeHomebrewSpecies,
+};
+
+/** Validates + inserts one entry; returns the next state, or null when the entry is invalid. */
+export function upsertHomebrewEntry(
+  homebrew: HomebrewState,
+  category: HomebrewCategory,
+  raw: unknown,
+): HomebrewState | null {
+  const entry = HOMEBREW_NORMALIZERS[category](raw);
+  if (!entry) return null;
+  const store = { ...(homebrew[category] as Record<string, unknown>), [entry.id]: entry };
+  return { ...homebrew, [category]: store } as HomebrewState;
+}
+
+/** Removes an entry; deleting a class also removes its homebrew subclasses (unreachable without it). */
+export function deleteHomebrewEntry(
+  homebrew: HomebrewState,
+  category: HomebrewCategory,
+  id: string,
+): HomebrewState {
+  const store = { ...(homebrew[category] as Record<string, unknown>) };
+  delete store[id];
+  const next = { ...homebrew, [category]: store } as HomebrewState;
+  if (category === "classes") {
+    next.subclasses = Object.fromEntries(
+      Object.entries(next.subclasses).filter(([, sub]) => sub.classId !== id),
+    );
+  }
+  return next;
+}
+
+/** Validates persisted homebrew; absent/malformed input yields an empty store (old saves). */
+export function normalizeHomebrew(raw: unknown): HomebrewState {
+  const source = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  const out = createEmptyHomebrew();
+  for (const category of HOMEBREW_CATEGORIES) {
+    const value = source[category];
+    if (!value || typeof value !== "object") continue;
+    const normalize = HOMEBREW_NORMALIZERS[category];
+    const store = out[category] as Record<string, { id: string }>;
+    for (const entryRaw of Object.values(value)) {
+      if (Object.keys(store).length >= HOMEBREW_CAP) break;
+      const entry = normalize(entryRaw);
+      if (entry) store[entry.id] = entry;
+    }
+  }
+  return out;
 }
 
 export type PlayerSlot = {
@@ -1406,6 +1751,8 @@ export type GameState = {
   folders: Folder[];
   /** Item catalog (DM-only; sheets copy item names into their inventories). */
   items: Record<string, ItemRecord>;
+  /** DM-authored compendium entries (classes/spells/...), unredacted — see HomebrewState. */
+  homebrew: HomebrewState;
   /** DM-managed handout images. Players receive only the ones granted to them (redacted). */
   handouts: Handout[];
   /** Per-group default token shapes (Phase 6.7). */
@@ -1544,7 +1891,8 @@ export type ClientMessage =
    * ScenesPage draft edit.
    */
   | { type: "SET_SCENE_PLAYER_VISIBLE"; sceneId: string; visible: boolean }
-  | { type: "ADD_TOKEN"; token: Token }
+  /** `silent` skips the "Token placed." log line (undo restores re-add without spam). */
+  | { type: "ADD_TOKEN"; token: Token; silent?: boolean }
   | { type: "MOVE_TOKEN"; tokenId: string; x: number; y: number; facing?: number }
   | { type: "UPDATE_TOKEN"; token: Token }
   /**
@@ -1596,6 +1944,12 @@ export type ClientMessage =
   | { type: "UPDATE_ITEM"; item: ItemRecord }
   | { type: "DUPLICATE_ITEM"; itemId: string; newItemId: string }
   | { type: "DELETE_ITEM"; itemId: string }
+  /** DM-only: create/update one homebrew entry (server validates + stamps `homebrew: true`). */
+  | { type: "UPSERT_HOMEBREW"; category: HomebrewCategory; entry: unknown }
+  /** DM-only: remove a homebrew entry. Deleting a class removes its homebrew subclasses too. */
+  | { type: "DELETE_HOMEBREW"; category: HomebrewCategory; id: string }
+  /** DM-only: publish/unpublish an NPC sheet as a homebrew statblock in the monster picker. */
+  | { type: "SET_SHEET_HOMEBREW"; sheetId: string; homebrew: boolean }
   | { type: "ADD_HANDOUT"; handout: Handout }
   /** Rename and/or edit the durable per-player visibility grants. */
   | { type: "UPDATE_HANDOUT"; handout: Handout }
@@ -2529,6 +2883,9 @@ function reconcileClasses(
       subclassName: str(typeof entry.subclassName === "string" ? entry.subclassName : "", NAME_CAP),
       level: clampInt(entry.level, 1, 20, 1),
       isFirstClass: entry.isFirstClass === true,
+      ...(entry.casterType === "full" || entry.casterType === "half" || entry.casterType === "pact"
+        ? { casterType: entry.casterType }
+        : {}),
     });
   }
   // Exactly one first class: first flagged entry wins, else the first entry.
@@ -3171,6 +3528,7 @@ export function normalizeGameState(state: GameState & LegacyGameStateFields): Ga
     combat: normalizeCombat(state.combat),
     folders,
     items,
+    homebrew: normalizeHomebrew(state.homebrew),
     // Pre-handout saves simply get an empty library (persist/export/import all round-trip here).
     handouts: (Array.isArray(state.handouts) ? state.handouts : [])
       .map((handout) => normalizeHandout(handout))
@@ -3238,6 +3596,7 @@ export function createInitialState(roomId: string): GameState {
     combat: null,
     folders: [],
     items: {},
+    homebrew: createEmptyHomebrew(),
     handouts: [],
     playersCanDraw: false,
     playersCanMove: true,

@@ -140,6 +140,14 @@ export function SheetCards({ ctx, records, onClose, allowReveal, emptyHint }: Sh
               onRollCheck={(check, adv) => ctx.rollCheck(record.id, check, adv)}
               onRest={(kind, spendHitDice) => ctx.room.send({ type: "REST", sheetId: record.id, kind, spendHitDice })}
               conditions={buildConditionsControl(ctx.state.tokens, record.id, true, ctx.room.send)}
+              homebrewTemplate={
+                ctx.isDm && record.kind === "npc"
+                  ? {
+                      on: Boolean(record.homebrew),
+                      toggle: (on) => ctx.dm.setSheetHomebrew(record.id, on),
+                    }
+                  : undefined
+              }
               actions={{
                 castSpell: (level) => ctx.room.send({ type: "CAST_SPELL", sheetId: record.id, level }),
                 useFeature: (featureId) => ctx.room.send({ type: "USE_FEATURE", sheetId: record.id, featureId }),

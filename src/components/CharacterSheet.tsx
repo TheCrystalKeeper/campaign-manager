@@ -21,6 +21,8 @@ type CharacterSheetPanelProps = {
   conditions?: SheetEdit["conditions"];
   /** Tier-3 resource actions (cast/use/death-save). */
   actions?: SheetActions;
+  /** DM-only, NPC sheets: the "Show in monster compendium" toggle. */
+  homebrewTemplate?: SheetEdit["homebrewTemplate"];
 };
 
 /**

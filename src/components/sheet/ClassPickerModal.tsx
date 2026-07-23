@@ -11,13 +11,24 @@ import {
   multiclassPrereqFailures,
 } from "../../lib/compendiumMap";
 import { DEFAULT_SHEET_TEMPLATE } from "../../lib/types";
+import { useHomebrew } from "../../hooks/useHomebrew";
 import { CompendiumPickerModal } from "../CompendiumPickerModal";
+import { PickerSelect } from "../pickerFilters";
 import { PreviewLine } from "../compendiumPreview";
 import type { SheetEdit } from "./context";
 
 const SKILL_NAME: Record<string, string> = Object.fromEntries(
   DEFAULT_SHEET_TEMPLATE.skills.map((s) => [s.id, s.name]),
 );
+
+const SOURCE_OPTIONS = [
+  { value: "official", label: "Official" },
+  { value: "homebrew", label: "Homebrew" },
+];
+
+/** Source-select predicate shared by the compendium pickers ("" = all). */
+export const matchesSource = (filter: string, row: { homebrew?: boolean }): boolean =>
+  filter === "" || (filter === "homebrew") === Boolean(row.homebrew);
 
 /// <summary>
 /// Compendium class/subclass picker, opened from the class chip. Default = names only
@@ -44,12 +55,25 @@ export function ClassPickerModal({
   const [subclassId, setSubclassId] = useState("");
   const [autofill, setAutofill] = useState(sheet.value.classAutofill);
   const [chosenSkills, setChosenSkills] = useState<string[]>([]);
+  const [sourceFilter, setSourceFilter] = useState("");
   const hasClass = Boolean(sheet.value.characterClass.trim());
   const [addMode, setAddMode] = useState(forceAdd);
+  const { homebrew } = useHomebrew();
+  const hbClasses = Object.values(homebrew.classes);
+  const hbSubclasses = Object.values(homebrew.subclasses);
 
   useEffect(() => {
-    void loadSubclasses().then(setSubclasses, () => setSubclasses([]));
-    void loadClasses().then(setAllClasses, () => setAllClasses([]));
+    // Homebrew entries ride along everywhere the official lists are used (reverse-map,
+    // prereq check, the picker rows) — captured at mount like the fetches themselves.
+    void loadSubclasses().then(
+      (rows) => setSubclasses([...rows, ...hbSubclasses]),
+      () => setSubclasses(hbSubclasses),
+    );
+    void loadClasses().then(
+      (rows) => setAllClasses([...rows, ...hbClasses]),
+      () => setAllClasses(hbClasses),
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Wait for both lists so the pre-selection is stable at mount (both are cached).
@@ -99,8 +123,21 @@ export function ClassPickerModal({
   return (
     <CompendiumPickerModal<CompendiumClass>
       title={addMode ? "Add a class (multiclass)" : "Choose a class"}
-      load={loadClasses}
+      load={async () => [...(await loadClasses()), ...hbClasses]}
       initialSelectedId={initialClassId}
+      badge={(c) => (c.homebrew ? "Homebrew" : null)}
+      filters={
+        hbClasses.length ? (
+          <PickerSelect
+            label="Filter by source"
+            value={sourceFilter}
+            onChange={setSourceFilter}
+            allLabel="All sources"
+            options={SOURCE_OPTIONS}
+          />
+        ) : undefined
+      }
+      filterFn={(c) => matchesSource(sourceFilter, c)}
       columns={[
         { label: "Hit die", render: (c) => `d${c.hitDie}` },
         { label: "Saves", render: (c) => c.saves.map((s) => s.toUpperCase()).join(", ") },
@@ -133,7 +170,8 @@ export function ClassPickerModal({
             </PreviewLine>
           ) : null}
           <p className="muted">
-            Subclass unlocks at level {c.subclassLevel}. Includes the four PHB subclasses for each class.
+            Subclass unlocks at level {c.subclassLevel}.
+            {c.homebrew ? "" : " Includes the four PHB subclasses for each class."}
           </p>
         </div>
       )}

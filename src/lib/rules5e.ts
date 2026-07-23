@@ -309,7 +309,11 @@ function casterContributions(classes: ClassEntry[]): { sources: CasterContributi
   for (const entry of classes) {
     const id = entry.className.trim().toLowerCase();
     const classLevel = Math.max(1, Math.min(20, Math.round(entry.level)));
-    if (id === "warlock") pact += classLevel;
+    // A compendium-stamped casterType (official or homebrew pick) beats the
+    // name-keyed lookup, which only knows the official base classes — including
+    // for a homebrew class that happens to be NAMED "Warlock" but isn't pact.
+    if (entry.casterType === "pact" || (!entry.casterType && id === "warlock")) pact += classLevel;
+    else if (entry.casterType) sources.push({ type: entry.casterType, classLevel });
     else if (CLASS_CASTER_WEIGHT[id]) sources.push({ type: CLASS_CASTER_WEIGHT[id], classLevel });
     else if ((id === "fighter" || id === "rogue") && THIRD_CASTER_SUBCLASS.test(entry.subclassName))
       sources.push({ type: "third", classLevel });

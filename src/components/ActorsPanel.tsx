@@ -104,11 +104,24 @@ export function ActorsPanel({
     <>
     {monsterPickerOpen ? (
       <MonsterPickerModal
-        onPick={(monster) => {
+        onPick={(row) => {
           const sheetId = newId("sheet");
-          // Ordered messages: the sheet exists by the time the patch arrives.
-          dm.createSheet(sheetId, monster.name);
-          dm.updateSheet(sheetId, monsterSheetPatch(monster));
+          // Ordered messages: the sheet exists by the time the patch arrives. Official
+          // picks map the monster onto a sheet; homebrew picks clone the template sheet
+          // wholesale (the server's normalize rebuilds nested objects, so no shared
+          // state) — with vitals reset to max, so a template published mid-fight
+          // doesn't spawn pre-wounded NPCs (parity with monsterSheetPatch).
+          dm.createSheet(sheetId, row.name);
+          dm.updateSheet(
+            sheetId,
+            row.source === "official"
+              ? monsterSheetPatch(row.monster)
+              : {
+                  ...row.sheet.data,
+                  hp: { current: row.sheet.data.hp.max, max: row.sheet.data.hp.max },
+                  hitDice: { ...row.sheet.data.hitDice, current: row.sheet.data.hitDice.max },
+                },
+          );
           if (openOnCreate) {
             openSheet(sheetId);
           }
@@ -182,7 +195,7 @@ export function ActorsPanel({
         void confirmDelete({
           kind: "NPC",
           name,
-          detail: "Board tokens lose their sheet link. Undoable with the undo button.",
+          detail: "Board tokens of this NPC are removed too. Undoable with the undo button.",
         }).then((ok) => {
           if (ok) npcIds.forEach((id) => dm.deleteSheet(id));
         });
@@ -208,7 +221,7 @@ export function ActorsPanel({
                 void confirmDelete({
                   kind: "NPC",
                   name: record.data.characterName || "NPC",
-                  detail: "Board tokens lose their sheet link. Undoable with the undo button.",
+                  detail: "Board tokens of this NPC are removed too. Undoable with the undo button.",
                 }).then((ok) => {
                   if (ok) dm.deleteSheet(sheetId);
                 });

@@ -1,9 +1,17 @@
 import { useEffect, useState } from "react";
 import { loadBackgrounds, type CompendiumBackground } from "../../lib/compendium";
 import { backgroundAutofillPatch } from "../../lib/compendiumMap";
+import { useHomebrew } from "../../hooks/useHomebrew";
 import { CompendiumPickerModal } from "../CompendiumPickerModal";
+import { PickerSelect } from "../pickerFilters";
 import { CompendiumDescription } from "../compendiumPreview";
+import { matchesSource } from "./ClassPickerModal";
 import type { SheetEdit } from "./context";
+
+const SOURCE_OPTIONS = [
+  { value: "official", label: "Official" },
+  { value: "homebrew", label: "Homebrew" },
+];
 
 const skillLabel = (id: string) =>
   id
@@ -20,9 +28,16 @@ const skillLabel = (id: string) =>
 export function BackgroundPickerModal({ sheet, onClose }: { sheet: SheetEdit; onClose: () => void }) {
   const [backgrounds, setBackgrounds] = useState<CompendiumBackground[] | null>(null);
   const [autofill, setAutofill] = useState(sheet.value.backgroundAutofill);
+  const [sourceFilter, setSourceFilter] = useState("");
+  const { homebrew } = useHomebrew();
+  const hbBackgrounds = Object.values(homebrew.backgrounds);
 
   useEffect(() => {
-    void loadBackgrounds().then(setBackgrounds, () => setBackgrounds([]));
+    void loadBackgrounds().then(
+      (rows) => setBackgrounds([...rows, ...hbBackgrounds]),
+      () => setBackgrounds(hbBackgrounds),
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Wait for the list so the pre-selection is stable at mount (loadBackgrounds is cached).
@@ -34,8 +49,21 @@ export function BackgroundPickerModal({ sheet, onClose }: { sheet: SheetEdit; on
   return (
     <CompendiumPickerModal<CompendiumBackground>
       title="Choose a background"
-      load={loadBackgrounds}
+      load={async () => [...(await loadBackgrounds()), ...hbBackgrounds]}
       initialSelectedId={initialId}
+      badge={(b) => (b.homebrew ? "Homebrew" : null)}
+      filters={
+        hbBackgrounds.length ? (
+          <PickerSelect
+            label="Filter by source"
+            value={sourceFilter}
+            onChange={setSourceFilter}
+            allLabel="All sources"
+            options={SOURCE_OPTIONS}
+          />
+        ) : undefined
+      }
+      filterFn={(b) => matchesSource(sourceFilter, b)}
       columns={[{ label: "Skills", render: (b) => b.skills.map(skillLabel).join(", ") }]}
       getSearchText={(b) => b.skills.map(skillLabel).join(" ")}
       renderPreview={(b) => (

@@ -84,6 +84,11 @@ function equipmentDescription(eq: CompendiumEquipment): string {
   return parts.join("\n");
 }
 
+/** Weapons and armor are the two equippable item types (drives `equipped`/`equippable`). */
+export function isEquippableType(itemType: string): boolean {
+  return itemType === "weapon" || itemType === "armor";
+}
+
 /** Auto to-hit ability for a weapon row: ranged/finesse -> dex, melee -> str. */
 function weaponToHitAbility(eq: CompendiumEquipment): string | undefined {
   if (eq.itemType !== "weapon" || !eq.damage) return undefined;
@@ -102,7 +107,7 @@ export function inventoryRowFromEquipment(eq: CompendiumEquipment): InventoryEnt
     ...(eq.damageType ? { damageType: cap(eq.damageType, SHORT_CAP) } : {}),
     ...(eq.range ? { range: eq.range } : {}),
     ...(toHitAbility ? { toHitAbility } : {}),
-    ...(eq.itemType === "weapon" || eq.itemType === "armor" ? { equipped: false } : {}),
+    ...(isEquippableType(eq.itemType) ? { equipped: false } : {}),
     ...(equipmentDescription(eq) ? { description: cap(equipmentDescription(eq), DESC_CAP) } : {}),
   });
 }
@@ -112,7 +117,7 @@ export function inventoryRowFromMagicItem(mi: CompendiumMagicItem): InventoryEnt
     name: cap(mi.name, NAME_CAP),
     category: inventoryCategoryForItemType(mi.itemType),
     ...(mi.attunement ? { note: "Requires attunement" } : {}),
-    ...(mi.itemType === "weapon" || mi.itemType === "armor" ? { equipped: false } : {}),
+    ...(isEquippableType(mi.itemType) ? { equipped: false } : {}),
     description: cap(mi.description, DESC_CAP),
   });
 }
@@ -127,7 +132,7 @@ export function itemPatchFromEquipment(eq: CompendiumEquipment): Partial<ItemRec
     ...(eq.damage ? { damage: cap(eq.damage, SHORT_CAP) } : {}),
     ...(eq.damageType ? { damageType: cap(eq.damageType, SHORT_CAP) } : {}),
     ...(eq.properties?.length ? { properties: eq.properties.map((p) => cap(p, PILL_CAP)) } : {}),
-    equippable: eq.itemType === "weapon" || eq.itemType === "armor",
+    equippable: isEquippableType(eq.itemType),
     description: cap(equipmentDescription(eq), DESC_CAP),
   };
 }
@@ -138,7 +143,7 @@ export function itemPatchFromMagicItem(mi: CompendiumMagicItem): Partial<ItemRec
     type: mi.itemType,
     ...(mi.rarity !== "varies" ? { rarity: mi.rarity } : {}),
     ...(mi.attunement ? { attunement: true } : {}),
-    equippable: mi.itemType === "weapon" || mi.itemType === "armor",
+    equippable: isEquippableType(mi.itemType),
     description: cap(
       [mi.rarityText ? `Rarity: ${mi.rarityText}` : "", mi.description].filter(Boolean).join("\n"),
       DESC_CAP,
@@ -201,6 +206,8 @@ export function classAutofillPatch(cls: CompendiumClass, opts: ClassPickOptions)
         subclassName,
         level: Math.max(1, opts.sheet.level),
         isFirstClass: true,
+        // Stamped so multiclass slot pooling works for homebrew casters too.
+        ...(cls.spellcasting ? { casterType: cls.spellcasting.casterType } : {}),
       },
     ],
   };
@@ -258,6 +265,7 @@ export function addMulticlassPatch(cls: CompendiumClass, opts: MulticlassAddOpti
     subclassName: opts.subclassName ? cap(opts.subclassName, NAME_CAP) : "",
     level: 1,
     isFirstClass: false,
+    ...(cls.spellcasting ? { casterType: cls.spellcasting.casterType } : {}),
   };
   const classes = [...sheet.classes, entry];
   const patch: Partial<CharacterSheet> = {
@@ -536,6 +544,59 @@ export function statblockPatch(
     immunities: unionPills(existing.immunities, patch.immunities),
     conditionImmunities: unionPills(existing.conditionImmunities, patch.conditionImmunities),
     vulnerabilities: unionPills(existing.vulnerabilities, patch.vulnerabilities),
+  };
+}
+
+/**
+ * Apply a homebrew statblock (an NPC sheet published as a template) onto an existing
+ * NPC sheet — the sheet→sheet analog of `statblockPatch`, and lossless because both
+ * sides are already sheets. Same mode semantics, same preserved identity fields
+ * (characterName/alignment stay the target's own). Copied rows get fresh ids and
+ * cloned nested objects so the target never shares state with the template.
+ */
+export function statblockPatchFromSheet(
+  existing: CharacterSheet,
+  source: CharacterSheet,
+  mode: StatblockApplyMode,
+): Partial<CharacterSheet> {
+  const base: Partial<CharacterSheet> = {
+    creatureType: source.creatureType,
+    size: source.size,
+    cr: source.cr,
+    xp: source.xp,
+    source: source.source,
+    ac: source.ac,
+    hp: { current: source.hp.max, max: source.hp.max },
+    hitDice: { ...source.hitDice, current: source.hitDice.max },
+    speed: source.speed,
+    proficiencyBonus: source.proficiencyBonus,
+    initiative: source.initiative,
+    abilityScores: { ...source.abilityScores },
+    saveMods: { ...source.saveMods },
+    skillMods: { ...source.skillMods },
+    senses: source.senses,
+    languages: [...source.languages],
+    vulnerabilities: [...source.vulnerabilities],
+    resistances: [...source.resistances],
+    immunities: [...source.immunities],
+    conditionImmunities: [...source.conditionImmunities],
+    attacks: source.attacks.map((a) => ({ ...a, id: rowId("atk"), ...(a.uses ? { uses: { ...a.uses } } : {}) })),
+    features: source.features.map((f) => ({ ...f, id: rowId("feat"), ...(f.uses ? { uses: { ...f.uses } } : {}) })),
+  };
+  if (mode === "replace") return base;
+  if (mode === "stats") {
+    for (const key of STATBLOCK_LIST_KEYS) delete (base as Record<string, unknown>)[key];
+    return base;
+  }
+  return {
+    ...base,
+    attacks: [...existing.attacks, ...(base.attacks ?? [])].slice(0, SHEET_ROW_CAPS.attacks),
+    features: [...existing.features, ...(base.features ?? [])].slice(0, SHEET_ROW_CAPS.features),
+    languages: unionPills(existing.languages, base.languages),
+    resistances: unionPills(existing.resistances, base.resistances),
+    immunities: unionPills(existing.immunities, base.immunities),
+    conditionImmunities: unionPills(existing.conditionImmunities, base.conditionImmunities),
+    vulnerabilities: unionPills(existing.vulnerabilities, base.vulnerabilities),
   };
 }
 

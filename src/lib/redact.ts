@@ -3,6 +3,7 @@ import {
   SHEET_SECTIONS,
   SHEET_SECTION_FIELDS,
   createDefaultSheet,
+  createEmptyHomebrew,
   type CharacterSheet,
   type GameState,
   type ItemRecord,
@@ -86,6 +87,7 @@ export function redactStateFor(state: GameState, view: StateView): GameState {
       combat: null,
       folders: [],
       items: {},
+      homebrew: createEmptyHomebrew(),
       handouts: [],
     };
   }
@@ -223,6 +225,24 @@ export function redactStateFor(state: GameState, view: StateView): GameState {
         iconCrop: concealIcon ? { ...DEFAULT_ICON_CROP } : item.iconCrop,
         folderId: null,
       };
+    }
+  }
+  // Homebrew-published catalog items ride the frame IN FULL (minus their folder — the
+  // directory tree stays DM-side): they feed the player-visible item picker's Homebrew
+  // tab, and the DM opted into publishing them. Placed AFTER the stub loop so a
+  // published item wins over its own stub. EXCEPT items with a concealed token on a
+  // visible scene: the full record would hand back exactly the name/icon the token's
+  // "???" masking withholds (the redacted token keeps `itemId`, so the join is
+  // trivial). Those keep their concealment-aware stub and sit out the picker until
+  // the DM reveals the token — the token's secrecy outranks the publication.
+  const concealedItemIds = new Set(
+    tokens
+      .filter((token) => token.itemId && (token.nameConcealed || token.portraitConcealed))
+      .map((token) => token.itemId as string),
+  );
+  for (const [id, item] of Object.entries(state.items)) {
+    if (item.homebrew && !concealedItemIds.has(id)) {
+      items[id] = { ...item, folderId: null };
     }
   }
   // Combatants tied to hidden or name-concealed tokens keep their slot in the

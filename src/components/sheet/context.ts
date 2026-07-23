@@ -57,6 +57,11 @@ export type SheetEdit = {
   };
   /** Tier-3 resource actions (cast/use/death-save). Absent for read-only viewers. */
   actions?: SheetActions;
+  /**
+   * DM-only, NPC sheets: publish/unpublish this sheet as a homebrew statblock in the
+   * monster picker (record-level flag — rides SET_SHEET_HOMEBREW, not the sheet data).
+   */
+  homebrewTemplate?: { on: boolean; toggle: (on: boolean) => void };
 };
 
 export const ROLL_HINT = "Click to roll (Shift = advantage, Alt = disadvantage)";

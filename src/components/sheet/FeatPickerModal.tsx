@@ -1,9 +1,18 @@
+import { useState } from "react";
 import { loadFeats, type CompendiumFeat } from "../../lib/compendium";
 import { featureRowFromFeat } from "../../lib/compendiumMap";
 import { SHEET_ROW_CAPS } from "../../lib/types";
+import { useHomebrew } from "../../hooks/useHomebrew";
 import { CompendiumPickerModal } from "../CompendiumPickerModal";
+import { PickerSelect } from "../pickerFilters";
 import { CompendiumDescription } from "../compendiumPreview";
+import { matchesSource } from "./ClassPickerModal";
 import type { SheetEdit } from "./context";
+
+const SOURCE_OPTIONS = [
+  { value: "official", label: "Official" },
+  { value: "homebrew", label: "Homebrew" },
+];
 
 const CATEGORY_LABEL: Record<string, string> = {
   origin: "Origin",
@@ -21,10 +30,27 @@ const CATEGORY_LABEL: Record<string, string> = {
 /// features list (players use it on their own sheet, the DM anywhere).
 /// </summary>
 export function FeatPickerModal({ sheet, onClose }: { sheet: SheetEdit; onClose: () => void }) {
+  const [sourceFilter, setSourceFilter] = useState("");
+  const { homebrew } = useHomebrew();
+  const hbFeats = Object.values(homebrew.feats);
+
   return (
     <CompendiumPickerModal<CompendiumFeat>
       title="Add a feat"
-      load={loadFeats}
+      load={async () => [...(await loadFeats()), ...hbFeats]}
+      badge={(f) => (f.homebrew ? "Homebrew" : null)}
+      filters={
+        hbFeats.length ? (
+          <PickerSelect
+            label="Filter by source"
+            value={sourceFilter}
+            onChange={setSourceFilter}
+            allLabel="All sources"
+            options={SOURCE_OPTIONS}
+          />
+        ) : undefined
+      }
+      filterFn={(f) => matchesSource(sourceFilter, f)}
       columns={[{ label: "Category", render: (f) => CATEGORY_LABEL[f.category] ?? f.category }]}
       getSearchText={(f) => f.category}
       renderPreview={(f) => (

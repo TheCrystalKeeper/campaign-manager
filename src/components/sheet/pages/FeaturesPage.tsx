@@ -7,8 +7,13 @@ import {
   type FeatureEntry,
 } from "../../../lib/types";
 import { attackModParts, sumParts } from "../../../lib/rules5e";
-import { statblockPatch, npcHasContent, clearStatblockPatch } from "../../../lib/compendiumMap";
-import type { CompendiumMonster } from "../../../lib/compendium";
+import {
+  statblockPatch,
+  statblockPatchFromSheet,
+  npcHasContent,
+  clearStatblockPatch,
+  type StatblockApplyMode,
+} from "../../../lib/compendiumMap";
 import { NumberInput } from "../../NumberInput";
 import { RowTable, type RowGroup } from "../RowTable";
 import { UsesCell } from "../atoms";
@@ -18,7 +23,7 @@ import { BackgroundPickerModal } from "../BackgroundPickerModal";
 import { ClassPickerModal } from "../ClassPickerModal";
 import { FeatPickerModal } from "../FeatPickerModal";
 import { ManageClassesModal } from "../ManageClassesModal";
-import { MonsterPickerModal } from "../../MonsterPickerModal";
+import { MonsterPickerModal, type MonsterPickRow } from "../../MonsterPickerModal";
 import { SpeciesPickerModal } from "../SpeciesPickerModal";
 import { StatblockApplyModal } from "../StatblockApplyModal";
 import { AbilityRow, SavesRow } from "./MainPage";
@@ -98,7 +103,15 @@ export function FeaturesPage({ sheet }: { sheet: SheetEdit }) {
   const [backgroundPickerOpen, setBackgroundPickerOpen] = useState(false);
   const [featPickerOpen, setFeatPickerOpen] = useState(false);
   const [statblockPickerOpen, setStatblockPickerOpen] = useState(false);
-  const [pendingMonster, setPendingMonster] = useState<CompendiumMonster | null>(null);
+  const [pendingPick, setPendingPick] = useState<MonsterPickRow | null>(null);
+
+  /** Applies a picked statblock (official monster or homebrew template) onto this NPC. */
+  const applyStatblock = (row: MonsterPickRow, mode: StatblockApplyMode) =>
+    update(
+      row.source === "official"
+        ? statblockPatch(value, row.monster, mode)
+        : statblockPatchFromSheet(value, row.sheet.data, mode),
+    );
 
   // 2+ classes: the chip shows the composed list and opens the multiclass manager.
   const multiclassed = value.classes.length >= 2;
@@ -215,6 +228,20 @@ export function FeaturesPage({ sheet }: { sheet: SheetEdit }) {
                   Clear Statblock
                 </button>
               ) : null}
+              {sheet.homebrewTemplate ? (
+                <button
+                  type="button"
+                  className={
+                    sheet.homebrewTemplate.on
+                      ? "class-chip class-chip--btn class-chip--on"
+                      : "class-chip class-chip--btn"
+                  }
+                  title="Publish this NPC's statblock to the monster picker as homebrew"
+                  onClick={() => sheet.homebrewTemplate!.toggle(!sheet.homebrewTemplate!.on)}
+                >
+                  {sheet.homebrewTemplate.on ? "★ In compendium" : "☆ Show in compendium"}
+                </button>
+              ) : null}
             </div>
           ) : null}
         </div>
@@ -329,21 +356,21 @@ export function FeaturesPage({ sheet }: { sheet: SheetEdit }) {
           title="Apply a stat block to this NPC"
           pickLabel="Choose"
           onClose={() => setStatblockPickerOpen(false)}
-          onPick={(m) => {
+          onPick={(row) => {
             setStatblockPickerOpen(false);
             // A blank NPC has nothing to lose — apply outright. Otherwise ask how to merge.
-            if (npcHasContent(value)) setPendingMonster(m);
-            else update(statblockPatch(value, m, "replace"));
+            if (npcHasContent(value)) setPendingPick(row);
+            else applyStatblock(row, "replace");
           }}
         />
       ) : null}
-      {pendingMonster ? (
+      {pendingPick ? (
         <StatblockApplyModal
-          monsterName={pendingMonster.name}
-          onClose={() => setPendingMonster(null)}
+          monsterName={pendingPick.name}
+          onClose={() => setPendingPick(null)}
           onChoose={(mode) => {
-            update(statblockPatch(value, pendingMonster, mode));
-            setPendingMonster(null);
+            applyStatblock(pendingPick, mode);
+            setPendingPick(null);
           }}
         />
       ) : null}

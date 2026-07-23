@@ -41,6 +41,7 @@ export function CompendiumPickerModal<T extends { id: string; name: string }>({
   filters,
   filterFn,
   footer,
+  badge,
   pickLabel = "Add",
   multiPick = false,
   initialSelectedId,
@@ -60,6 +61,8 @@ export function CompendiumPickerModal<T extends { id: string; name: string }>({
   filterFn?: (row: T) => boolean;
   /** Extra controls above the action row (e.g. the autofill checkbox). */
   footer?: ReactNode;
+  /** Small pill rendered after the row name (e.g. "Homebrew"); null/undefined = none. */
+  badge?: (row: T) => string | null | undefined;
   pickLabel?: string;
   multiPick?: boolean;
   /** Row to pre-highlight on open (e.g. the sheet's current choice). */
@@ -390,6 +393,7 @@ export function CompendiumPickerModal<T extends { id: string; name: string }>({
                 >
                   <span className="cmp-cell cmp-cell--name">
                     {row.name}
+                    {badge?.(row) ? <span className="cmp-badge">{badge(row)}</span> : null}
                     {addedIds.has(row.id) ? <span className="cmp-added">✓</span> : null}
                   </span>
                   {columns.map((col) => (

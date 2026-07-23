@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { Backpack, Download, Upload } from "lucide-react";
+import { Backpack, BookOpen, Download, Upload } from "lucide-react";
 import {
   DEFAULT_ICON_CROP,
   ITEM_RARITIES,
@@ -9,11 +9,28 @@ import {
   type ItemRecord,
   type ItemType,
 } from "../lib/types";
+import { itemPatchFromEquipment, itemPatchFromMagicItem } from "../lib/compendiumMap";
 import { downloadJson, itemExportPayload, parseItemImport, transferFilename } from "../lib/sheetTransfer";
 import { uploadTokenImage } from "../lib/uploadAsset";
 import { CroppableImage } from "./CroppableImage";
 import { ImageCropModal } from "./ImageCropModal";
 import { AssetPickerModal } from "./AssetPickerModal";
+import { SrdItemPickerModal } from "./SrdItemPickerModal";
+
+/** Compendium-managed optional fields, cleared before an apply so values from the item's
+ *  previous identity (e.g. a magic item's rarity/attunement) don't survive under the new one. */
+const COMPENDIUM_FIELD_RESET: Partial<ItemRecord> = {
+  type: undefined,
+  rarity: undefined,
+  weight: undefined,
+  value: undefined,
+  attunement: undefined,
+  damage: undefined,
+  damageType: undefined,
+  properties: undefined,
+  equippable: undefined,
+  toHit: undefined,
+};
 
 /// <summary>
 /// Item Sheet: a compact editor for a catalog `ItemRecord` — icon, name, type, rarity,
@@ -34,9 +51,25 @@ export function ItemSheetPanel({
   const [uploading, setUploading] = useState(false);
   const [cropOpen, setCropOpen] = useState(false);
   const [libOpen, setLibOpen] = useState(false);
+  const [srdOpen, setSrdOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const importRef = useRef<HTMLInputElement>(null);
   const patch = (fields: Partial<ItemRecord>) => onChange({ ...item, ...fields });
+
+  /** Overwrites this item's fields from a compendium pick, keeping its identity in the
+   *  catalog (id, icon, folder, ordering, quantity). Placed board tokens re-sync their
+   *  label/art automatically via UPDATE_ITEM. Returns false to keep the picker open. */
+  const applyCompendium = (fields: Partial<ItemRecord> & { name: string }): boolean => {
+    const hasContent = Boolean(item.description.trim() || item.type);
+    if (
+      hasContent &&
+      !window.confirm(`Overwrite "${item.name}"'s fields with "${fields.name}" from the compendium?`)
+    ) {
+      return false;
+    }
+    patch({ ...COMPENDIUM_FIELD_RESET, ...fields });
+    return true;
+  };
 
   /** Import replaces the item's own fields but keeps its place in THIS catalog
    *  (folder + ordering come from the target, not the exported file). */
@@ -116,6 +149,14 @@ export function ItemSheetPanel({
               </button>
             ) : null}
             <button
+              className="btn-ghost icon-btn icon-btn--accent"
+              title="Apply a compendium item — overwrites this item's fields"
+              onClick={() => setSrdOpen(true)}
+            >
+              <BookOpen size={14} strokeWidth={2.2} />
+            </button>
+            <span className="divider" />
+            <button
               className="btn-ghost icon-btn"
               title="Export this item as a JSON file"
               onClick={() => downloadJson(transferFilename(item.name, "item"), itemExportPayload(item))}
@@ -171,6 +212,16 @@ export function ItemSheetPanel({
               title="Choose an icon"
               onPick={(url) => patch({ iconUrl: url, iconCrop: { ...DEFAULT_ICON_CROP } })}
               onClose={() => setLibOpen(false)}
+            />
+          ) : null}
+          {srdOpen ? (
+            <SrdItemPickerModal
+              title="Apply a compendium item"
+              pickLabel="Apply"
+              multiPick={false}
+              onPickEquipment={(eq) => applyCompendium(itemPatchFromEquipment(eq))}
+              onPickMagicItem={(mi) => applyCompendium(itemPatchFromMagicItem(mi))}
+              onClose={() => setSrdOpen(false)}
             />
           ) : null}
         </div>
@@ -263,6 +314,21 @@ export function ItemSheetPanel({
           onClick={() => patch({ equippable: !item.equippable })}
         >
           {item.equippable ? "Yes" : "No"}
+        </button>
+      </div>
+
+      <div className="row" style={{ justifyContent: "space-between" }}>
+        <label
+          style={{ margin: 0 }}
+          title="Publishes this item to the compendium item picker's Homebrew tab — players can see and take it"
+        >
+          Show in item compendium
+        </label>
+        <button
+          className={item.homebrew ? "btn-active" : ""}
+          onClick={() => patch({ homebrew: !item.homebrew })}
+        >
+          {item.homebrew ? "Yes" : "No"}
         </button>
       </div>
 

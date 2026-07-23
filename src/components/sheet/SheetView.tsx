@@ -42,6 +42,8 @@ export type SheetViewProps = {
   conditions?: SheetEdit["conditions"];
   /** Tier-3 resource actions (cast/use/death-save). */
   actions?: SheetActions;
+  /** DM-only, NPC sheets: the "Show in monster compendium" toggle. */
+  homebrewTemplate?: SheetEdit["homebrewTemplate"];
 };
 
 /**
@@ -61,6 +63,7 @@ export function SheetView({
   onRest,
   conditions,
   actions,
+  homebrewTemplate,
 }: SheetViewProps) {
   const { sheet, uploading, handlePortrait, overSoftCap } = useSheetEdit(record, {
     canEdit,
@@ -70,6 +73,7 @@ export function SheetView({
     onRollCheck,
     conditions,
     actions,
+    homebrewTemplate,
   });
 
   const kind = record?.kind ?? "pc";

@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { loadClasses, type CompendiumClass } from "../../lib/compendium";
 import { multiclassPrereqFailures } from "../../lib/compendiumMap";
 import type { ClassEntry } from "../../lib/types";
+import { useHomebrew } from "../../hooks/useHomebrew";
 import { NumberInput } from "../NumberInput";
 import { ClassPickerModal } from "./ClassPickerModal";
 import type { SheetEdit } from "./context";
@@ -16,9 +17,16 @@ import type { SheetEdit } from "./context";
 export function ManageClassesModal({ sheet, onClose }: { sheet: SheetEdit; onClose: () => void }) {
   const [compendium, setCompendium] = useState<CompendiumClass[]>([]);
   const [addOpen, setAddOpen] = useState(false);
+  const { homebrew } = useHomebrew();
 
   useEffect(() => {
-    void loadClasses().then(setCompendium, () => setCompendium([]));
+    // Homebrew classes join the name-keyed lookups (hit-die breakdown, prereq check).
+    const hbClasses = Object.values(homebrew.classes);
+    void loadClasses().then(
+      (rows) => setCompendium([...rows, ...hbClasses]),
+      () => setCompendium(hbClasses),
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {

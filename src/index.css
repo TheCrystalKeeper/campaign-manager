@@ -800,6 +800,19 @@ textarea,
   align-self: stretch;
   background: var(--border-subtle);
   border-radius: 2px;
+  /* Extra breathing room on top of the row's own gap, so the line reads as
+   * centered between its neighbors instead of sitting flush against one side. */
+  margin: 0 0.2rem;
+}
+/* An important ghost icon button (e.g. "Apply a compendium item") gets an accent
+ * ring + tinted hover so it doesn't read as just another neutral icon in its row. */
+.btn-ghost.icon-btn--accent {
+  color: var(--accent);
+  box-shadow: inset 0 0 0 1.5px var(--accent);
+}
+.btn-ghost.icon-btn--accent:hover:not(:disabled) {
+  background-color: color-mix(in srgb, var(--accent) 16%, transparent);
+  box-shadow: inset 0 0 0 1.5px var(--accent);
 }
 
 /* Online-player presence icons (top center): portrait circle + a mini HP bar beneath. */
@@ -4046,6 +4059,112 @@ body.pointer-dragging * {
   margin-left: 0.35rem;
   color: var(--success);
   font-weight: 700;
+}
+.cmp-badge {
+  margin-left: 0.4rem;
+  font-size: 0.65rem;
+  font-weight: 400;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  padding: 0 0.35rem;
+  flex-shrink: 0;
+  vertical-align: middle;
+}
+
+/* ---- Homebrew panel + editor modals ---- */
+.hb-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+.hb-list {
+  gap: 0.15rem;
+}
+.hb-row {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+}
+.hb-row-name {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  background: none;
+  border: none;
+  padding: 0.3rem 0.4rem;
+  border-radius: 6px;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hb-row-name:hover {
+  background: var(--surface-2);
+}
+.hb-row-sub {
+  font-size: 0.8rem;
+}
+.hb-hint {
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+.hb-editor {
+  display: flex;
+  flex-direction: column;
+  width: min(560px, calc(100vw - 2rem));
+  max-height: min(85vh, 780px);
+  padding: 0;
+}
+.hb-editor-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.6rem 0.9rem 0.35rem;
+}
+.hb-editor-head h2 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+.hb-editor-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0.35rem 0.9rem;
+}
+.hb-editor-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.4rem;
+  padding: 0.5rem 0.9rem 0.7rem;
+  border-top: 1px solid var(--border-subtle);
+}
+.hb-checkgrid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem 0.7rem;
+}
+.hb-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+  margin: 0;
+}
+.hb-inline-num {
+  width: 3.2rem;
+  display: inline-block;
+}
+.hb-trait {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 0.4rem;
 }
 .cmp-empty {
   padding: 0.6rem;
