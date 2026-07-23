@@ -195,15 +195,22 @@ export function FloatingWindow({
     return () => window.removeEventListener("resize", onResize);
   }, [clampGeom]);
 
+  // A ref keeps this listener's identity STABLE across renders. Depending on `onClose`
+  // (a fresh closure each render) re-subscribed the listener on every render — and a
+  // keydown that triggers a re-render (e.g. MapCanvas's Escape-to-deselect) ran this
+  // effect's cleanup mid-dispatch, removing the listener before the event reached it, so
+  // Escape silently failed to close the topmost window. Subscribing once fixes that.
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape" && isTopmost(id) && !isTypingTarget(event.target)) {
-        onClose();
+        onCloseRef.current();
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [id, onClose]);
+  }, [id]);
 
   const persist = useCallback(
     (g: WindowGeom) => {

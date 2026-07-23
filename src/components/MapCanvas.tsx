@@ -722,13 +722,13 @@ const TokenNode = memo(function TokenNode({
   const arrowPoints = useMemo(() => {
     const gap = radius * 0.14;
     const R = reach + gap; // inner radius, offset past the token's silhouette
-    const finW = radius * 0.28; // fin thickness at the mouth
-    const finTipW = radius * 0.09; // fin thickness at the far end (blunt, not tapered to 0)
+    const finW = radius * 0.17; // fin thickness at the mouth
+    const finTipW = radius * 0.045; // fin thickness at the far end (blunt, not tapered to 0)
     const baseR = R + finW; // arrowhead base / fin outer radius at the mouth
     const up = -Math.PI / 2;
-    const arrowH = radius * 0.38; // tip length beyond baseR (smaller arrowhead)
-    const arrowAng = 0.26; // half-angle of the arrowhead base
-    const spread = 1.02; // how far each fin sweeps around the rim (shorter = smaller arc)
+    const arrowH = radius * 0.14; // tip length beyond baseR (smaller arrowhead)
+    const arrowAng = 0.19; // half-angle of the arrowhead base
+    const spread = 0.80; // how far each fin sweeps around the rim (shorter = smaller arc)
     const steps = 14;
     const P = (a: number, r: number): [number, number] => [Math.cos(a) * r, Math.sin(a) * r];
     const finAngle = (dir: number, s: number) => up + dir * (arrowAng + (spread - arrowAng) * s);
@@ -1061,7 +1061,7 @@ const TokenNode = memo(function TokenNode({
             closed
             fill={token.color}
             stroke="#00000088"
-            strokeWidth={Math.max(1, radius * 0.05)}
+            strokeWidth={Math.max(1, radius * 0.025)}
             {...(glowShadow ?? {})}
           />
         </Group>
