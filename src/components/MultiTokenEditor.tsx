@@ -58,6 +58,7 @@ export function MultiTokenEditor({ tokens, state, dm, onClose }: MultiTokenEdito
   const nameHidden = common((t) => Boolean(t.nameHidden));
   const nameConcealed = common((t) => Boolean(t.nameConcealed));
   const portraitConcealed = common((t) => Boolean(t.portraitConcealed));
+  const noInitiative = common((t) => Boolean(t.noInitiative));
   const visionOn = common((t) => Boolean(t.vision?.enabled));
   const visionRange = common((t) => t.vision?.rangeFt ?? 0);
   // Visibility tri-state: "hidden" / "auto" / "always" per token, unanimous or MIXED.
@@ -295,6 +296,23 @@ export function MultiTokenEditor({ tokens, state, dm, onClose }: MultiTokenEdito
               None of the selected tokens has a linked sheet — no bars will show.
             </div>
           ) : null}
+        </div>
+
+        <div className="row" style={{ justifyContent: "space-between" }}>
+          <label
+            style={{ margin: 0 }}
+            title="Leave these tokens out of the initiative order when combat starts — no d20, no turn"
+          >
+            Rolls initiative
+          </label>
+          <button
+            className={noInitiative === true ? "btn-active" : ""}
+            onClick={() =>
+              toggleAll(noInitiative === true, (t, on) => ({ ...t, noInitiative: on || undefined }))
+            }
+          >
+            {noInitiative === MIXED ? "Mixed" : noInitiative ? "Skipped" : "Yes"}
+          </button>
         </div>
 
         <div className="row" style={{ justifyContent: "space-between" }}>

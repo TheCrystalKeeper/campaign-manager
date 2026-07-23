@@ -22,6 +22,7 @@ import {
   MAX_TEMPLATE_EXTENT,
   MAX_WALLS,
   TEMPLATE_KINDS,
+  TOKEN_SFX_NAMES,
   type CampaignExport,
   type TemplateShape,
   normalizeCharacterSheet,
@@ -1654,6 +1655,8 @@ export default class GameServer implements Party.Server {
           : partsFromDice(rolls, rollPartLabels(specs), modifier),
       };
       const secret = Boolean(parsed.private);
+      // The roller muted their broadcast: every non-roller replays the throw without sound.
+      const silent = Boolean(parsed.silent);
       const trayCenter: [number, number] = [
         Number.isFinite(parsed.trayCenter?.[0]) ? parsed.trayCenter[0] : 0,
         Number.isFinite(parsed.trayCenter?.[1]) ? parsed.trayCenter[1] : 0,
@@ -1680,6 +1683,7 @@ export default class GameServer implements Party.Server {
           ...(worldScale ? { worldScale } : {}),
           ...(withValues ? { faceValues } : {}),
           ...(secret ? { secret: true } : {}),
+          ...(silent ? { silent: true } : {}),
         });
       }
 
@@ -1869,6 +1873,27 @@ export default class GameServer implements Party.Server {
           const t = this.state.tokens.find((x) => x.id === tokenId);
           return !!t && !t.hidden && this.isSceneVisibleToPlayers(t.sceneId);
         },
+      );
+      return;
+    }
+
+    // A token-handling sound (pickup/place) to share with the table. Relayed like the other
+    // transient board events, so the throttle caps floods and the scene filter keeps players
+    // from hearing minis moved on a scene they can't see. Closed-set + real-scene validated.
+    if (parsed.type === "TOKEN_SFX") {
+      if (!TOKEN_SFX_NAMES.includes(parsed.sound)) {
+        return;
+      }
+      if (!this.state.scenes.some((scene) => scene.id === parsed.sceneId)) {
+        return;
+      }
+      const sceneId = parsed.sceneId;
+      this.relayTransient(
+        sender.id,
+        "tokensfx",
+        { type: "TOKEN_SFX", sound: parsed.sound },
+        false,
+        (receiver) => receiver.role === "dm" || this.isSceneVisibleToPlayers(sceneId),
       );
       return;
     }
@@ -2223,7 +2248,12 @@ export default class GameServer implements Party.Server {
       case "COMBAT_START": {
         const wanted = new Set(parsed.tokenIds);
         const tokens = this.state.tokens.filter(
-          (token) => token.sceneId === this.state.activeSceneId && wanted.has(token.id),
+          (token) =>
+            token.sceneId === this.state.activeSceneId &&
+            wanted.has(token.id) &&
+            // Authoritative: tokens the DM excluded from initiative never join the order,
+            // even if a stale client sends their id.
+            !token.noInitiative,
         );
         if (tokens.length === 0) {
           this.sendTo(sender, {

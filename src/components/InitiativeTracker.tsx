@@ -34,9 +34,12 @@ export function InitiativeTracker({ state, isDm, room, dm, dice, openSheet }: In
         </div>
       );
     }
-    const sceneTokenIds = state.tokens
-      .filter((token) => token.sceneId === state.activeSceneId && token.kind !== "item")
-      .map((token) => token.id);
+    const sceneTokens = state.tokens.filter(
+      (token) => token.sceneId === state.activeSceneId && token.kind !== "item",
+    );
+    // Tokens the DM flagged "not in initiative" (Token panel) sit combat out entirely.
+    const sceneTokenIds = sceneTokens.filter((token) => !token.noInitiative).map((token) => token.id);
+    const excludedCount = sceneTokens.length - sceneTokenIds.length;
     return (
       <div className="panel-body stack">
         <button
@@ -48,9 +51,20 @@ export function InitiativeTracker({ state, isDm, room, dm, dice, openSheet }: In
         </button>
         <span className="muted" style={{ fontSize: "0.78rem" }}>
           {sceneTokenIds.length === 0
-            ? "Place tokens in the scene first."
-            : `Starts combat with all ${sceneTokenIds.length} tokens in the scene. Roll a d20 for the NPCs, then players roll theirs.`}
+            ? sceneTokens.length === 0
+              ? "Place tokens in the scene first."
+              : "Every token in this scene is excluded from initiative."
+            : `Starts combat with ${
+                excludedCount > 0
+                  ? `${sceneTokenIds.length} of the ${sceneTokens.length}`
+                  : `all ${sceneTokenIds.length}`
+              } tokens in the scene. Roll a d20 for the NPCs, then players roll theirs.`}
         </span>
+        {excludedCount > 0 ? (
+          <span className="muted" style={{ fontSize: "0.78rem" }}>
+            {excludedCount} token{excludedCount === 1 ? " is" : "s are"} set to skip initiative.
+          </span>
+        ) : null}
       </div>
     );
   }

@@ -196,7 +196,7 @@ export function ActorsPanel({
           <>
             <button
               className="btn-ghost icon-btn"
-              title="Duplicate (own HP for goblin #2)"
+              title="Duplicate NPC"
               onClick={() => dm.duplicateSheet(sheetId, newId("sheet"))}
             >
               ⧉

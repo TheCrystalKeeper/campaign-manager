@@ -41,6 +41,7 @@ import {
   type TemplateShape,
   type Token,
   type TokenShape,
+  type TokenSfxName,
   type Viewport,
   type Wall,
   type WallBrush,
@@ -48,6 +49,7 @@ import {
   WALL_SNAP_SUBDIVISIONS,
 } from "../lib/types";
 import {
+  clampViewportPan,
   clampViewportScale,
   downscaleImageCached,
   imageScaleBucket,
@@ -60,7 +62,7 @@ import {
   getRenderPixelRatio,
   subscribeRenderPixelRatio,
 } from "../lib/renderQuality";
-import type { MeasureEvent, TemplateEvent, TokenDragEvent } from "../hooks/useGameRoom";
+import type { MeasureEvent, TemplateEvent, TokenDragEvent, TokenSfxEvent } from "../hooks/useGameRoom";
 import type { History } from "../lib/history";
 import { deriveBoardColor, DEFAULT_BOARD_BG } from "../lib/boardBackdrop";
 import { clampMove, movementSegments } from "../lib/visibility";
@@ -91,6 +93,7 @@ import { LightConfigPanel } from "./LightConfigPanel";
 import { WallConfigPanel } from "./WallConfigPanel";
 import { readCampaignFlag, writeCampaignFlag } from "../lib/campaignStore";
 import { playSfx, preloadSfx } from "../lib/sfx";
+import { getBroadcastSfx, setBroadcastSfx, subscribeBroadcastSfx } from "../lib/broadcastSfx";
 import {
   annotationOpacity,
   annotationPathLength,
@@ -245,6 +248,8 @@ type MapCanvasProps = {
   subscribeTemplate: (listener: (event: TemplateEvent) => void) => () => void;
   /** Live token-drag relay subscription (transient TOKEN_DRAG messages). */
   subscribeTokenDrag: (listener: (event: TokenDragEvent) => void) => () => void;
+  /** Token sound-effect relay subscription — another client handled a mini (transient TOKEN_SFX). */
+  subscribeTokenSfx?: (listener: (event: TokenSfxEvent) => void) => () => void;
   /** Per-client: show other players' tokens sliding live while they drag (default on). */
   showLiveDrags: boolean;
   /** Per-client snap-to-grid — owned by App (settings + the toolbar 🧲 share it). */
@@ -600,6 +605,7 @@ const TokenNode = memo(function TokenNode({
   onDragFrame,
   onNodeRef,
   onHover,
+  onSfx,
 }: {
   token: GameState["tokens"][number];
   /** Portrait to render on the token (resolved live from the linked sheet). */
@@ -638,6 +644,8 @@ const TokenNode = memo(function TokenNode({
   onNodeRef?: (tokenId: string, handle: TokenNodeHandle | null) => void;
   /** Mirrors the node's hover state up to the board (powers the X-to-delete hotkey). */
   onHover?: (token: GameState["tokens"][number], hovered: boolean) => void;
+  /** A token handling sound just played locally — the board broadcasts it to the table. */
+  onSfx?: (sound: TokenSfxName) => void;
 }) {
   const img = useImage(imageUrl);
   // Render a crisp, size-appropriate copy so large uploads don't look soft in a small token.
@@ -903,13 +911,22 @@ const TokenNode = memo(function TokenNode({
         onSelect?.(token, { toggle: e.evt.altKey });
       }}
       onTap={() => onSelect?.(token, { toggle: false })}
-      onMouseEnter={() => {
+      onMouseEnter={(e) => {
         setHovered(true);
         onHover?.(token, true);
+        // In select mode the whole board wears a pan "grab"; a token (and its rotate handle) instead
+        // reads as the clickable pointing-hand cursor, so it's clear a press acts on the mini rather
+        // than panning the map underneath. All the token's children share this one cursor, so a
+        // single enter/leave pair covers it — no per-part re-assert needed.
+        const c = e.target.getStage()?.container();
+        if (c) c.style.cursor = "pointer";
       }}
-      onMouseLeave={() => {
+      onMouseLeave={(e) => {
         setHovered(false);
         onHover?.(token, false);
+        // Drop the override so the board's pan "grab" returns once the pointer is off the token.
+        const c = e.target.getStage()?.container();
+        if (c) c.style.cursor = "";
       }}
       onDblClick={() => onOpenSheet?.(token)}
       onDblTap={() => onOpenSheet?.(token)}
@@ -924,9 +941,10 @@ const TokenNode = memo(function TokenNode({
         // A real move begins: let the board suppress the duplicate above-darkness name label,
         // which is pinned to the (not-yet-updated) React position and would otherwise trail.
         onDragActive?.(token, true);
-        // Local-only pickup sound — after the guard above, so aiming a pointer arrow or
-        // rotating never audibly "lifts" the token. Silent until the files exist.
+        // Pickup sound — after the guard above, so aiming a pointer arrow or rotating never
+        // audibly "lifts" the token. Silent until the files exist. Also broadcast to the table.
         playSfx("token-pickup", { gain: 0.4, rateLimitMs: 80 });
+        onSfx?.("token-pickup");
         startLift();
       }}
       onDragMove={(e) => {
@@ -938,6 +956,7 @@ const TokenNode = memo(function TokenNode({
         onDragFrame?.(token, null); // clear frame: tells receivers to reconcile with the echo
         onMove(token, e.target.x(), e.target.y());
         playSfx("token-place", { gain: 0.5, rateLimitMs: 80 });
+        onSfx?.("token-place");
         endLift();
       }}
     >
@@ -1034,14 +1053,6 @@ const TokenNode = memo(function TokenNode({
         <Group
           rotation={facingDeg}
           listening={canRotate}
-          onMouseEnter={(e) => {
-            const c = e.target.getStage()?.container();
-            if (c) c.style.cursor = "grab";
-          }}
-          onMouseLeave={(e) => {
-            const c = e.target.getStage()?.container();
-            if (c) c.style.cursor = "";
-          }}
           onMouseDown={startRotate}
           onTouchStart={startRotate}
         >
@@ -1096,14 +1107,6 @@ const TokenNode = memo(function TokenNode({
           shadowColor="#000000"
           shadowBlur={Math.max(1, radius * 0.04)}
           shadowOpacity={0.7}
-          onMouseEnter={(e) => {
-            const c = e.target.getStage()?.container();
-            if (c) c.style.cursor = "grab";
-          }}
-          onMouseLeave={(e) => {
-            const c = e.target.getStage()?.container();
-            if (c) c.style.cursor = "";
-          }}
           onMouseDown={(e) => startRotate(e, true)}
           onTouchStart={(e) => startRotate(e, true)}
         />
@@ -1283,6 +1286,7 @@ export function MapCanvas({
   subscribeMeasure,
   subscribeTemplate,
   subscribeTokenDrag,
+  subscribeTokenSfx,
   showLiveDrags,
   snap,
   onToggleSnap,
@@ -2262,6 +2266,7 @@ export function MapCanvas({
     snapPoint: (x: number, y: number) => { x: number; y: number };
     selectedTokenIds: string[];
     send: (message: ClientMessage) => void;
+    sceneId: string;
   }>(null!);
   // ─── Group drag (DM): dragging one SELECTED token carries the whole selection ────────
   // Armed at drag start when the grabbed token is part of a 2+ selection; every follower
@@ -2424,6 +2429,23 @@ export function MapCanvas({
     [send],
   );
 
+  // Broadcast a token-handling sound to the table (gated by the per-device "let others hear
+  // me" switch). Reads send + the live sceneId from the ref so this dispatcher keeps a
+  // constant identity — the memoized TokenNodes depend on it. The sound already played
+  // locally in the node; this only shares it.
+  const handleTokenSfx = useCallback((sound: TokenSfxName) => {
+    if (!getBroadcastSfx()) return;
+    const cb = tokenCbRef.current;
+    cb.send({ type: "TOKEN_SFX", sound, sceneId: cb.sceneId });
+  }, []);
+
+  // The "let others hear my sound effects" switch, surfaced as a toolbar button. The module
+  // stays the source of truth (send sites read it live); this state only re-renders the
+  // button, kept in sync via subscribe so it reflects the value wherever it's flipped.
+  const [broadcastSfx, setBroadcastSfxState] = useState(getBroadcastSfx);
+  useEffect(() => subscribeBroadcastSfx(setBroadcastSfxState), []);
+  const toggleBroadcastSfx = useCallback(() => setBroadcastSfx(!getBroadcastSfx()), []);
+
   // A live registry of each mounted token's Konva nodes, so a remote drag can move the real node
   // imperatively (no stage walking, no duplicated "ghost" token).
   const tokenNodesRef = useRef(new Map<string, TokenNodeHandle>());
@@ -2556,6 +2578,18 @@ export function MapCanvas({
     });
   }, [subscribeTokenDrag, runRemoteDragLoop, syncRemoteIds]);
 
+  // Hear other players handle their minis: play the relayed token sound locally. The server
+  // already scene-scoped it (players never hear tokens on a scene they can't see) and gated
+  // it on the sender's broadcast switch, so this side just plays — at this viewer's own volume
+  // (rate-limited so a burst of relays can't machine-gun). Optional prop: absent on the scene
+  // editor, where remote table sounds would be noise.
+  useEffect(() => {
+    if (!subscribeTokenSfx) return;
+    return subscribeTokenSfx((event) => {
+      playSfx(event.sound, { gain: event.sound === "token-pickup" ? 0.4 : 0.5, rateLimitMs: 80 });
+    });
+  }, [subscribeTokenSfx]);
+
   // Viewer disabled live drags mid-session: restore every mirrored node to its authoritative
   // position and end the sessions (the loop stops itself once the map empties).
   useEffect(() => {
@@ -2646,6 +2680,7 @@ export function MapCanvas({
     snapPoint,
     selectedTokenIds: selectedTokenIds ?? [],
     send,
+    sceneId: scene.id,
   };
 
   /** Routes a stage pointer event to the active tool in world coordinates. */
@@ -2684,11 +2719,19 @@ export function MapCanvas({
       if (!start) {
         return;
       }
-      onViewportChange({
-        x: start.vp.x + (ev.clientX - start.x),
-        y: start.vp.y + (ev.clientY - start.y),
-        scale: start.vp.scale,
-      });
+      onViewportChange(
+        clampViewportPan(
+          {
+            x: start.vp.x + (ev.clientX - start.x),
+            y: start.vp.y + (ev.clientY - start.y),
+            scale: start.vp.scale,
+          },
+          scene.width,
+          scene.height,
+          stageW,
+          stageH,
+        ),
+      );
     };
     const onUp = () => {
       panRef.current = null;
@@ -2813,10 +2856,26 @@ export function MapCanvas({
       ? selectedWallIds.length
       : 1;
 
+  /** Clamp a viewport's pan so the map can't be dragged/zoomed off into the empty backdrop. */
+  const clampPan = (vp: Viewport): Viewport =>
+    clampViewportPan(vp, scene.width, scene.height, stageW, stageH);
+
   const emitViewportFromStage = () => {
     const stage = stageRef.current;
     if (!stage || !onViewportChange) return;
-    onViewportChange({ x: stage.x(), y: stage.y(), scale: stage.scaleX() });
+    onViewportChange(clampPan({ x: stage.x(), y: stage.y(), scale: stage.scaleX() }));
+  };
+
+  /**
+   * Konva pan-drag bound: constrains the stage translation live during a left-button drag so the
+   * map can't be flung past the pan limit (Konva owns the position mid-drag, so a post-hoc clamp
+   * would fight it and jitter — bounding here keeps the drag itself smooth). Matches the
+   * wheel/middle-pan clamps. `pos` is the stage's would-be screen position, which equals the
+   * viewport's x/y (the stage has no parent transform).
+   */
+  const stageDragBound = (pos: { x: number; y: number }) => {
+    const clamped = clampPan({ x: pos.x, y: pos.y, scale: viewport.scale });
+    return { x: clamped.x, y: clamped.y };
   };
 
   const handleWheel = (e: Konva.KonvaEventObject<WheelEvent>) => {
@@ -2838,11 +2897,14 @@ export function MapCanvas({
     const worldY = (pointer.y - viewport.y) / oldScale;
     const direction = e.evt.deltaY > 0 ? -1 : 1;
     const newScale = clampViewportScale(oldScale * (direction > 0 ? 1.1 : 1 / 1.1));
-    onViewportChange({
-      scale: newScale,
-      x: pointer.x - worldX * newScale,
-      y: pointer.y - worldY * newScale,
-    });
+    // Clamp the pan too: zooming out shrinks the map, which can leave it beyond the pan limit.
+    onViewportChange(
+      clampPan({
+        scale: newScale,
+        x: pointer.x - worldX * newScale,
+        y: pointer.y - worldY * newScale,
+      }),
+    );
   };
 
   const handleStageClick = (e: Konva.KonvaEventObject<MouseEvent | TouchEvent>) => {
@@ -2866,6 +2928,7 @@ export function MapCanvas({
         const snapped = snapPoint(point.x, point.y);
         onPlaceToken(snapped.x, snapped.y);
         playSfx("token-place", { gain: 0.5, rateLimitMs: 80 }); // new mini hits the table
+        handleTokenSfx("token-place"); // and the rest of the table hears it land
       }
       return;
     }
@@ -2954,6 +3017,7 @@ export function MapCanvas({
         scaleX={viewport.scale}
         scaleY={viewport.scale}
         draggable={stageDraggable}
+        dragBoundFunc={stageDragBound}
         onDragMove={emitViewportFromStage}
         onDragEnd={emitViewportFromStage}
         onWheel={handleWheel}
@@ -3218,6 +3282,7 @@ export function MapCanvas({
                 onDragFrame={draggable ? handleTokenDragFrame : undefined}
                 onNodeRef={handleTokenNodeRef}
                 onHover={isDm ? handleTokenHover : undefined}
+                onSfx={draggable ? handleTokenSfx : undefined}
               />
             );
           })}
@@ -3440,6 +3505,8 @@ export function MapCanvas({
 
       <MapToolbar
         isDm={isDm}
+        broadcastSfx={broadcastSfx}
+        onToggleBroadcastSfx={toggleBroadcastSfx}
         tools={availableTools}
         activeToolId={activeTool.id}
         onSelectTool={(id) => {

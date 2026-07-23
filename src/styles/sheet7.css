@@ -466,6 +466,12 @@
   line-height: 1;
   color: var(--accent);
 }
+/* CR reads as a fraction ("1/8", "1/4", "1/2") or up to two digits, both wider than
+   the single/double-digit levels this ring was sized for — shrink so it stays inside
+   the badge instead of overflowing or getting clipped. */
+.level-ring-value--cr {
+  font-size: 1.25rem;
+}
 .level-ring-input {
   width: 2.4rem;
   text-align: center;
@@ -476,6 +482,10 @@
   font-size: 1.7rem;
   line-height: 1;
   color: var(--accent);
+}
+.level-ring-input--cr {
+  width: 3rem;
+  font-size: 1.25rem;
 }
 .level-ring-label {
   font-size: 0.5rem;

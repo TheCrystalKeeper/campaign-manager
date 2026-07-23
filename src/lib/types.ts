@@ -382,6 +382,9 @@ export type Token = {
    *  included). Purely visual — unlike `nameConcealed` it doesn't rewrite the label, so
    *  combat/log/editor still show the real name. */
   nameHidden?: boolean;
+  /** DM toggle: skip this token when combat starts — it never joins the initiative order
+   *  (scenery, mounts, summons the DM runs on someone else's turn, and so on). */
+  noInitiative?: boolean;
   /**
    * Darkness visibility override (enemy/item tokens, client-enforced): absent = "auto"
    * (each viewer's vision/lights/LOS decide), "always" = rendered for everyone even in
@@ -1519,6 +1522,13 @@ export type JoinMessage =
   | { type: "JOIN"; role: "dm"; displayName: string; roomKey: string }
   | { type: "JOIN"; role: "player"; slotId: string; roomKey: string };
 
+/**
+ * The token-handling sounds that broadcast to the rest of the table (heard on the board).
+ * A closed set the server validates against — a client can't relay arbitrary sound names.
+ */
+export const TOKEN_SFX_NAMES = ["token-pickup", "token-place"] as const;
+export type TokenSfxName = (typeof TOKEN_SFX_NAMES)[number];
+
 export type ClientMessage =
   | JoinMessage
   | { type: "UPDATE_VIEWPORT"; viewport: Viewport }
@@ -1641,6 +1651,9 @@ export type ClientMessage =
        */
       context?: { sheetId?: string; label?: string; initiativeEntryIds?: string[] };
       private?: boolean;
+      /** Roller opted out of broadcasting sound: other clients replay the throw silently
+       *  (the roller still hears their own). Carried through to DICE_THROW below. */
+      silent?: boolean;
     }
   | { type: "COMBAT_START"; tokenIds: string[] }
   | { type: "COMBAT_ROLL_INITIATIVE" }
@@ -1656,6 +1669,12 @@ export type ClientMessage =
   | { type: "TEMPLATE"; sceneId: string; shape: TemplateShape | null }
   /** Live token drag position (world coords) — transient relay like MEASURE, null = drag ended. */
   | { type: "TOKEN_DRAG"; tokenId: string; pos: { x: number; y: number } | null }
+  /**
+   * "I just made this token sound" — relayed so the rest of the table hears each other
+   * handle minis. `sceneId` scopes it: players only hear sounds for scenes they can see
+   * (a DM prepping a hidden scene never leaks a phantom clatter). Transient, fire-and-forget.
+   */
+  | { type: "TOKEN_SFX"; sound: TokenSfxName; sceneId: string }
   | { type: "ADD_ANNOTATION"; sceneId: string; annotation: Annotation }
   | { type: "REMOVE_ANNOTATION"; sceneId: string; annotationId: string }
   /** Edit an existing annotation in place (pins): note text and/or position. */
@@ -1711,6 +1730,9 @@ export type ServerMessage =
       worldScale?: number;
       faceValues?: number[];
       secret?: boolean;
+      /** The roller muted their broadcast: non-roller clients replay the motion but skip
+       *  the throw/impact sounds. The roller's own copy always plays (it's `local`). */
+      silent?: boolean;
     }
   /** Another client's live ruler (transient; null points = ruler cleared). */
   | {
@@ -1737,6 +1759,8 @@ export type ServerMessage =
       tokenId: string;
       pos: { x: number; y: number } | null;
     }
+  /** Another client made a token sound — play it locally (scene-scoped by the server). */
+  | { type: "TOKEN_SFX"; sound: TokenSfxName }
   /**
    * Ephemeral "look at this now" push, sent only to targeted players. Self-contained
    * (name + URL, not just an id): broadcastState awaits persistState, so this frame can
@@ -1895,6 +1919,7 @@ export function normalizeToken(token: Token): Token {
     ...(token.nameConcealed ? { nameConcealed: true } : { nameConcealed: undefined }),
     ...(token.portraitConcealed ? { portraitConcealed: true } : { portraitConcealed: undefined }),
     ...(token.nameHidden ? { nameHidden: true } : { nameHidden: undefined }),
+    ...(token.noInitiative ? { noInitiative: true } : { noInitiative: undefined }),
     dmVisibility: token.dmVisibility === "always" ? "always" : undefined,
     revealTo: (() => {
       if (!Array.isArray(token.revealTo)) return undefined;

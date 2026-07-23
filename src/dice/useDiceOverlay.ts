@@ -15,6 +15,7 @@ import {
   mergeSkinPref,
   type DiceSkinPrefs,
 } from "./skinDefs";
+import { getBroadcastSfx } from "../lib/broadcastSfx";
 import type { DiceAudio } from "./audio";
 import type { DiceEngine, SafeInsets } from "./engine";
 import type { DiceTrayScene } from "./trayScene";
@@ -234,6 +235,8 @@ export function useDiceOverlay(room: GameRoom, roomId: string | null): DiceOverl
                   worldScale,
                   ...(armed.context ? { context: armed.context } : {}),
                   private: secretRef.current || undefined,
+                  // Table-manners toggle: when off, other clients replay the dice silently.
+                  silent: getBroadcastSfx() ? undefined : true,
                 });
               }
             },
@@ -268,12 +271,18 @@ export function useDiceOverlay(room: GameRoom, roomId: string | null): DiceOverl
         ourRollIdsRef.current.delete(event.rollId);
         armedRef.current.delete(event.rollId);
         const blank = !event.faceValues || event.faceValues.length === 0;
-        // Throw-release sounds fire as playback begins, on every client — the whoosh for
-        // dice, the airborne flip for coins (its landing "drop" comes via onImpact).
-        audioRef.current?.throwStart(
-          event.specs.some((spec) => spec.kind !== "coin"),
-          event.specs.some((spec) => spec.kind === "coin"),
-        );
+        // The roller always hears their own throw; a `silent` throw plays soundlessly for
+        // everyone else (they opted out of broadcasting). Gates both the release whoosh here
+        // and the per-impact clacks inside the track (muteAudio below).
+        const playAudio = local || !event.silent;
+        if (playAudio) {
+          // Throw-release sounds fire as playback begins — the whoosh for dice, the airborne
+          // flip for coins (its landing "drop" comes via onImpact).
+          audioRef.current?.throwStart(
+            event.specs.some((spec) => spec.kind !== "coin"),
+            event.specs.some((spec) => spec.kind === "coin"),
+          );
+        }
         engine.playTrack(
           event.rollId,
           event.specs,
@@ -283,6 +292,7 @@ export function useDiceOverlay(room: GameRoom, roomId: string | null): DiceOverl
           blank,
           event.trayCenter,
           event.worldScale,
+          !playAudio,
         );
       });
     });

@@ -31,6 +31,8 @@ import {
   Trash2,
   Triangle,
   Undo2,
+  Volume2,
+  VolumeX,
 } from "lucide-react";
 import type { CalibrateMode, MapTool } from "../map/tools/types";
 import type { LightPreset } from "../map/tools/lights";
@@ -94,6 +96,10 @@ const WALL_BRUSH_TITLES: Record<WallBrush, string> = {
 
 type MapToolbarProps = {
   isDm: boolean;
+  /** Per-device: whether this client broadcasts its sound effects (dice/coins/token handling)
+   *  to the rest of the table. The rail button flips it; it does not mute your own sounds. */
+  broadcastSfx: boolean;
+  onToggleBroadcastSfx: () => void;
   /** Tools available to this client (already role/permission filtered). */
   tools: MapTool[];
   activeToolId: string;
@@ -213,6 +219,8 @@ const Row = ({ children, className }: { children: ReactNode; className?: string 
 /// </summary>
 export function MapToolbar({
   isDm,
+  broadcastSfx,
+  onToggleBroadcastSfx,
   tools,
   activeToolId,
   onSelectTool,
@@ -407,6 +415,21 @@ export function MapToolbar({
             </button>
           </>
         ) : null}
+        <span className="map-toolbar-sep" />
+        {/* Table manners: whether the rest of the table hears the sound effects YOU make —
+            dice, coins, and moving/placing minis. Off mutes them only for others; you still
+            hear your own. Personal + per-device, so it lives here rather than in scene state. */}
+        <button
+          className={`map-tool-btn${broadcastSfx ? " btn-active" : ""}`}
+          title={
+            broadcastSfx
+              ? "Others hear your sound effects (dice, coins, moving tokens). Click to mute them for the table."
+              : "Your sound effects are muted for other players. Click to let the table hear them again."
+          }
+          onClick={onToggleBroadcastSfx}
+        >
+          {broadcastSfx ? <Volume2 size={16} strokeWidth={2.2} /> : <VolumeX size={16} strokeWidth={2.2} />}
+        </button>
       </div>
 
       {activeToolId === "draw" ? (

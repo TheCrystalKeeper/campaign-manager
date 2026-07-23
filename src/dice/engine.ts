@@ -136,6 +136,9 @@ interface RollInstance {
   track: DiceTrack | null;
   trackStart: number | null;
   nextImpact: number;
+  /** Replay this track's motion without its impact sounds (a remote roller who muted their
+   *  broadcast). The roller's own copy is never muted. */
+  muteAudio: boolean;
   settled: boolean;
   revealStart: number | null;
   revealDecals: THREE.Mesh[];
@@ -916,6 +919,7 @@ export class DiceEngine {
     blank: boolean,
     trayCenter: WorldPoint,
     worldScale?: number,
+    muteAudio = false,
   ) {
     this.clearRoll(rollId);
     const k0 = worldScale && Number.isFinite(worldScale) && worldScale > 0
@@ -992,6 +996,7 @@ export class DiceEngine {
     );
     roll.track = track;
     roll.trackStart = performance.now();
+    roll.muteAudio = muteAudio;
     this.rolls.set(rollId, roll);
     this.applyDieScales(roll);
     this.applyTrackFrame(roll, 0);
@@ -1095,6 +1100,7 @@ export class DiceEngine {
       track: null,
       trackStart: null,
       nextImpact: 0,
+      muteAudio: false,
       settled: false,
       revealStart: null,
       revealDecals: [],
@@ -1172,7 +1178,9 @@ export class DiceEngine {
       // alongside dice still sounds like a coin. Legacy tracks (no die id) fall back to the
       // whole-roll flag.
       const isCoin = impact.die !== undefined ? roll.coinIds.has(impact.die) : roll.coin;
-      this.callbacks.onImpact?.(impact.strength, isCoin);
+      if (!roll.muteAudio) {
+        this.callbacks.onImpact?.(impact.strength, isCoin);
+      }
       roll.nextImpact += 1;
     }
     if (f >= last) {

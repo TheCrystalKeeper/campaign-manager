@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { EyeOff, Hand } from "lucide-react";
+import { Ban, EyeOff, Hand } from "lucide-react";
 import {
   CONDITIONS,
   DEFAULT_ICON_CROP,
@@ -451,6 +451,17 @@ export function TokenEditor({ token, state, dm, openSheet, openItemSheet, onClos
                 </select>
               </div>
             ) : null}
+            <div className="row" style={{ justifyContent: "space-between" }}>
+              <label style={{ margin: 0 }} title="Leave this token out of the initiative order when combat starts — no d20, no turn. Use it for scenery, mounts, or anything you run on another combatant's turn.">
+                Rolls initiative
+              </label>
+              <button
+                className={token.noInitiative ? "btn-active" : ""}
+                onClick={() => dm.updateToken({ ...token, noInitiative: !token.noInitiative })}
+              >
+                {token.noInitiative ? <><Ban size={13} strokeWidth={2.2} /> Skipped</> : "Yes"}
+              </button>
+            </div>
           </>
         )}
 

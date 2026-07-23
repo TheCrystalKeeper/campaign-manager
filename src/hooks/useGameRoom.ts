@@ -65,6 +65,8 @@ export type MeasureEvent = Extract<ServerMessage, { type: "MEASURE" }>;
 export type TemplateEvent = Extract<ServerMessage, { type: "TEMPLATE" }>;
 /** Another client's live token drag (transient relay); null pos = drag ended. */
 export type TokenDragEvent = Extract<ServerMessage, { type: "TOKEN_DRAG" }>;
+/** Another client handled a token — play its sound locally (scene-scoped by the server). */
+export type TokenSfxEvent = Extract<ServerMessage, { type: "TOKEN_SFX" }>;
 /** The DM popped a handout on this client's screen (targeted transient push). */
 export type HandoutShowEvent = Extract<ServerMessage, { type: "HANDOUT_SHOW" }>;
 /** The long roll history for the Stats page (reply to GET_ROLL_ARCHIVE). */
@@ -93,6 +95,8 @@ export type GameRoom = {
   subscribeTemplate: (listener: (event: TemplateEvent) => void) => () => void;
   /** Listen for other clients' live token drags; returns an unsubscribe function. */
   subscribeTokenDrag: (listener: (event: TokenDragEvent) => void) => () => void;
+  /** Listen for other clients' token sound effects; returns an unsubscribe function. */
+  subscribeTokenSfx: (listener: (event: TokenSfxEvent) => void) => () => void;
   /** Listen for DM "show handout" pushes aimed at this client; returns an unsubscribe function. */
   subscribeHandout: (listener: (event: HandoutShowEvent) => void) => () => void;
   /** Listen for roll-archive replies (Stats page); returns an unsubscribe function. */
@@ -275,6 +279,7 @@ export function useGameRoom(roomId: string | null): GameRoom {
   const measureListenersRef = useRef<Set<(event: MeasureEvent) => void>>(new Set());
   const templateListenersRef = useRef<Set<(event: TemplateEvent) => void>>(new Set());
   const tokenDragListenersRef = useRef<Set<(event: TokenDragEvent) => void>>(new Set());
+  const tokenSfxListenersRef = useRef<Set<(event: TokenSfxEvent) => void>>(new Set());
   const handoutListenersRef = useRef<Set<(event: HandoutShowEvent) => void>>(new Set());
   const rollArchiveListenersRef = useRef<Set<(event: RollArchiveEvent) => void>>(new Set());
 
@@ -386,6 +391,10 @@ export function useGameRoom(roomId: string | null): GameRoom {
         for (const listener of tokenDragListenersRef.current) {
           listener(message);
         }
+      } else if (message.type === "TOKEN_SFX") {
+        for (const listener of tokenSfxListenersRef.current) {
+          listener(message);
+        }
       } else if (message.type === "HANDOUT_SHOW") {
         for (const listener of handoutListenersRef.current) {
           listener(message);
@@ -489,6 +498,13 @@ export function useGameRoom(roomId: string | null): GameRoom {
     };
   }, []);
 
+  const subscribeTokenSfx = useCallback((listener: (event: TokenSfxEvent) => void) => {
+    tokenSfxListenersRef.current.add(listener);
+    return () => {
+      tokenSfxListenersRef.current.delete(listener);
+    };
+  }, []);
+
   const subscribeHandout = useCallback((listener: (event: HandoutShowEvent) => void) => {
     handoutListenersRef.current.add(listener);
     return () => {
@@ -518,6 +534,7 @@ export function useGameRoom(roomId: string | null): GameRoom {
     subscribeMeasure,
     subscribeTemplate,
     subscribeTokenDrag,
+    subscribeTokenSfx,
     subscribeHandout,
     subscribeRollArchive,
     clearError,

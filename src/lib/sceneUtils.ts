@@ -28,6 +28,48 @@ export function clampViewport(viewport: Viewport): Viewport {
 }
 
 /// <summary>
+/// Minimum fraction of the viewport (per axis) that the map must always cover at the pan extremes,
+/// so the map can be panned to explore its edges but never dragged off into the empty backdrop.
+/// </summary>
+export const PAN_VISIBLE_FRACTION = 0.2;
+
+/// <summary>
+/// Clamps a viewport's PAN (x/y) so the map can never be dragged (or zoomed) entirely off into the
+/// empty backdrop — the fix for an otherwise-infinite pan. Scale is left untouched (see
+/// `clampViewportScale`). The margin is a fraction of the VIEWPORT, so the guarantee is simple: at
+/// the pan limit at least a `PAN_VISIBLE_FRACTION` strip of the screen is still covered by the map
+/// on each axis (or the whole map, if it is smaller than that strip — in which case it can be
+/// repositioned but never pushed off). `stageWidth`/`stageHeight` are the canvas size in screen px;
+/// a not-yet-measured 0-size stage is returned unchanged.
+/// </summary>
+export function clampViewportPan(
+  viewport: Viewport,
+  sceneWidth: number,
+  sceneHeight: number,
+  stageWidth: number,
+  stageHeight: number,
+): Viewport {
+  if (!(stageWidth > 0) || !(stageHeight > 0)) {
+    return viewport;
+  }
+  const scale = viewport.scale > 0 ? viewport.scale : 1;
+  const sceneScreenW = Math.max(sceneWidth, 0) * scale;
+  const sceneScreenH = Math.max(sceneHeight, 0) * scale;
+  const marginX = stageWidth * PAN_VISIBLE_FRACTION;
+  const marginY = stageHeight * PAN_VISIBLE_FRACTION;
+  const clamp = (value: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, value));
+  return {
+    ...viewport,
+    // x is the scene's left screen edge: the lower bound pins the scene's RIGHT edge at `marginX`
+    // (map pulled left), the upper bound pins its LEFT edge at `stageWidth - marginX` (pulled
+    // right). When the map is smaller than the viewport these bounds cross into a fully-in-view
+    // band; the clamp still resolves to a sensible in-range position.
+    x: clamp(viewport.x, marginX - sceneScreenW, stageWidth - marginX),
+    y: clamp(viewport.y, marginY - sceneScreenH, stageHeight - marginY),
+  };
+}
+
+/// <summary>
 /// Quantizes the live viewport scale for image-cache sizing: the smallest power of √2 that is
 /// ≥ scale (clamped to the zoom limits). Caches sized to this bucket are always drawn with a
 /// downscale ratio in [1, √2) — comfortably inside the single-pass range the browser's cubic

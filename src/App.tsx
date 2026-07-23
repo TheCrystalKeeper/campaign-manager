@@ -1054,6 +1054,7 @@ export default function App() {
         subscribeMeasure={room.subscribeMeasure}
         subscribeTemplate={room.subscribeTemplate}
         subscribeTokenDrag={room.subscribeTokenDrag}
+        subscribeTokenSfx={room.subscribeTokenSfx}
         showLiveDrags={showLiveDrags}
         snap={snap}
         onToggleSnap={toggleSnap}

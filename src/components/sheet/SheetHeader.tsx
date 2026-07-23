@@ -180,7 +180,7 @@ export function SheetHeader({
         {canEdit && !multiclassed ? (
           isNpc ? (
             <input
-              className="level-ring-input"
+              className="level-ring-input level-ring-input--cr"
               value={value.cr}
               placeholder="CR"
               onChange={(e) => update({ cr: e.target.value })}
@@ -189,7 +189,7 @@ export function SheetHeader({
             <NumberInput className="level-ring-input" value={value.level} min={1} allowNegative={false} onCommit={(level) => update({ level })} aria-label="Level" />
           )
         ) : (
-          <span className="level-ring-value">{isNpc ? value.cr || "—" : value.level}</span>
+          <span className={`level-ring-value${isNpc ? " level-ring-value--cr" : ""}`}>{isNpc ? value.cr || "—" : value.level}</span>
         )}
         <span className="level-ring-label">{isNpc ? "CR" : "Level"}</span>
       </div>
