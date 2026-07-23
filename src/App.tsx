@@ -44,13 +44,12 @@ import { LoadingScreen } from "./components/LoadingScreen";
 import {
   DEFAULT_ICON_CROP,
   DEFAULT_VIEWPORT,
-  TOKEN_ENEMY_COLOR,
-  TOKEN_ITEM_COLOR,
   type GameState,
   type HitPoints,
   type IconCrop,
   type Viewport,
 } from "./lib/types";
+import { actorToken, itemToken } from "./lib/tokenFactory";
 
 import { applyRenderPixelRatio } from "./lib/renderQuality";
 
@@ -824,56 +823,19 @@ export default function App() {
 
   /** DM dropped an actor row (or the blank chip) from the directory onto the map. */
   const dropActorAt = (sheetId: string | null, clientX: number, clientY: number) => {
-    if (!isDm) {
-      return;
-    }
-    // The stage fills the window, so screen coords map straight through the viewport.
+    if (!isDm) return;
     const x = (clientX - viewport.x) / viewport.scale;
     const y = (clientY - viewport.y) / viewport.scale;
-    const record = sheetId ? state.sheets[sheetId] : null;
-    const isPc = record?.kind === "pc";
-    dm.addToken({
-      id: `token-${crypto.randomUUID().slice(0, 8)}`,
-      sceneId: state.activeSceneId,
-      x,
-      y,
-      label: record ? record.data.characterName || "Token" : "Token",
-      color: TOKEN_ENEMY_COLOR,
-      kind: isPc ? "player" : "enemy",
-      imageUrl: record?.data.iconUrl ?? null,
-      ownerPlayerId: isPc && record ? record.id : null,
-      sheetId: record && !isPc ? record.id : null,
-      conditions: [],
-      showHp: "none",
-    });
+    dm.addToken(actorToken(state, sheetId, state.activeSceneId, x, y));
   };
 
-  /** DM dropped a catalog item from the Items directory onto the map → an "item" token. */
+  /** DM dropped a catalog item from the Items directory onto the map. */
   const dropItemAt = (itemId: string, clientX: number, clientY: number) => {
-    if (!isDm) {
-      return;
-    }
-    const item = state.items[itemId];
-    if (!item) {
-      return;
-    }
+    if (!isDm) return;
     const x = (clientX - viewport.x) / viewport.scale;
     const y = (clientY - viewport.y) / viewport.scale;
-    dm.addToken({
-      id: `token-${crypto.randomUUID().slice(0, 8)}`,
-      sceneId: state.activeSceneId,
-      x,
-      y,
-      label: item.name || "Item",
-      color: TOKEN_ITEM_COLOR,
-      kind: "item",
-      imageUrl: item.iconUrl ?? null,
-      ownerPlayerId: null,
-      sheetId: null,
-      itemId,
-      conditions: [],
-      showHp: "none",
-    });
+    const token = itemToken(state, itemId, state.activeSceneId, x, y);
+    if (token) dm.addToken(token);
   };
 
   const handleViewportChange = (next: Viewport) => {
@@ -1253,7 +1215,7 @@ export default function App() {
         {/* One floating window per open sheet — players and the DM can have several up at
             once. Each has its own id (independent geometry + z-order); freshly-opened ones
             cascade off the default position so they don't land exactly atop one another. */}
-        {onBoard
+        {onBoard || activePage === "scenes"
           ? openSheetIds.map((entryId, index) => {
               const sheetId = entryId === SHEET_PICKER ? null : entryId;
               const sheetCtx: PanelContext = { ...panelContext, viewSheetId: sheetId };
@@ -1302,7 +1264,7 @@ export default function App() {
 
         {/* One floating window per open item sheet — the DM can inspect several at once.
             Each has its own id (independent geometry + z-order) and cascades off the default. */}
-        {onBoard && isDm
+        {(onBoard || activePage === "scenes") && isDm
           ? openItemIds.map((itemId, index) => {
               const itemCtx: PanelContext = { ...panelContext, viewItemId: itemId };
               const cascade = index * 32;

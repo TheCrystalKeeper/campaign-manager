@@ -1652,22 +1652,6 @@ button.class-chip--on {
 }
 
 /* --- Scenes-page: stage actors (Phase 7i) ---------------------------------- */
-.stage-actors {
-  border-top: 1px solid var(--border-subtle);
-  padding-top: 0.4rem;
-}
-.stage-actor-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-  max-height: 12rem;
-  overflow-y: auto;
-}
-.stage-actor-row {
-  text-align: left;
-  font-size: 0.8rem;
-  padding: 0.2rem 0.4rem;
-}
 
 /* --- Assets page (Phase 7j) ------------------------------------------------- */
 .assets-page-body {

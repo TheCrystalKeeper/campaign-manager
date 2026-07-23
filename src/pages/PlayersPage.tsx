@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { SheetCards } from "./SheetCards";
+import { ChipTabStrip } from "./ChipTabStrip";
 import { PageSwitcher, type PageId } from "./PageSwitcher";
 import { confirmDelete } from "../components/ConfirmDeleteDialog";
 import type { PanelContext } from "../panels/registry";
@@ -51,82 +52,83 @@ export function PlayersPage({
       <div className="chip-tabs player-tabs">
         <PageSwitcher active={activePage} onSelect={onNavigate} className="page-switcher--inline" history={ctx.history} />
         <span className="page-topbar-sep" aria-hidden />
-        {state.playerSlots.map((slot) => (
-          <div
-            key={slot.id}
-            className={`chip-tab${openIds.includes(slot.id) ? " chip-tab--open" : ""}`}
-            title={openIds.includes(slot.id) ? "Click to close sheet" : "Click to open sheet"}
-            onClick={() => {
-              if (editingId !== slot.id) {
-                toggle(slot.id);
-              }
-            }}
-          >
-            <span
-              className={`status-dot ${onlineIds.has(slot.id) ? "online" : ""}`}
-              title={onlineIds.has(slot.id) ? "Online" : "Offline"}
-            />
-            <input
-              className="chip-tab-name-input"
-              // Remounts with the new name after an external rename commits.
-              key={slot.name}
-              defaultValue={slot.name}
-              readOnly={editingId !== slot.id}
-              size={Math.max(slot.name.length, 4)}
-              title={editingId === slot.id ? undefined : "Double-click to rename"}
-              onClick={(e) => {
-                // While editing, clicks belong to the input, not the toggle.
-                if (editingId === slot.id) {
-                  e.stopPropagation();
+        <ChipTabStrip>
+          {state.playerSlots.map((slot) => (
+            <div
+              key={slot.id}
+              data-chip-id={slot.id}
+              className={`chip-tab${openIds.includes(slot.id) ? " chip-tab--open" : ""}`}
+              title={openIds.includes(slot.id) ? "Click to close sheet" : "Click to open sheet"}
+              onClick={() => {
+                if (editingId !== slot.id) {
+                  toggle(slot.id);
                 }
-              }}
-              onDoubleClick={(e) => {
-                e.stopPropagation();
-                setEditingId(slot.id);
-                const input = e.currentTarget;
-                requestAnimationFrame(() => {
-                  input.focus();
-                  input.select();
-                });
-              }}
-              onBlur={(e) => {
-                const name = e.target.value.trim();
-                if (name && name !== slot.name) {
-                  dm.updatePlayerSlot({ ...slot, name });
-                } else {
-                  e.target.value = slot.name;
-                }
-                setEditingId(null);
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.currentTarget.blur();
-                } else if (e.key === "Escape") {
-                  e.currentTarget.value = slot.name;
-                  e.currentTarget.blur();
-                }
-              }}
-            />
-            <button
-              className="chip-tab-close"
-              title="Remove slot"
-              onClick={(e) => {
-                e.stopPropagation();
-                void confirmDelete({
-                  kind: "player",
-                  name: slot.name,
-                  detail: "This removes their slot, character sheet, and board tokens.",
-                }).then((ok) => {
-                  if (!ok) return;
-                  close(slot.id);
-                  dm.removePlayerSlot(slot.id);
-                });
               }}
             >
-              ✕
-            </button>
-          </div>
-        ))}
+              <span
+                className={`status-dot ${onlineIds.has(slot.id) ? "online" : ""}`}
+                title={onlineIds.has(slot.id) ? "Online" : "Offline"}
+              />
+              <input
+                className="chip-tab-name-input"
+                key={slot.name}
+                defaultValue={slot.name}
+                readOnly={editingId !== slot.id}
+                size={Math.max(slot.name.length, 4)}
+                title={editingId === slot.id ? undefined : "Double-click to rename"}
+                onClick={(e) => {
+                  if (editingId === slot.id) {
+                    e.stopPropagation();
+                  }
+                }}
+                onDoubleClick={(e) => {
+                  e.stopPropagation();
+                  setEditingId(slot.id);
+                  const input = e.currentTarget;
+                  requestAnimationFrame(() => {
+                    input.focus();
+                    input.select();
+                  });
+                }}
+                onBlur={(e) => {
+                  const name = e.target.value.trim();
+                  if (name && name !== slot.name) {
+                    dm.updatePlayerSlot({ ...slot, name });
+                  } else {
+                    e.target.value = slot.name;
+                  }
+                  setEditingId(null);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.currentTarget.blur();
+                  } else if (e.key === "Escape") {
+                    e.currentTarget.value = slot.name;
+                    e.currentTarget.blur();
+                  }
+                }}
+              />
+              <button
+                className="chip-tab-close"
+                title="Remove slot"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void confirmDelete({
+                    kind: "player",
+                    name: slot.name,
+                    detail: "This removes their slot, character sheet, and board tokens.",
+                  }).then((ok) => {
+                    if (!ok) return;
+                    close(slot.id);
+                    dm.removePlayerSlot(slot.id);
+                  });
+                }}
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+        </ChipTabStrip>
         <button
           className="chip-tab chip-tab--add"
           title="Add a player slot"

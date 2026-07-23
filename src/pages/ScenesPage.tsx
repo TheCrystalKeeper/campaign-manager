@@ -1,27 +1,31 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, Eye, EyeOff } from "lucide-react";
+import { AlertTriangle, Eye, EyeOff, PanelLeft, PanelRight } from "lucide-react";
 import { MapCanvas } from "../components/MapCanvas";
 import { SceneSettings } from "../components/SceneSettings";
+import { ActorsPanel } from "../components/ActorsPanel";
+import { ItemsPanel } from "../components/ItemsPanel";
+import { ChipTabStrip } from "./ChipTabStrip";
 import { PageSwitcher, type PageId } from "./PageSwitcher";
-import { readCampaignFlag, writeCampaignFlag } from "../lib/campaignStore";
+import { campaignKey, readCampaignFlag, writeCampaignFlag } from "../lib/campaignStore";
 import { applySceneMessage, sceneMessageSceneId } from "../lib/sceneMessages";
 import { buildInverse, useHistory } from "../lib/history";
 import { useKeybinds } from "../lib/useKeybinds";
 import { matchesBinding } from "../lib/keybinds";
 import { createEmptyScene, fitViewportToScene } from "../lib/sceneUtils";
+import { actorToken, itemToken } from "../lib/tokenFactory";
 import {
   DEFAULT_VIEWPORT,
-  TOKEN_ENEMY_COLOR,
   type Annotation,
   type ClientMessage,
-  type GameState,
   type Scene,
   type Viewport,
 } from "../lib/types";
-import type { GameRoom } from "../hooks/useGameRoom";
 import type { PanelContext } from "../panels/registry";
 
 const LIVE_KEY = "cm-scene-editor-live";
+
+type InspectorTab = "scene" | "actors" | "items";
+type PanelLayout = "tabs" | "roster";
 
 /** Ephemeral annotations (pointer arrows, fading player strokes) never belong in a draft. */
 function stripEphemeral(scene: Scene): Scene {
@@ -30,16 +34,37 @@ function stripEphemeral(scene: Scene): Scene {
 
 type Draft = { scene: Scene; baselineJson: string };
 
-/// <summary>
-/// DM-only Scenes page: the full scene EDITOR. Top tabs pick the scene being
-/// edited (independent of the board's live scene); the main area is a second,
-/// embedded MapCanvas with its own local viewport and the full tool set; the
-/// right inspector holds the scene settings. "Live updates" ON = edits ride the
-/// normal room messages instantly. OFF = edits stage into a local per-scene
-/// draft (via the pure applySceneMessage reducer) until Apply pushes the whole
-/// scene in one UPDATE_SCENE. "Set Live on Board" applies any dirty draft, then
-/// switches the table to this scene.
-/// </summary>
+// --- Inspector / roster width persistence ---
+const INSPECTOR_MIN_W = 260;
+const INSPECTOR_MAX_W = 560;
+const INSPECTOR_DEFAULT_W = 340;
+const ROSTER_MIN_W = 220;
+const ROSTER_MAX_W = 560;
+const ROSTER_DEFAULT_W = 300;
+
+function loadWidth(roomId: string, key: string, fallback: number, min: number, max: number): number {
+  try {
+    const raw = localStorage.getItem(campaignKey(roomId, key));
+    const n = raw ? Number(raw) : NaN;
+    if (Number.isFinite(n)) return Math.min(Math.max(n, min), max);
+  } catch { /* use fallback */ }
+  return fallback;
+}
+function saveWidth(roomId: string, key: string, w: number) {
+  try { localStorage.setItem(campaignKey(roomId, key), String(Math.round(w))); } catch { /* noop */ }
+}
+
+function loadLayout(roomId: string): PanelLayout {
+  try {
+    const raw = localStorage.getItem(campaignKey(roomId, "scene-panel-layout"));
+    if (raw === "roster") return "roster";
+  } catch { /* noop */ }
+  return "tabs";
+}
+function saveLayout(roomId: string, layout: PanelLayout) {
+  try { localStorage.setItem(campaignKey(roomId, "scene-panel-layout"), layout); } catch { /* noop */ }
+}
+
 export function ScenesPage({
   ctx,
   active,
@@ -60,9 +85,30 @@ export function ScenesPage({
   const [viewport, setViewport] = useState<Viewport>(DEFAULT_VIEWPORT);
   const canvasBoxRef = useRef<HTMLDivElement>(null);
   const fittedSceneRef = useRef<string | null>(null);
-  // Undo/redo for scene-editor edits (independent of the board's history).
   const history = useHistory();
   const keybinds = useKeybinds();
+
+  // Inspector tabs + layout toggle state
+  const [inspectorTab, setInspectorTab] = useState<InspectorTab>("scene");
+  const [panelLayout, setPanelLayoutState] = useState<PanelLayout>(() => loadLayout(state.roomId));
+  const [rosterTab, setRosterTab] = useState<"actors" | "items">("actors");
+
+  const setPanelLayout = (layout: PanelLayout) => {
+    setPanelLayoutState(layout);
+    saveLayout(state.roomId, layout);
+  };
+
+  // Resizable inspector width
+  const [inspectorW, setInspectorW] = useState(() =>
+    loadWidth(state.roomId, "scene-inspector-w", INSPECTOR_DEFAULT_W, INSPECTOR_MIN_W, INSPECTOR_MAX_W),
+  );
+  const inspectorDragging = useRef(false);
+
+  // Resizable left roster width
+  const [rosterW, setRosterW] = useState(() =>
+    loadWidth(state.roomId, "scene-roster-w", ROSTER_DEFAULT_W, ROSTER_MIN_W, ROSTER_MAX_W),
+  );
+  const rosterDragging = useRef(false);
 
   // Fall back to the live scene when nothing (or a removed scene) is selected.
   const selectedSceneId =
@@ -75,67 +121,43 @@ export function ScenesPage({
   const serverChanged =
     dirty && serverScene !== null && JSON.stringify(stripEphemeral(serverScene)) !== draft.baselineJson;
 
-  // Fit the editor viewport when the edited scene changes (only while visible,
-  // so the box has a real size to measure).
+  // Fit the editor viewport when the edited scene changes.
   useEffect(() => {
-    if (!active || !serverScene || fittedSceneRef.current === selectedSceneId) {
-      return;
-    }
+    if (!active || !serverScene || fittedSceneRef.current === selectedSceneId) return;
     const box = canvasBoxRef.current?.getBoundingClientRect();
-    if (!box || box.width < 10 || box.height < 10) {
-      return;
-    }
+    if (!box || box.width < 10 || box.height < 10) return;
     fittedSceneRef.current = selectedSceneId;
     setViewport(fitViewportToScene(serverScene, box.width, box.height));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active, selectedSceneId, serverScene?.id]);
 
-  /** The state MapCanvas sees: the draft substituted in while staging. */
   const editorState = useMemo(() => {
-    if (liveUpdates || !draft) {
-      return state;
-    }
+    if (liveUpdates || !draft) return state;
     return {
       ...state,
       scenes: state.scenes.map((scene) => (scene.id === selectedSceneId ? draft.scene : scene)),
     };
   }, [state, liveUpdates, draft, selectedSceneId]);
 
-  /**
-   * The editor's send: live → straight to the room. Staging → scene-shape
-   * messages for the edited scene fold into the draft; everything transient
-   * (MEASURE, ephemeral pointer arrows) still goes live.
-   */
   const editorSend = useCallback(
     (msg: ClientMessage) => {
-      if (liveUpdates) {
-        room.send(msg);
-        return;
-      }
+      if (liveUpdates) { room.send(msg); return; }
       const targetId = sceneMessageSceneId(msg);
       const isEphemeralArrow =
         msg.type === "ADD_ANNOTATION" && (msg.annotation.ephemeral || msg.annotation.kind === "arrow");
-      if (targetId !== selectedSceneId || isEphemeralArrow) {
-        room.send(msg);
-        return;
-      }
+      if (targetId !== selectedSceneId || isEphemeralArrow) { room.send(msg); return; }
       setDrafts((current) => {
         const existing = current[selectedSceneId];
         const server = state.scenes.find((scene) => scene.id === selectedSceneId);
         const base = existing?.scene ?? (server ? stripEphemeral(server) : null);
-        if (!base) {
-          return current;
-        }
+        if (!base) return current;
         const next = applySceneMessage(base, msg);
-        if (next === base && existing) {
-          return current;
-        }
+        if (next === base && existing) return current;
         return {
           ...current,
           [selectedSceneId]: {
             scene: next,
-            baselineJson:
-              existing?.baselineJson ?? JSON.stringify(server ? stripEphemeral(server) : base),
+            baselineJson: existing?.baselineJson ?? JSON.stringify(server ? stripEphemeral(server) : base),
           },
         };
       });
@@ -143,10 +165,6 @@ export function ScenesPage({
     [liveUpdates, room, selectedSceneId, state.scenes],
   );
 
-  // `editorSend` wrapped to record undo/redo, mirroring App's board history: build the inverse from
-  // the state the editor currently sees (draft while staging, else live), record it, then forward.
-  // Undo/redo replay through the raw `editorSend`, so they re-fold into the draft or hit the room
-  // exactly like the original edit.
   const editorStateRef = useRef(editorState);
   editorStateRef.current = editorState;
   const recordEdit = history.record;
@@ -154,38 +172,26 @@ export function ScenesPage({
   const historyEditorSend = useCallback(
     (msg: ClientMessage) => {
       const inverse = buildInverse(editorStateRef.current, msg);
-      if (inverse) {
-        recordEdit({ send: editorSend, undo: inverse.undo, redo: inverse.redo });
-      }
+      if (inverse) recordEdit({ send: editorSend, undo: inverse.undo, redo: inverse.redo });
       editorSend(msg);
     },
     [editorSend, recordEdit],
   );
-  // A fresh editing context (different scene, or toggling live/staged) starts with a clean stack.
-  useEffect(() => {
-    resetHistory();
-  }, [selectedSceneId, liveUpdates, resetHistory]);
-  // Ctrl+Z / Ctrl+Shift+Z (+ Ctrl+Y) undo/redo while the Scenes page is visible.
+
+  useEffect(() => { resetHistory(); }, [selectedSceneId, liveUpdates, resetHistory]);
+
   const { undo: historyUndo, redo: historyRedo } = history;
   useEffect(() => {
-    if (!active) {
-      return;
-    }
+    if (!active) return;
     const onKey = (event: KeyboardEvent) => {
       const t = event.target as HTMLElement | null;
-      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) {
-        return;
-      }
-      // Ctrl/Cmd+Y stays a fixed alternate redo alongside the rebindable Redo chord.
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "y") {
-        event.preventDefault();
-        historyRedo();
+        event.preventDefault(); historyRedo();
       } else if (matchesBinding(event, keybinds.redo)) {
-        event.preventDefault();
-        historyRedo();
+        event.preventDefault(); historyRedo();
       } else if (matchesBinding(event, keybinds.undo)) {
-        event.preventDefault();
-        historyUndo();
+        event.preventDefault(); historyUndo();
       }
     };
     window.addEventListener("keydown", onKey);
@@ -197,26 +203,17 @@ export function ScenesPage({
       const pending = drafts[sceneId];
       if (pending) {
         room.send({ type: "UPDATE_SCENE", scene: stripEphemeral(pending.scene) });
-        setDrafts((current) => {
-          const next = { ...current };
-          delete next[sceneId];
-          return next;
-        });
+        setDrafts((current) => { const next = { ...current }; delete next[sceneId]; return next; });
       }
     },
     [drafts, room],
   );
 
   const discardDraft = (sceneId: string) =>
-    setDrafts((current) => {
-      const next = { ...current };
-      delete next[sceneId];
-      return next;
-    });
+    setDrafts((current) => { const next = { ...current }; delete next[sceneId]; return next; });
 
   const setLiveUpdates = (on: boolean) => {
     if (on) {
-      // Turning live back on pushes every staged draft first — nothing silently lost.
       for (const sceneId of Object.keys(drafts)) {
         const pending = drafts[sceneId];
         room.send({ type: "UPDATE_SCENE", scene: stripEphemeral(pending.scene) });
@@ -229,9 +226,7 @@ export function ScenesPage({
 
   const setLive = () => {
     applyDraft(selectedSceneId);
-    if (selectedSceneId !== state.activeSceneId) {
-      dm.setScene(selectedSceneId);
-    }
+    if (selectedSceneId !== state.activeSceneId) dm.setScene(selectedSceneId);
   };
 
   const addScene = () => {
@@ -246,29 +241,182 @@ export function ScenesPage({
     setSelectedId(null);
   };
 
+  // --- Scene-aware drop wiring ---
+  // Always-live: tokens aren't draftable (sceneMessageSceneId returns null for ADD_TOKEN),
+  // so editorSend forwards them to the room even in staged mode. Players can't see tokens
+  // on non-active scenes (redaction), so instant sends are safe.
+  const dropActorAtScene = useCallback(
+    (sheetId: string | null, clientX: number, clientY: number) => {
+      const box = canvasBoxRef.current?.getBoundingClientRect();
+      if (!box || !serverScene) return;
+      const x = (clientX - box.left - viewport.x) / viewport.scale;
+      const y = (clientY - box.top - viewport.y) / viewport.scale;
+      const token = actorToken(state, sheetId, selectedSceneId, x, y);
+      historyEditorSend({ type: "ADD_TOKEN", token });
+    },
+    [viewport, selectedSceneId, serverScene, state, historyEditorSend],
+  );
+
+  const dropItemAtScene = useCallback(
+    (itemId: string, clientX: number, clientY: number) => {
+      const box = canvasBoxRef.current?.getBoundingClientRect();
+      if (!box || !serverScene) return;
+      const x = (clientX - box.left - viewport.x) / viewport.scale;
+      const y = (clientY - box.top - viewport.y) / viewport.scale;
+      const token = itemToken(state, itemId, selectedSceneId, x, y);
+      if (token) historyEditorSend({ type: "ADD_TOKEN", token });
+    },
+    [viewport, selectedSceneId, serverScene, state, historyEditorSend],
+  );
+
   const shownScene = editorState.scenes.find((scene) => scene.id === selectedSceneId) ?? null;
+  const stagedCount = state.tokens.filter((token) => token.sceneId === selectedSceneId).length;
+
+  // --- Resize handlers ---
+  const onInspectorHandleDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    inspectorDragging.current = true;
+    e.currentTarget.setPointerCapture(e.pointerId);
+  }, []);
+  const onInspectorHandleMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (!inspectorDragging.current) return;
+    setInspectorW(Math.min(Math.max(window.innerWidth - e.clientX, INSPECTOR_MIN_W), INSPECTOR_MAX_W));
+  }, []);
+  const onInspectorHandleUp = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (!inspectorDragging.current) return;
+    inspectorDragging.current = false;
+    e.currentTarget.releasePointerCapture(e.pointerId);
+    setInspectorW((w) => { saveWidth(state.roomId, "scene-inspector-w", w); return w; });
+  }, [state.roomId]);
+
+  const onRosterHandleDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    rosterDragging.current = true;
+    e.currentTarget.setPointerCapture(e.pointerId);
+  }, []);
+  const onRosterHandleMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (!rosterDragging.current) return;
+    setRosterW(Math.min(Math.max(e.clientX, ROSTER_MIN_W), ROSTER_MAX_W));
+  }, []);
+  const onRosterHandleUp = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (!rosterDragging.current) return;
+    rosterDragging.current = false;
+    e.currentTarget.releasePointerCapture(e.pointerId);
+    setRosterW((w) => { saveWidth(state.roomId, "scene-roster-w", w); return w; });
+  }, [state.roomId]);
+
+  // Clamp widths if window shrinks
+  useEffect(() => {
+    const onResize = () => {
+      setInspectorW((w) => Math.min(w, Math.max(INSPECTOR_MIN_W, window.innerWidth - 400)));
+      setRosterW((w) => Math.min(w, Math.max(ROSTER_MIN_W, window.innerWidth - 400)));
+    };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  // --- Shared panel elements ---
+  const stagedHeader = (
+    <div className="scene-staged-header">
+      <div className="scene-staged-header-row">
+        <span>Tokens on scene</span>
+        <span>{stagedCount}</span>
+      </div>
+      <p style={{ margin: "0 0 0.2rem" }}>
+        Staged tokens stay hidden from players until this scene is set live.
+      </p>
+    </div>
+  );
+
+  const actorsPanelEl = (
+    <>
+      {stagedHeader}
+      <ActorsPanel
+        state={state}
+        dm={dm}
+        openSheet={ctx.openSheet}
+        dropActorAt={dropActorAtScene}
+        openOnCreate={false}
+      />
+    </>
+  );
+
+  const itemsPanelEl = (
+    <ItemsPanel
+      state={state}
+      dm={dm}
+      openItemSheet={ctx.openItemSheet}
+      dropItemAt={dropItemAtScene}
+    />
+  );
+
+  const sceneSettingsEl = shownScene ? (
+    <div className="stack">
+      <SceneSettings
+        scene={shownScene}
+        roomId={state.roomId}
+        onPatch={(patch) =>
+          editorSend({ type: "UPDATE_SCENE", scene: { ...shownScene, ...patch } })
+        }
+        onSetFog={(patch) =>
+          editorSend({
+            type: "FOG_SET",
+            sceneId: shownScene.id,
+            enabled: patch.enabled ?? shownScene.fog.enabled,
+            inverted: patch.inverted,
+          })
+        }
+        onResetFog={() => editorSend({ type: "FOG_RESET", sceneId: shownScene.id })}
+        onRotate={() => historyEditorSend({ type: "ROTATE_SCENE", sceneId: shownScene.id })}
+        rotateDisabled={dirty}
+      />
+      <button
+        className="btn-danger"
+        disabled={state.scenes.length <= 1}
+        title="Remove this scene (tokens on it are removed too)"
+        onClick={removeScene}
+      >
+        Delete scene
+      </button>
+    </div>
+  ) : null;
+
+  const layoutToggle = (
+    <button
+      className="scene-inspector-tab-toggle"
+      title={panelLayout === "tabs"
+        ? "Move actors & items to the left side"
+        : "Move actors & items back to the right side"}
+      onClick={() => setPanelLayout(panelLayout === "tabs" ? "roster" : "tabs")}
+    >
+      {panelLayout === "tabs" ? <PanelLeft size={14} strokeWidth={2.2} /> : <PanelRight size={14} strokeWidth={2.2} />}
+    </button>
+  );
 
   return (
     <div className="scene-editor">
       <div className="chip-tabs scene-tabs">
         <PageSwitcher active={activePage} onSelect={onNavigate} className="page-switcher--inline" />
         <span className="page-topbar-sep" aria-hidden />
-        {state.scenes.map((scene) => {
-          const isLive = scene.id === state.activeSceneId;
-          const isSelected = scene.id === selectedSceneId;
-          return (
-            <button
-              key={scene.id}
-              className={`chip-tab${isSelected ? " chip-tab--open" : ""}`}
-              title={isLive ? `${scene.name} — live on the board` : `Edit ${scene.name}`}
-              onClick={() => setSelectedId(scene.id)}
-            >
-              {isLive ? <span className="chip-tab-live">●</span> : null}
-              <span className="chip-tab-name">{scene.name}</span>
-              {drafts[scene.id] ? <span className="chip-tab-dirty" title="Unsaved changes" /> : null}
-            </button>
-          );
-        })}
+        <ChipTabStrip activeId={selectedSceneId}>
+          {state.scenes.map((scene) => {
+            const isLive = scene.id === state.activeSceneId;
+            const isSelected = scene.id === selectedSceneId;
+            return (
+              <button
+                key={scene.id}
+                data-chip-id={scene.id}
+                className={`chip-tab${isSelected ? " chip-tab--open" : ""}`}
+                title={isLive ? `${scene.name} — live on the board` : `Edit ${scene.name}`}
+                onClick={() => setSelectedId(scene.id)}
+              >
+                {isLive ? <span className="chip-tab-live">●</span> : null}
+                <span className="chip-tab-name">{scene.name}</span>
+                {drafts[scene.id] ? <span className="chip-tab-dirty" title="Unsaved changes" /> : null}
+              </button>
+            );
+          })}
+        </ChipTabStrip>
         <button className="chip-tab chip-tab--add" title="Add a scene" onClick={addScene}>
           ＋ Add
         </button>
@@ -299,13 +447,9 @@ export function ScenesPage({
             {liveUpdates ? "Live updates: on" : "Live updates: off"}
           </button>
           {(() => {
-            // Visibility is a table-state action, not a draft edit — read the SERVER copy
-            // and send the dedicated message immediately (never rides Apply).
             const serverScene = state.scenes.find((scene) => scene.id === selectedSceneId);
             const isLiveScene = selectedSceneId === state.activeSceneId;
-            if (!serverScene) {
-              return null;
-            }
+            if (!serverScene) return null;
             return (
               <button
                 className={serverScene.playerVisible && !isLiveScene ? "btn-active" : ""}
@@ -340,6 +484,39 @@ export function ScenesPage({
       </div>
 
       <div className="scene-editor-body">
+        {/* Layout B: left roster for actors/items */}
+        {panelLayout === "roster" ? (
+          <>
+            <aside className="scene-editor-roster" style={{ width: rosterW }}>
+              <div className="scene-inspector-tabs">
+                <button
+                  className={rosterTab === "actors" ? "btn-active" : ""}
+                  onClick={() => setRosterTab("actors")}
+                >
+                  Actors
+                </button>
+                <button
+                  className={rosterTab === "items" ? "btn-active" : ""}
+                  onClick={() => setRosterTab("items")}
+                >
+                  Items
+                </button>
+              </div>
+              <div className="scene-inspector-body scene-inspector-body--dir">
+                {rosterTab === "actors" ? actorsPanelEl : itemsPanelEl}
+              </div>
+            </aside>
+            <div
+              className="page-resize"
+              title="Drag to resize"
+              onPointerDown={onRosterHandleDown}
+              onPointerMove={onRosterHandleMove}
+              onPointerUp={onRosterHandleUp}
+              onPointerCancel={onRosterHandleUp}
+            />
+          </>
+        ) : null}
+
         <div className="scene-editor-canvas" ref={canvasBoxRef}>
           {active && shownScene ? (
             <MapCanvas
@@ -363,103 +540,58 @@ export function ScenesPage({
           ) : null}
         </div>
 
-        <aside className="scene-editor-inspector">
-          {shownScene ? (
-            <div className="stack">
-              <SceneSettings
-                scene={shownScene}
-                roomId={state.roomId}
-                onPatch={(patch) =>
-                  editorSend({ type: "UPDATE_SCENE", scene: { ...shownScene, ...patch } })
-                }
-                onSetFog={(patch) =>
-                  editorSend({
-                    type: "FOG_SET",
-                    sceneId: shownScene.id,
-                    enabled: patch.enabled ?? shownScene.fog.enabled,
-                    inverted: patch.inverted,
-                  })
-                }
-                onResetFog={() => editorSend({ type: "FOG_RESET", sceneId: shownScene.id })}
-                // Always-live (bypasses staging by design — it also moves the scene's
-                // TOKENS, which drafts can't hold). Disabled while a draft is dirty:
-                // applying pre-rotation staged geometry afterwards would desync it.
-                onRotate={() => historyEditorSend({ type: "ROTATE_SCENE", sceneId: shownScene.id })}
-                rotateDisabled={dirty}
-              />
-              <StageActors state={state} scene={shownScene} room={room} />
-              <button
-                className="btn-danger"
-                disabled={state.scenes.length <= 1}
-                title="Remove this scene (tokens on it are removed too)"
-                onClick={removeScene}
-              >
-                Delete scene
-              </button>
-            </div>
-          ) : null}
+        {/* Inspector resize handle */}
+        <div
+          className="page-resize"
+          title="Drag to resize"
+          onPointerDown={onInspectorHandleDown}
+          onPointerMove={onInspectorHandleMove}
+          onPointerUp={onInspectorHandleUp}
+          onPointerCancel={onInspectorHandleUp}
+        />
+
+        <aside className="scene-editor-inspector" style={{ width: inspectorW }}>
+          {panelLayout === "tabs" ? (
+            <>
+              <div className="scene-inspector-tabs">
+                <button
+                  className={inspectorTab === "scene" ? "btn-active" : ""}
+                  onClick={() => setInspectorTab("scene")}
+                >
+                  Scene
+                </button>
+                <button
+                  className={inspectorTab === "actors" ? "btn-active" : ""}
+                  onClick={() => setInspectorTab("actors")}
+                >
+                  Actors
+                </button>
+                <button
+                  className={inspectorTab === "items" ? "btn-active" : ""}
+                  onClick={() => setInspectorTab("items")}
+                >
+                  Items
+                </button>
+                {layoutToggle}
+              </div>
+              <div className={`scene-inspector-body${inspectorTab !== "scene" ? " scene-inspector-body--dir" : ""}`}>
+                {inspectorTab === "scene" ? sceneSettingsEl : null}
+                {inspectorTab === "actors" ? actorsPanelEl : null}
+                {inspectorTab === "items" ? itemsPanelEl : null}
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="scene-inspector-tabs">
+                <span style={{ flex: 1, fontWeight: 700, fontSize: "0.78rem" }}>Scene Settings</span>
+                {layoutToggle}
+              </div>
+              <div className="scene-inspector-body">
+                {sceneSettingsEl}
+              </div>
+            </>
+          )}
         </aside>
-      </div>
-    </div>
-  );
-}
-
-/// <summary>
-/// Pre-staging (Phase 7): drop actors onto the SELECTED scene ahead of time. Because
-/// players only ever receive the ACTIVE scene's tokens (redactStateFor), tokens staged on
-/// a non-active scene stay invisible until the DM sets it live — so an encounter can be
-/// laid out in advance. Tokens land near the scene center; nudge them on the editor canvas.
-/// </summary>
-function StageActors({ state, scene, room }: { state: GameState; scene: Scene; room: GameRoom }) {
-  const actors = Object.values(state.sheets);
-  const stagedCount = state.tokens.filter((token) => token.sceneId === scene.id).length;
-  const stage = (sheetId: string) => {
-    const record = state.sheets[sheetId];
-    if (!record) return;
-    const isPc = record.kind === "pc";
-    const jitter = () => (Math.random() - 0.5) * scene.gridSize * 3;
-    room.send({
-      type: "ADD_TOKEN",
-      token: {
-        id: `token-${crypto.randomUUID().slice(0, 8)}`,
-        sceneId: scene.id,
-        x: scene.width / 2 + jitter(),
-        y: scene.height / 2 + jitter(),
-        label: record.data.characterName || "Token",
-        color: TOKEN_ENEMY_COLOR,
-        kind: isPc ? "player" : "enemy",
-        imageUrl: record.data.iconUrl ?? null,
-        ownerPlayerId: isPc ? record.id : null,
-        sheetId: isPc ? null : record.id,
-        conditions: [],
-        showHp: "none",
-      },
-    });
-  };
-
-  return (
-    <div className="stage-actors">
-      <div className="sheet-section-head">
-        <span className="sheet-section-title">Stage actors</span>
-        <span className="muted" style={{ fontSize: "0.7rem" }}>{stagedCount} on scene</span>
-      </div>
-      <p className="muted" style={{ fontSize: "0.72rem", margin: "0 0 0.3rem" }}>
-        Staged tokens stay hidden from players until this scene is set live.
-      </p>
-      <div className="stage-actor-list">
-        {actors.length === 0 ? (
-          <span className="muted" style={{ fontSize: "0.78rem" }}>No actors yet — create some in Actors/NPCs.</span>
-        ) : null}
-        {actors.map((record) => (
-          <button
-            key={record.id}
-            className="btn-ghost stage-actor-row"
-            title="Add a token for this actor to the selected scene"
-            onClick={() => stage(record.id)}
-          >
-            ＋ {record.data.characterName || (record.kind === "pc" ? "Player" : "NPC")}
-          </button>
-        ))}
       </div>
     </div>
   );
