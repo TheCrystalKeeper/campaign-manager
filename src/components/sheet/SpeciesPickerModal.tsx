@@ -124,6 +124,36 @@ export function SpeciesPickerModal({ sheet, onClose }: { sheet: SheetEdit; onClo
             <input type="checkbox" checked={autofill} onChange={(e) => setAutofill(e.target.checked)} />
             Autofill basics
           </label>
+          {sheet.value.race.trim() ? (
+            <button
+              type="button"
+              className="btn-ghost"
+              title="Remove this species (and its trait rows), leaving it unset"
+              onClick={async () => {
+                // Species features are tagged source "species"; clearing removes them the
+                // same way switching species replaces them — confirm when any exist.
+                const speciesRows = sheet.value.features.filter((f) => f.source === "species");
+                if (speciesRows.length) {
+                  const n = speciesRows.length;
+                  const ok = await confirmAction({
+                    title: "Clear species?",
+                    body: `Removing this species also removes its ${n} species feature${n === 1 ? "" : "s"} (including any you added by hand).`,
+                    confirmLabel: "Clear species",
+                    danger: true,
+                  });
+                  if (!ok) return;
+                }
+                sheet.update({
+                  race: "",
+                  speciesAutofill: false,
+                  features: sheet.value.features.filter((f) => f.source !== "species"),
+                });
+                onClose();
+              }}
+            >
+              Clear species
+            </button>
+          ) : null}
         </div>
       }
       pickLabel="Set species"

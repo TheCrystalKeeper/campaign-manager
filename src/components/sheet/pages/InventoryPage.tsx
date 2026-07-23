@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Shield } from "lucide-react";
+import { BookOpen, Shield } from "lucide-react";
 import {
   createInventoryRow,
   INVENTORY_CATEGORIES,
@@ -41,7 +41,8 @@ const CURRENCY_KEYS: Array<{ key: keyof Currency; label: string }> = [
  */
 export function InventoryPage({ sheet }: { sheet: SheetEdit }) {
   const { value, canEdit, derived, setOverride, update, onRollCheck, actions } = sheet;
-  const [srdPickerOpen, setSrdPickerOpen] = useState(false);
+  // null = closed; "all" = the top button (unscoped); a category = that group's book button.
+  const [pickerCat, setPickerCat] = useState<InventoryCategory | "all" | null>(null);
 
   const setRows = (rows: InventoryEntry[]) => update({ inventory: rows });
   const appendRow = (row: InventoryEntry) =>
@@ -67,6 +68,7 @@ export function InventoryPage({ sheet }: { sheet: SheetEdit }) {
     title: CATEGORY_TITLES[category],
     rows: value.inventory.filter((r) => r.category === category),
     onAdd: canEdit ? () => setRows([...value.inventory, createInventoryRow({ category })]) : undefined,
+    onCompendium: canEdit ? () => setPickerCat(category) : undefined,
   }));
 
   return (
@@ -139,21 +141,22 @@ export function InventoryPage({ sheet }: { sheet: SheetEdit }) {
         <div className="spell-add-bar">
           <button
             type="button"
-            className="btn-ghost"
+            className="btn-compendium"
             title="Browse the full compendium item list"
-            onClick={() => setSrdPickerOpen(true)}
+            onClick={() => setPickerCat("all")}
           >
-            ＋ From compendium
+            <BookOpen size={14} strokeWidth={2.2} /> From Compendium
           </button>
         </div>
       ) : null}
-      {srdPickerOpen ? (
+      {pickerCat !== null ? (
         <SrdItemPickerModal
+          category={pickerCat === "all" ? undefined : pickerCat}
           onPickEquipment={(eq) => appendRow(inventoryRowFromEquipment(eq))}
           onPickMagicItem={(mi) => appendRow(inventoryRowFromMagicItem(mi))}
           // Keeps the itemId catalog link, so the row tracks the item's name/icon.
           onPickHomebrewItem={(item) => appendRow(inventoryRowFromItem(item))}
-          onClose={() => setSrdPickerOpen(false)}
+          onClose={() => setPickerCat(null)}
         />
       ) : null}
 

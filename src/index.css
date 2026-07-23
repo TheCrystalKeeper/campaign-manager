@@ -1140,8 +1140,9 @@ textarea,
   user-select: none;
 }
 
-/* Stat-block apply modal — a vertical list of "how should this apply?" choices. */
-.statblock-apply-choice {
+/* Apply-mode modal — a vertical list of "how should this apply?" choices. Shared by
+   the stat-block apply flow (NPC sheets) and the compendium-item apply flow. */
+.apply-choice {
   display: flex;
   flex-direction: column;
   gap: 0.15rem;
@@ -1154,16 +1155,16 @@ textarea,
   cursor: pointer;
   color: inherit;
 }
-.statblock-apply-choice:hover,
-.statblock-apply-choice:focus-visible {
+.apply-choice:hover,
+.apply-choice:focus-visible {
   background: var(--surface-2);
   border-color: var(--accent);
 }
-.statblock-apply-choice-label {
+.apply-choice-label {
   font-family: var(--font-display);
   font-size: 0.9rem;
 }
-.statblock-apply-choice-hint {
+.apply-choice-hint {
   font-size: 0.76rem;
   line-height: 1.25;
 }
@@ -3938,7 +3939,7 @@ body.pointer-dragging * {
    left and a full-text preview right. Reuses .rt-search for the search box.
    --------------------------------------------------------------------------- */
 .modal.cmp-picker {
-  width: min(880px, 100%);
+  width: min(1080px, 96vw);
   display: flex;
   flex-direction: column;
   gap: 0.55rem;
@@ -4023,6 +4024,34 @@ body.pointer-dragging * {
 .cmp-row--head .cmp-cell--sortable:hover {
   filter: brightness(1.3);
   text-decoration: underline;
+}
+/* Header cells anchor the drag-to-resize handle and let it straddle the column edge. */
+.cmp-row--head .cmp-cell {
+  position: relative;
+  overflow: visible;
+}
+/* Draggable divider on a header column's right edge — resizes that column. */
+.cmp-col-resize {
+  position: absolute;
+  top: 0;
+  right: -0.25rem;
+  width: 0.6rem;
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  cursor: col-resize;
+  touch-action: none;
+  z-index: 2;
+}
+.cmp-col-resize::after {
+  content: "";
+  width: 2px;
+  height: 100%;
+  background: color-mix(in srgb, var(--border-subtle) 70%, transparent);
+  border-radius: 2px;
+}
+.cmp-col-resize:hover::after {
+  background: var(--accent);
 }
 .cmp-sort-arrow {
   display: inline-flex;

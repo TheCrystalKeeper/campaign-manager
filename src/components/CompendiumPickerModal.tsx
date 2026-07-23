@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Search } from "lucide-react";
 import { COMPENDIUM_ATTRIBUTION, searchCompendium } from "../lib/compendium";
@@ -31,6 +31,9 @@ type ResizeDir = "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw";
 const RESIZE_DIRS: ResizeDir[] = ["n", "s", "e", "w", "ne", "nw", "se", "sw"];
 const MIN_W = 480;
 const MIN_H = 320;
+/** Smallest a column can be dragged to. Name column (index -1) gets a wider floor. */
+const MIN_COL_W = 52;
+const MIN_NAME_COL_W = 90;
 
 export function CompendiumPickerModal<T extends { id: string; name: string }>({
   title,
@@ -89,6 +92,45 @@ export function CompendiumPickerModal<T extends { id: string; name: string }>({
   const [geom, setGeom] = useState<Geom | null>(null);
   const dragRef = useRef<{ pointerId: number; offsetX: number; offsetY: number; w: number; h: number } | null>(null);
   const resizeRef = useRef<{ dir: ResizeDir; startX: number; startY: number; start: Geom } | null>(null);
+
+  // Per-column pixel widths, keyed by column index (-1 = the Name column, 0..n-1 = `columns`).
+  // Absent = the CSS default flex sizing. Ephemeral, like `geom`: a fresh open starts default.
+  const [colWidths, setColWidths] = useState<Record<number, number>>({});
+  const colResizeRef = useRef<{ index: number; startX: number; startWidth: number } | null>(null);
+  const cellStyle = (index: number): CSSProperties | undefined =>
+    colWidths[index] != null ? { flex: `0 0 ${colWidths[index]}px` } : undefined;
+  const startColResize = (index: number) => (event: React.PointerEvent<HTMLSpanElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const cell = event.currentTarget.parentElement as HTMLElement | null;
+    if (!cell) return;
+    colResizeRef.current = { index, startX: event.clientX, startWidth: cell.getBoundingClientRect().width };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+  const onColResizeMove = (event: React.PointerEvent<HTMLSpanElement>) => {
+    const r = colResizeRef.current;
+    if (!r) return;
+    const floor = r.index === -1 ? MIN_NAME_COL_W : MIN_COL_W;
+    const width = Math.max(floor, r.startWidth + (event.clientX - r.startX));
+    setColWidths((prev) => ({ ...prev, [r.index]: width }));
+  };
+  const endColResize = (event: React.PointerEvent<HTMLSpanElement>) => {
+    if (!colResizeRef.current) return;
+    colResizeRef.current = null;
+    event.currentTarget.releasePointerCapture(event.pointerId);
+  };
+  // A reusable resize handle for a header column's right edge (omitted on the last column,
+  // whose right edge is the table border). stopPropagation keeps a drag from sorting.
+  const resizeHandle = (index: number) => (
+    <span
+      className="cmp-col-resize"
+      onPointerDown={startColResize(index)}
+      onPointerMove={onColResizeMove}
+      onPointerUp={endColResize}
+      onPointerCancel={endColResize}
+      onClick={(e) => e.stopPropagation()}
+    />
+  );
 
   const currentRect = (): Geom => {
     if (geom) return geom;
@@ -362,10 +404,12 @@ export function CompendiumPickerModal<T extends { id: string; name: string }>({
                   className="cmp-cell cmp-cell--name cmp-cell--sortable"
                   role="button"
                   tabIndex={0}
+                  style={cellStyle(-1)}
                   onClick={() => toggleSort(-1)}
                 >
                   Name
                   {sortIndicator(-1)}
+                  {columns.length > 0 ? resizeHandle(-1) : null}
                 </span>
                 {columns.map((col, i) => (
                   <span
@@ -373,10 +417,12 @@ export function CompendiumPickerModal<T extends { id: string; name: string }>({
                     className="cmp-cell cmp-cell--sortable"
                     role="button"
                     tabIndex={0}
+                    style={cellStyle(i)}
                     onClick={() => toggleSort(i)}
                   >
                     {col.label}
                     {sortIndicator(i)}
+                    {i < columns.length - 1 ? resizeHandle(i) : null}
                   </span>
                 ))}
               </div>
@@ -391,13 +437,13 @@ export function CompendiumPickerModal<T extends { id: string; name: string }>({
                   onClick={() => select(row)}
                   onDoubleClick={() => pick(row)}
                 >
-                  <span className="cmp-cell cmp-cell--name">
+                  <span className="cmp-cell cmp-cell--name" style={cellStyle(-1)}>
                     {row.name}
                     {badge?.(row) ? <span className="cmp-badge">{badge(row)}</span> : null}
                     {addedIds.has(row.id) ? <span className="cmp-added">✓</span> : null}
                   </span>
-                  {columns.map((col) => (
-                    <span key={col.label} className="cmp-cell">
+                  {columns.map((col, i) => (
+                    <span key={col.label} className="cmp-cell" style={cellStyle(i)}>
                       {col.render(row)}
                     </span>
                   ))}

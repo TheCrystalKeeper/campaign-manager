@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { Search } from "lucide-react";
+import { BookOpen, Search } from "lucide-react";
 
 export type RowGroup<T> = {
   id: string;
@@ -7,6 +7,8 @@ export type RowGroup<T> = {
   rows: T[];
   /** DM/owner: add a row to this group. */
   onAdd?: () => void;
+  /** DM/owner: browse the compendium scoped to this group (adds a book button). */
+  onCompendium?: () => void;
 };
 
 type RowTableProps<T extends { id: string }> = {
@@ -118,6 +120,19 @@ export function RowTable<T extends { id: string }>({
                 <span className="rt-group-count">{group.rows.length}</span>
               ) : null}
               <span className="rt-group-cols">{headerCells}</span>
+              {canEdit && group.onCompendium ? (
+                <button
+                  type="button"
+                  className="btn-ghost icon-btn icon-btn--accent rt-compendium"
+                  title={`Add ${group.title.toLowerCase()} from the compendium`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    group.onCompendium?.();
+                  }}
+                >
+                  <BookOpen size={11} strokeWidth={2.2} />
+                </button>
+              ) : null}
               {canEdit && group.onAdd ? (
                 <button
                   type="button"

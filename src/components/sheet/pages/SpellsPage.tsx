@@ -1,5 +1,5 @@
 import { useState, type ReactElement } from "react";
-import { Sparkles } from "lucide-react";
+import { BookOpen, Sparkles } from "lucide-react";
 import {
   CASTER_TYPES,
   DEFAULT_SHEET_TEMPLATE,
@@ -180,11 +180,11 @@ export function SpellsPage({ sheet }: { sheet: SheetEdit }) {
           <button type="button" className="btn-ghost" onClick={() => addSpell(1)}>＋ Spell</button>
           <button
             type="button"
-            className="btn-ghost"
+            className="btn-compendium"
             title="Browse the full compendium spell list"
             onClick={() => setSrdPickerOpen(true)}
           >
-            ＋ From compendium
+            <BookOpen size={14} strokeWidth={2.2} /> From Compendium
           </button>
         </div>
       ) : null}

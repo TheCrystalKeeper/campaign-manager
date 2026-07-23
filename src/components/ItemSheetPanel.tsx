@@ -12,10 +12,35 @@ import {
 import { itemPatchFromEquipment, itemPatchFromMagicItem } from "../lib/compendiumMap";
 import { downloadJson, itemExportPayload, parseItemImport, transferFilename } from "../lib/sheetTransfer";
 import { uploadTokenImage } from "../lib/uploadAsset";
+import { ApplyModeModal, type ApplyChoice } from "./ApplyModeModal";
 import { CroppableImage } from "./CroppableImage";
 import { ImageCropModal } from "./ImageCropModal";
 import { AssetPickerModal } from "./AssetPickerModal";
 import { SrdItemPickerModal } from "./SrdItemPickerModal";
+
+/** How a compendium item merges onto an item that already has stats/description. */
+type ItemApplyMode = "stats" | "keep-name" | "replace";
+/** The compendium field payload waiting for the DM to pick an apply mode. */
+type PendingApply = Partial<ItemRecord> & { name: string };
+
+/** Apply-mode choices, safest (keeps the most) first — mirrors StatblockApplyModal. */
+const ITEM_APPLY_CHOICES = (name: string): ApplyChoice<ItemApplyMode>[] => [
+  {
+    mode: "stats",
+    label: "Stats only",
+    hint: "Keep this item's name and description. Only update the numbers (type, damage, properties…).",
+  },
+  {
+    mode: "keep-name",
+    label: "Keep name",
+    hint: `Keep this item's name, but take “${name}”'s description and stats.`,
+  },
+  {
+    mode: "replace",
+    label: "Replace",
+    hint: `Overwrite everything — name, description, and stats — with “${name}”.`,
+  },
+];
 
 /** Compendium-managed optional fields, cleared before an apply so values from the item's
  *  previous identity (e.g. a magic item's rarity/attunement) don't survive under the new one. */
@@ -52,23 +77,35 @@ export function ItemSheetPanel({
   const [cropOpen, setCropOpen] = useState(false);
   const [libOpen, setLibOpen] = useState(false);
   const [srdOpen, setSrdOpen] = useState(false);
+  // Set when a compendium pick lands on an item that already has content — the apply-mode
+  // modal takes over from here so the DM chooses how name/description are handled.
+  const [pendingApply, setPendingApply] = useState<PendingApply | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const importRef = useRef<HTMLInputElement>(null);
   const patch = (fields: Partial<ItemRecord>) => onChange({ ...item, ...fields });
 
-  /** Overwrites this item's fields from a compendium pick, keeping its identity in the
-   *  catalog (id, icon, folder, ordering, quantity). Placed board tokens re-sync their
-   *  label/art automatically via UPDATE_ITEM. Returns false to keep the picker open. */
-  const applyCompendium = (fields: Partial<ItemRecord> & { name: string }): boolean => {
+  /** A compendium pick keeps this item's catalog identity (id, icon, folder, ordering,
+   *  quantity); placed board tokens re-sync their label/art via UPDATE_ITEM. A blank item
+   *  is replaced outright; one with content defers to the apply-mode modal. Returning true
+   *  closes the picker either way. */
+  const applyCompendium = (fields: PendingApply): boolean => {
     const hasContent = Boolean(item.description.trim() || item.type);
-    if (
-      hasContent &&
-      !window.confirm(`Overwrite "${item.name}"'s fields with "${fields.name}" from the compendium?`)
-    ) {
-      return false;
+    if (hasContent) {
+      setPendingApply(fields);
+    } else {
+      patch({ ...COMPENDIUM_FIELD_RESET, ...fields });
     }
-    patch({ ...COMPENDIUM_FIELD_RESET, ...fields });
     return true;
+  };
+
+  /** Applies a deferred compendium pick per the chosen mode. Mechanical fields
+   *  (type/rarity/damage/properties…) are always replaced; the mode decides whether the
+   *  item's own name and/or description survive. */
+  const applyItemMode = (fields: PendingApply, mode: ItemApplyMode) => {
+    const base = { ...COMPENDIUM_FIELD_RESET, ...fields };
+    if (mode === "keep-name") patch({ ...base, name: item.name });
+    else if (mode === "stats") patch({ ...base, name: item.name, description: item.description });
+    else patch(base);
   };
 
   /** Import replaces the item's own fields but keeps its place in THIS catalog
@@ -222,6 +259,18 @@ export function ItemSheetPanel({
               onPickEquipment={(eq) => applyCompendium(itemPatchFromEquipment(eq))}
               onPickMagicItem={(mi) => applyCompendium(itemPatchFromMagicItem(mi))}
               onClose={() => setSrdOpen(false)}
+            />
+          ) : null}
+          {pendingApply ? (
+            <ApplyModeModal<ItemApplyMode>
+              title={`Apply “${pendingApply.name}”`}
+              intro={`This item's stats (type, damage, properties…) will be replaced from “${pendingApply.name}”. How should this item's own name and description be handled?`}
+              choices={ITEM_APPLY_CHOICES(pendingApply.name)}
+              onChoose={(mode) => {
+                applyItemMode(pendingApply, mode);
+                setPendingApply(null);
+              }}
+              onClose={() => setPendingApply(null)}
             />
           ) : null}
         </div>

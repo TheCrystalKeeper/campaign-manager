@@ -771,6 +771,13 @@
   padding: 0 0.3rem;
   cursor: pointer;
 }
+/* Per-group compendium book button — sized down to sit in the compact group header. */
+.rt-compendium.icon-btn {
+  width: 1.4rem;
+  height: 1.4rem;
+  font-size: 0.8rem;
+  flex-shrink: 0;
+}
 .rt-row {
   display: flex;
   align-items: center;
@@ -1315,6 +1322,23 @@ button.class-chip--on {
 .spell-add-bar {
   display: flex;
   gap: 0.4rem;
+}
+/* The "From Compendium" action: a real outlined button (not ghost text) with an accent
+   tint + book icon, so it reads clearly as the gateway to the compendium browser. */
+.btn-compendium {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.82rem;
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.btn-compendium:hover:not(:disabled) {
+  background-color: color-mix(in srgb, var(--accent) 14%, var(--surface-page));
+  border-color: var(--accent);
+}
+.btn-compendium svg {
+  flex-shrink: 0;
 }
 
 /* --- Effects & conditions --------------------------------------------------- */

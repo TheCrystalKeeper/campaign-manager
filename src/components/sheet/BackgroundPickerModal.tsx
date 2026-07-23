@@ -79,6 +79,21 @@ export function BackgroundPickerModal({ sheet, onClose }: { sheet: SheetEdit; on
             <input type="checkbox" checked={autofill} onChange={(e) => setAutofill(e.target.checked)} />
             Autofill skills
           </label>
+          {sheet.value.background.trim() ? (
+            <button
+              type="button"
+              className="btn-ghost"
+              title="Remove this background, leaving it unset"
+              onClick={() => {
+                // Skill proficiencies stay (they can't be cleanly attributed to one
+                // source) — same as "Clear class" leaving its proficiencies.
+                sheet.update({ background: "", backgroundAutofill: false });
+                onClose();
+              }}
+            >
+              Clear background
+            </button>
+          ) : null}
         </div>
       }
       pickLabel="Set background"

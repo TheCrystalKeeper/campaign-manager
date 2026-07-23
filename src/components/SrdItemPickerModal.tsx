@@ -5,7 +5,12 @@ import {
   type CompendiumEquipment,
   type CompendiumMagicItem,
 } from "../lib/compendium";
-import { ITEM_RARITIES, type ItemRecord } from "../lib/types";
+import {
+  ITEM_RARITIES,
+  inventoryCategoryForItemType,
+  type InventoryCategory,
+  type ItemRecord,
+} from "../lib/types";
 import { useHomebrew } from "../hooks/useHomebrew";
 import { CompendiumPickerModal } from "./CompendiumPickerModal";
 import { PickerSelect, optionLabel } from "./pickerFilters";
@@ -14,6 +19,13 @@ import { CompendiumDescription, PreviewLine } from "./compendiumPreview";
 // Intentionally the subset of ItemType present in equipment.json — mundane equipment
 // has no wondrous/ring/etc. entries, so those options would always filter to nothing.
 const EQUIPMENT_TYPES = ["weapon", "armor", "tool", "gear"] as const;
+
+const CATEGORY_TITLES: Record<InventoryCategory, string> = {
+  weapon: "weapons",
+  equipment: "equipment",
+  consumable: "consumables",
+  loot: "loot",
+};
 
 /// <summary>
 /// Compendium item browser with two tabs — mundane Equipment and Magic Items —
@@ -25,9 +37,10 @@ const EQUIPMENT_TYPES = ["weapon", "armor", "tool", "gear"] as const;
 /// `onPick*` may return `false` to keep the modal open (e.g. a cancelled confirm).
 /// </summary>
 export function SrdItemPickerModal({
-  title = "Add items from the compendium",
+  title,
   pickLabel,
   multiPick = true,
+  category,
   onPickEquipment,
   onPickMagicItem,
   onPickHomebrewItem,
@@ -36,17 +49,37 @@ export function SrdItemPickerModal({
   title?: string;
   pickLabel?: string;
   multiPick?: boolean;
+  /**
+   * Scope every tab to items that land in this inventory category (weapon/equipment/
+   * consumable/loot). Opened from a category's ＋ book button — hides the per-type
+   * filter (redundant when the category already constrains the type).
+   */
+  category?: InventoryCategory;
   onPickEquipment: (eq: CompendiumEquipment) => void | boolean;
   onPickMagicItem: (mi: CompendiumMagicItem) => void | boolean;
   /** When provided, a third "Homebrew" tab lists the campaign's published catalog items. */
   onPickHomebrewItem?: (item: ItemRecord) => void | boolean;
   onClose: () => void;
 }) {
-  const [tab, setTab] = useState<"equipment" | "magic" | "homebrew">("equipment");
+  // Consumables (potions, scrolls, etc.) live almost entirely in magic-items.json —
+  // equipment.json's "consumable" rows are just torches/rations/rope — so opening the
+  // Consumables category book button should land straight on the Magic items tab.
+  const [tab, setTab] = useState<"equipment" | "magic" | "homebrew">(
+    category === "consumable" ? "magic" : "equipment",
+  );
   const [typeFilter, setTypeFilter] = useState("");
   const [rarityFilter, setRarityFilter] = useState("");
   const { catalogItems } = useHomebrew();
   const showHomebrewTab = Boolean(onPickHomebrewItem);
+
+  const resolvedTitle =
+    title ??
+    (category
+      ? `Add ${CATEGORY_TITLES[category]} from the compendium`
+      : "Add items from the compendium");
+  // Category scoping runs as a predicate on each tab's `itemType`/`type`.
+  const inCategory = (type: CompendiumEquipment["itemType"] | undefined) =>
+    category === undefined || inventoryCategoryForItemType(type) === category;
 
   const tabs = (
     <div className="cmp-tabs">
@@ -84,7 +117,7 @@ export function SrdItemPickerModal({
     return (
       <CompendiumPickerModal<ItemRecord>
         key={tab}
-        title={title}
+        title={resolvedTitle}
         load={async () => [...catalogItems].sort((a, b) => a.name.localeCompare(b.name))}
         badge={() => "Homebrew"}
         columns={[
@@ -94,6 +127,7 @@ export function SrdItemPickerModal({
         ]}
         getSearchText={(i) => `${i.type ?? ""} ${i.rarity ?? ""}`}
         filters={tabs}
+        filterFn={(i) => inCategory(i.type)}
         renderPreview={(i) => (
           <div>
             <h3>{i.name}</h3>
@@ -129,7 +163,7 @@ export function SrdItemPickerModal({
     return (
       <CompendiumPickerModal<CompendiumEquipment>
         key={tab}
-        title={title}
+        title={resolvedTitle}
         load={loadEquipment}
         columns={[
           { label: "Category", render: (e) => e.category },
@@ -140,16 +174,18 @@ export function SrdItemPickerModal({
         filters={
           <>
             {tabs}
-            <PickerSelect
-              label="Filter by type"
-              value={typeFilter}
-              onChange={setTypeFilter}
-              allLabel="All types"
-              options={EQUIPMENT_TYPES.map((t) => ({ value: t, label: optionLabel(t) }))}
-            />
+            {category === undefined ? (
+              <PickerSelect
+                label="Filter by type"
+                value={typeFilter}
+                onChange={setTypeFilter}
+                allLabel="All types"
+                options={EQUIPMENT_TYPES.map((t) => ({ value: t, label: optionLabel(t) }))}
+              />
+            ) : null}
           </>
         }
-        filterFn={(e) => typeFilter === "" || e.itemType === typeFilter}
+        filterFn={(e) => (typeFilter === "" || e.itemType === typeFilter) && inCategory(e.itemType)}
         renderPreview={(e) => (
           <div>
             <h3>{e.name}</h3>
@@ -186,7 +222,7 @@ export function SrdItemPickerModal({
   return (
     <CompendiumPickerModal<CompendiumMagicItem>
       key={tab}
-      title={title}
+      title={resolvedTitle}
       load={loadMagicItems}
       columns={[
         { label: "Category", render: (m) => m.category },
@@ -206,7 +242,7 @@ export function SrdItemPickerModal({
           />
         </>
       }
-      filterFn={(m) => rarityFilter === "" || m.rarity === rarityFilter}
+      filterFn={(m) => (rarityFilter === "" || m.rarity === rarityFilter) && inCategory(m.itemType)}
       renderPreview={(m) => (
         <div>
           <h3>{m.name}</h3>
