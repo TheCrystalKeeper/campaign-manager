@@ -3445,6 +3445,7 @@ export function MapCanvas({
               points={ruler.points}
               color={ruler.color}
               name={ruler.name}
+              scale={viewport.scale}
             />
           ))}
           {sceneTemplates.map(([clientId, tpl]) => (

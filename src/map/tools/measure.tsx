@@ -44,41 +44,56 @@ export function formatRulerDistance(scene: Scene, points: number[]): string {
   return `${feet} ft (${rounded} sq)`;
 }
 
-/// <summary>Shared ruler visual: line, endpoints, and a distance/name tag.</summary>
+/// <summary>Shared ruler visual: line, endpoints, and a distance/name tag. Decorations
+/// (stroke, endpoints, tag) are counter-scaled by the live viewport scale so they hold a
+/// constant, readable on-screen size at any zoom — only the line's endpoints track world
+/// coordinates. The tag lives in a group inverse-scaled at the ruler end, which also lands
+/// its text at a 1:1 raster (crisp) regardless of zoom.</summary>
 export function RulerShape({
   scene,
   points,
   color,
   name,
+  scale = 1,
 }: {
   scene: Scene;
   points: number[];
   color: string;
   name?: string;
+  /** Live world→screen viewport scale; decorations divide by it to stay screen-constant. */
+  scale?: number;
 }) {
   if (points.length < 4) {
     return null;
   }
+  // Inverse of the viewport zoom: multiply screen-px sizes by this to draw them in world px.
+  const s = 1 / (scale > 0 ? scale : 1);
   const endX = points[points.length - 2];
   const endY = points[points.length - 1];
   const label = `${name ? `${name} — ` : ""}${formatRulerDistance(scene, points)}`;
-  const labelW = label.length * 7.2 + 12;
+  const boxH = 26;
+  const padX = 10;
+  const labelW = label.length * 8.4 + padX * 2;
   return (
     <Group listening={false}>
-      <Line points={points} stroke={color} strokeWidth={2} dash={[8, 6]} />
-      <Circle x={points[0]} y={points[1]} radius={4} fill={color} />
-      <Circle x={endX} y={endY} radius={4} fill={color} />
-      <Rect
-        x={endX + 10}
-        y={endY - 12}
-        width={labelW}
-        height={22}
-        cornerRadius={5}
-        fill="rgba(10,12,16,0.85)"
-        stroke={color}
-        strokeWidth={1}
-      />
-      <Text x={endX + 16} y={endY - 7} text={label} fontSize={12} fill="#e6e6e8" />
+      <Line points={points} stroke={color} strokeWidth={2.5 * s} dash={[9 * s, 6 * s]} />
+      <Circle x={points[0]} y={points[1]} radius={5 * s} fill={color} />
+      <Circle x={endX} y={endY} radius={5 * s} fill={color} />
+      {/* Tag anchored at the ruler end, inverse-scaled into screen space so its box + text
+          hold a constant size (and crisp 1:1 text) no matter the zoom. */}
+      <Group x={endX} y={endY} scaleX={s} scaleY={s} listening={false}>
+        <Rect
+          x={12}
+          y={-boxH / 2}
+          width={labelW}
+          height={boxH}
+          cornerRadius={7}
+          fill="rgba(10,12,16,0.85)"
+          stroke={color}
+          strokeWidth={1.5}
+        />
+        <Text x={12 + padX} y={-7} text={label} fontSize={14} fill="#e6e6e8" />
+      </Group>
     </Group>
   );
 }
@@ -126,6 +141,6 @@ export const measureTool: MapTool = {
     if (!d) {
       return null;
     }
-    return <RulerShape scene={rt.scene} points={d.points} color="#7cc4ff" />;
+    return <RulerShape scene={rt.scene} points={d.points} color="#7cc4ff" scale={rt.viewportScale} />;
   },
 };
