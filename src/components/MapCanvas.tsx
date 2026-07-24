@@ -1433,8 +1433,10 @@ export function MapCanvas({
    *  Cascades on repeat paste (each paste stores its own offset copies). */
   const tokenClipboardRef = useRef<Token[] | null>(null);
   // ---- Alt+drag marquee selection (DM only) ----
-  /** World-coord anchor of the in-flight marquee; null = no marquee. The gesture truth. */
-  const marqueeRef = useRef<{ startX: number; startY: number } | null>(null);
+  /** World-coord anchor of the in-flight marquee; null = no marquee. The gesture truth.
+   *  `additive` (Shift+Alt at gesture start) unions the result into the current selection
+   *  instead of replacing it. */
+  const marqueeRef = useRef<{ startX: number; startY: number; additive: boolean } | null>(null);
   /** Normalized live rect driving the dashed preview (world coords). */
   const [marqueeRect, setMarqueeRect] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
   /** Set for one tick after a marquee commits: Konva fires token-click then stage-click after
@@ -2839,8 +2841,10 @@ export function MapCanvas({
   /** True when a shift-drag pointer arrow should start (select mode, left button). */
   // The shift-drag pointer arrow: DM always; players only when the DM allows it.
   const canPoint = isDm || state.playersCanPoint !== false;
+  // Shift+Alt is the "add to marquee" chord (DM), so it must NOT arm an arrow here — let it
+  // fall through to the marquee block below. Plain Shift-drag still draws a pointer arrow.
   const arrowGestureArmed = (e: Konva.KonvaEventObject<PointerEvent>) =>
-    canPoint && !toolActive && !placing && e.evt.button === 0 && e.evt.shiftKey;
+    canPoint && !toolActive && !placing && e.evt.button === 0 && e.evt.shiftKey && !e.evt.altKey;
 
   const currentTurnTokenId =
     state.combat?.entries[state.combat.turnIndex]?.tokenId ?? null;
@@ -3077,7 +3081,7 @@ export function MapCanvas({
           if (isDm && onSelectTokens && e.evt.altKey && !toolActive && !placing && e.evt.button === 0) {
             const pos = stageRef.current?.getRelativePointerPosition();
             if (pos) {
-              marqueeRef.current = { startX: pos.x, startY: pos.y };
+              marqueeRef.current = { startX: pos.x, startY: pos.y, additive: e.evt.shiftKey };
               setMarqueeRect({ x: pos.x, y: pos.y, w: 0, h: 0 });
               // Capture the pointer so the marquee survives the cursor crossing the dock,
               // toolbar, or window edge (same rationale as the tool gesture below).
@@ -3135,6 +3139,7 @@ export function MapCanvas({
         onPointerUp={(e) => {
           if (marqueeRef.current) {
             const rect = marqueeRect;
+            const additive = marqueeRef.current.additive;
             marqueeRef.current = null;
             setMarqueeRect(null);
             // A near-zero drag (screen px, so zoom doesn't change the feel) is a plain
@@ -3154,7 +3159,12 @@ export function MapCanvas({
                 return (token.x - nx) ** 2 + (token.y - ny) ** 2 <= r * r;
               })
               .map((token) => token.id);
-            onSelectTokens?.(ids);
+            // Shift+Alt marquee adds to the live selection (union, order-stable); a plain
+            // Alt marquee replaces it.
+            const nextIds = additive
+              ? [...(selectedTokenIds ?? []), ...ids.filter((id) => !selectedIdSet.has(id))]
+              : ids;
+            onSelectTokens?.(nextIds);
             // Konva fires token-click + stage-click after this pointerup; swallow both so
             // they can't toggle/clear the selection we just committed.
             marqueeJustEndedRef.current = true;
