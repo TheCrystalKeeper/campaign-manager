@@ -29,6 +29,7 @@ import { readLocalFlag, writeLocalFlag } from "./lib/localFlags";
 import { Dices, IdCard, Settings, X } from "lucide-react";
 import { UI_ACCENTS, type UiAccent } from "./lib/types";
 import {
+  clearCampaignAll,
   clearCampaignLayout,
   readCampaignFlag,
   readCampaignJson,
@@ -37,7 +38,7 @@ import {
 } from "./lib/campaignStore";
 import { useSpaceClick } from "./lib/useSpaceClick";
 import { useKeybinds } from "./lib/useKeybinds";
-import { matchesBinding } from "./lib/keybinds";
+import { formatBinding, matchesBinding } from "./lib/keybinds";
 import { fitViewportToScene, prefetchImage } from "./lib/sceneUtils";
 import { setOptimizeUploads as applyOptimizeUploads } from "./lib/uploadAsset";
 import { LoadingScreen } from "./components/LoadingScreen";
@@ -52,8 +53,10 @@ import {
 import { actorToken, itemToken } from "./lib/tokenFactory";
 
 import { applyRenderPixelRatio } from "./lib/renderQuality";
+import type { TutorialMode } from "./lib/tutorialContent";
+import { TutorialController } from "./tutorial/TutorialController";
 
-type SessionParams = JoinParams & { roomId: string };
+type SessionParams = JoinParams & { roomId: string; tutorial?: TutorialMode };
 
 const SNAP_KEY = "cm-map-snap";
 const TOASTS_KEY = "cm-log-toasts";
@@ -198,6 +201,11 @@ export default function App() {
   );
   /** Bumped by "Reset UI layout" — remounts windows / repositions the tray. */
   const [layoutEpoch, setLayoutEpoch] = useState(0);
+  // Tutorial signals: the board's effective map tool (reported by MapCanvas) and a
+  // counter bumped on every committed token move, so walkthrough steps can advance
+  // on "you moved a token" without inspecting positions.
+  const [boardToolId, setBoardToolId] = useState("select");
+  const [tokenMoves, setTokenMoves] = useState(0);
   const lastSceneRef = useRef<string | null>(null);
   /** roomId whose saved layout has been restored (once per join) — nulled on leave. */
   const restoredRoomRef = useRef<string | null>(null);
@@ -490,6 +498,9 @@ export default function App() {
   }, [onBoard, settingsOpen, closeSettingsOnClickOff]);
 
   const leave = () => {
+    // Tutorial rooms are single-visit: purge their cm:{roomId}:* keys (window
+    // geometry, toggles) so throwaway room ids never accumulate in localStorage.
+    if (session?.tutorial && roomId) clearCampaignAll(roomId);
     setSession(null);
     setPopped([]);
     setOpenSheetIds([]);
@@ -503,6 +514,8 @@ export default function App() {
     setDockOpen(true);
     setPage("board");
     setViewingSceneId(null);
+    setBoardToolId("select");
+    setTokenMoves(0);
     history.reset();
     lastSceneRef.current = null;
     // Re-arm restore so re-joining any campaign reloads its saved layout.
@@ -642,6 +655,11 @@ export default function App() {
     if (!roomId || restoredRoomRef.current === roomId) {
       return;
     }
+    // Tutorial sandboxes always start from the default layout and never persist one
+    // (leaving the ref unset also disables the persist effect below).
+    if (session?.tutorial) {
+      return;
+    }
     restoredRoomRef.current = roomId;
     const layout = readCampaignJson<StoredLayout>(roomId, "layout", DEFAULT_LAYOUT);
     setDockOpen(layout.dockOpen);
@@ -711,6 +729,22 @@ export default function App() {
       else window.clearTimeout(handle);
     };
   }, [state]);
+
+  // Clicking a left map-toolbar button dismisses the open token popup — the board already
+  // clears it on a stage click, this extends that to the toolbar (only). Other chrome (the
+  // dock, other windows) deliberately leaves the selection alone.
+  useEffect(() => {
+    if (selectedTokenIds.length === 0) {
+      return;
+    }
+    const onPointerDown = (event: PointerEvent) => {
+      if (event.target instanceof Element && event.target.closest(".map-toolbar")) {
+        setSelectedTokenIds([]);
+      }
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [selectedTokenIds]);
 
   // Homebrew read-context for the compendium pickers (however deep they mount). Must
   // stay ABOVE the early returns — hooks after a conditional return break hook order
@@ -847,6 +881,8 @@ export default function App() {
     room,
     dm,
     isDm,
+    displayedSceneId: displayedSceneId ?? state.activeSceneId,
+    peekScene: setViewingSceneId,
     // Per-sheet windows override this with their own id; the base context has no single "current"
     // sheet. Other panels don't read it.
     viewSheetId: null,
@@ -920,6 +956,7 @@ export default function App() {
       id: "sheet",
       icon: <IdCard size={17} strokeWidth={2.2} />,
       title: "Character sheet",
+      desc: "Open your character sheet; click again to close.",
       active: openSheetIds.length > 0,
       slot: "top",
       onClick: toggleSheet,
@@ -928,6 +965,7 @@ export default function App() {
       id: "dice",
       icon: <Dices size={17} strokeWidth={2.2} />,
       title: "Dice tray",
+      desc: "Show or hide the dice tray.",
       active: trayOpen,
       slot: "top",
       onClick: () => setTrayOpen((open) => !open),
@@ -935,7 +973,8 @@ export default function App() {
     {
       id: "settings",
       icon: <Settings size={17} strokeWidth={2.2} />,
-      title: "Settings",
+      title: `Settings (${formatBinding(keybinds.toggleSettings)})`,
+      desc: "This device, table look, and campaign options.",
       active: settingsOpen,
       slot: "bottom",
       onClick: () => setSettingsOpen((open) => !open),
@@ -1014,9 +1053,11 @@ export default function App() {
         yourPlayerId={room.yourPlayerId}
         viewport={viewport}
         onViewportChange={handleViewportChange}
-        onMoveToken={(tokenId, x, y, facing) =>
-          (isDm ? historySend : room.send)({ type: "MOVE_TOKEN", tokenId, x, y, ...(facing !== undefined ? { facing } : {}) })
-        }
+        onActiveToolChange={setBoardToolId}
+        onMoveToken={(tokenId, x, y, facing) => {
+          if (session.tutorial) setTokenMoves((count) => count + 1);
+          (isDm ? historySend : room.send)({ type: "MOVE_TOKEN", tokenId, x, y, ...(facing !== undefined ? { facing } : {}) });
+        }}
         onSelectToken={selectToken}
         onSelectTokens={selectTokens}
         onOpenTokenSheet={openTokenSheet}
@@ -1099,29 +1140,54 @@ export default function App() {
         </FloatingCluster>
         ) : null}
 
-        {/* The DM always gets the page switcher; players get it only when the DM has
-            enabled the Stats page (otherwise the two-button Board/Stats pill vanishes
-            for them — with only the board left there is nothing to switch between). */}
-        {onBoard && (isDm || state.playersCanSeeStats) ? (
-          <div className="page-switcher">
-            <PageSwitcher
-              pages={isDm ? DM_PAGES : PLAYER_PAGES}
-              active={activePage}
-              onSelect={setPage}
-            />
-          </div>
-        ) : null}
-
-        {/* Players: scene strip when the DM has opened extra scenes (redacted state only
-            ever carries scenes this player may see, so length > 1 IS the signal). */}
-        {!isDm && state.scenes.length > 1 ? (
-          <SceneSwitcher
-            scenes={state.scenes}
-            activeSceneId={state.activeSceneId}
-            displayedSceneId={displayedSceneId ?? state.activeSceneId}
-            onView={setViewingSceneId}
-          />
-        ) : null}
+        {/* Two top-left pills share one slot. The Board/Stats switcher: the DM always
+            gets it, players only when Stats is enabled (otherwise the two-button pill has
+            nothing to switch between). The player scene strip: shown when the DM has
+            opened extra scenes (redacted state only carries scenes this player may see, so
+            length > 1 IS the signal). Both are board-only — off the board (e.g. a player on
+            the Stats page) there's nothing to switch scenes for, so leaving it hides them.
+            When a player has BOTH, they'd stack on top of each other, so render as one
+            pill — Board/Stats first, then the scene tabs. */}
+        {(() => {
+          const showSwitcher = onBoard && (isDm || state.playersCanSeeStats);
+          const showScenes = onBoard && !isDm && state.scenes.length > 1;
+          if (showSwitcher && showScenes) {
+            return (
+              <div className="page-switcher page-switcher--with-scenes">
+                <PageSwitcher pages={PLAYER_PAGES} active={activePage} onSelect={setPage} />
+                <span className="page-topbar-sep" />
+                <SceneSwitcher
+                  inline
+                  scenes={state.scenes}
+                  activeSceneId={state.activeSceneId}
+                  displayedSceneId={displayedSceneId ?? state.activeSceneId}
+                  onView={setViewingSceneId}
+                />
+              </div>
+            );
+          }
+          return (
+            <>
+              {showSwitcher ? (
+                <div className="page-switcher">
+                  <PageSwitcher
+                    pages={isDm ? DM_PAGES : PLAYER_PAGES}
+                    active={activePage}
+                    onSelect={setPage}
+                  />
+                </div>
+              ) : null}
+              {showScenes ? (
+                <SceneSwitcher
+                  scenes={state.scenes}
+                  activeSceneId={state.activeSceneId}
+                  displayedSceneId={displayedSceneId ?? state.activeSceneId}
+                  onView={setViewingSceneId}
+                />
+              ) : null}
+            </>
+          );
+        })()}
 
         <Dock
           panels={dockPanels}
@@ -1414,6 +1480,44 @@ export default function App() {
           <div className="toast">Reconnecting to the game server…</div>
         ) : null}
         {error && status === "joined" ? <div className="error-banner">{error}</div> : null}
+
+        {session.tutorial && status === "joined" ? (
+          <TutorialController
+            mode={session.tutorial}
+            signals={{
+              page: activePage,
+              dockTab,
+              dockOpen,
+              trayOpen,
+              settingsOpen,
+              openSheetIds,
+              openHandoutIds,
+              activeToolId: boardToolId,
+              tokenMoves,
+              selectedTokenIds: liveSelectedTokenIds,
+              snap,
+              viewport,
+              displayedSceneId: displayedSceneId ?? state.activeSceneId,
+              state,
+            }}
+            actions={{
+              setDockTab: (id) => {
+                setDockTab(id);
+                setDockOpen(true);
+              },
+              setDockOpen,
+              setPage,
+              setTrayOpen,
+              openSheet: (id) =>
+                setOpenSheetIds((current) => (current.includes(id) ? current : [...current, id])),
+              closeWindows: () => {
+                setOpenSheetIds([]);
+                setOpenHandoutIds([]);
+              },
+              leave,
+            }}
+          />
+        ) : null}
       </div>
     </div>
     </HomebrewProvider>

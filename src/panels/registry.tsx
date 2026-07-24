@@ -53,6 +53,12 @@ export type PanelContext = {
   room: GameRoom;
   dm: ReturnType<typeof useDmActions>;
   isDm: boolean;
+  /** The scene this client's board is currently showing — the live scene, or the one the
+      DM is peeking. Equals state.activeSceneId when not peeking. */
+  displayedSceneId: string;
+  /** DM: peek a scene locally (this client's board only) without cutting it live for
+      everyone; null returns to the live scene. */
+  peekScene: (sceneId: string | null) => void;
   /** Which sheet the sheet window is showing (null → own sheet for players). */
   viewSheetId: string | null;
   openSheet: (sheetId: string) => void;
@@ -127,6 +133,8 @@ export type PanelDef = {
   id: PanelId;
   /** Tab tooltip / window title fallback. */
   label: string;
+  /** Optional second line for the dock-tab hover tooltip (see TOOLTIPS.md). */
+  tipDesc?: string;
   /** Sidebar tab glyph. */
   icon: ReactNode;
   /** Dockable panels appear as sidebar tabs; others are floating-only. */
@@ -265,6 +273,7 @@ export const PANELS: PanelDef[] = [
   {
     id: "log",
     label: "Log",
+    tipDesc: "Dice rolls and table chat.",
     icon: <MessageSquare size={17} strokeWidth={2.2} />,
     dockable: true,
     roles: ["dm", "player"],
@@ -291,6 +300,7 @@ export const PANELS: PanelDef[] = [
   {
     id: "initiative",
     label: "Combat",
+    tipDesc: "Initiative order and turn tracking.",
     icon: <Swords size={17} strokeWidth={2.2} />,
     dockable: true,
     roles: ["dm", "player"],
@@ -311,6 +321,7 @@ export const PANELS: PanelDef[] = [
   {
     id: "inventory",
     label: "Inventory",
+    tipDesc: "Party inventory and claimed items.",
     icon: <Backpack size={17} strokeWidth={2.2} />,
     dockable: true,
     // Player-only: the DM reaches any character's inventory through the sheet window,
@@ -331,17 +342,26 @@ export const PANELS: PanelDef[] = [
   {
     id: "scenes",
     label: "Scenes",
+    tipDesc: "Build and switch battle maps.",
     icon: <MapIcon size={17} strokeWidth={2.2} />,
     dockable: true,
     roles: ["dm"],
     title: () => "Scenes",
     defaultPos: (vw) => ({ x: vw - 392, y: 92 }),
     width: 340,
-    render: (ctx) => <ScenePanel state={ctx.state} dm={ctx.dm} />,
+    render: (ctx) => (
+      <ScenePanel
+        state={ctx.state}
+        dm={ctx.dm}
+        displayedSceneId={ctx.displayedSceneId}
+        onPeek={ctx.peekScene}
+      />
+    ),
   },
   {
     id: "actors",
     label: "Actors",
+    tipDesc: "NPCs and monsters — drag onto the map.",
     icon: <Users size={17} strokeWidth={2.2} />,
     dockable: true,
     roles: ["dm"],
@@ -363,6 +383,7 @@ export const PANELS: PanelDef[] = [
   {
     id: "items",
     label: "Items",
+    tipDesc: "Item library — drag onto the map.",
     icon: <Backpack size={17} strokeWidth={2.2} />,
     dockable: true,
     roles: ["dm"],
@@ -381,6 +402,7 @@ export const PANELS: PanelDef[] = [
   {
     id: "homebrew",
     label: "Homebrew",
+    tipDesc: "Custom monsters, spells, and items.",
     icon: <FlaskConical size={17} strokeWidth={2.2} />,
     dockable: true,
     roles: ["dm"],
@@ -395,6 +417,7 @@ export const PANELS: PanelDef[] = [
   {
     id: "party",
     label: "Party",
+    tipDesc: "The player characters at a glance.",
     icon: <HeartHandshake size={17} strokeWidth={2.2} />,
     dockable: true,
     roles: ["dm"],
@@ -409,6 +432,7 @@ export const PANELS: PanelDef[] = [
   {
     id: "handouts",
     label: "Handouts",
+    tipDesc: "Share images with the table.",
     icon: <ScrollText size={17} strokeWidth={2.2} />,
     dockable: true,
     roles: ["dm", "player"],
@@ -427,6 +451,7 @@ export const PANELS: PanelDef[] = [
   {
     id: "notes",
     label: "DM Notes",
+    tipDesc: "Private notes only you can see.",
     icon: <Feather size={17} strokeWidth={2.2} />,
     dockable: true,
     roles: ["dm"],

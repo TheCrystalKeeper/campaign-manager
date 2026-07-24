@@ -36,6 +36,7 @@ function commitSegment(rt: ToolRuntime, a: Pt, b: Pt): void {
 export const wallsTool: MapTool = {
   id: "walls",
   label: "Walls & doors",
+  tipDesc: "Draw walls that block sight and movement.",
   icon: <BrickWall size={17} strokeWidth={2.2} />,
   hotkey: "w",
   dmOnly: true,

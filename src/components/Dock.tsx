@@ -7,6 +7,8 @@ export type DockAction = {
   id: string;
   icon: ReactNode;
   title: string;
+  /** Optional second line for the hover tooltip (see TOOLTIPS.md). */
+  desc?: string;
   active?: boolean;
   onClick: () => void;
   /** Rail placement: above the tabs, right after them, or at the bottom (above the chevron). */
@@ -38,6 +40,7 @@ function ActionButtons({ actions }: { actions: DockAction[] }) {
           data-dock-action={action.id}
           className={`dock-tab${action.active ? " dock-tab--active" : ""}`}
           title={action.title}
+          data-tip-desc={action.desc}
           onClick={action.onClick}
         >
           {action.icon}
@@ -77,7 +80,8 @@ export function Dock({
 
   return (
     <div className="dock">
-      <div className="dock-rail">
+      {/* Rail hugs the right edge — hover tooltips open to its left (see TOOLTIPS.md). */}
+      <div className="dock-rail" data-tip-side="left">
         {topActions.length > 0 ? (
           <>
             <ActionButtons actions={topActions} />
@@ -89,10 +93,12 @@ export function Dock({
           return (
             <button
               key={panel.id}
+              data-dock-tab={panel.id}
               className={`dock-tab${open && active?.id === panel.id ? " dock-tab--active" : ""}${
                 isPopped ? " dock-tab--popped" : ""
               }`}
               title={isPopped ? `${panel.label} (popped out)` : panel.label}
+              data-tip-desc={panel.tipDesc}
               onClick={() => onSelectTab(panel.id)}
             >
               {panel.icon}
@@ -105,6 +111,7 @@ export function Dock({
         <button
           className="dock-tab"
           title={open ? "Collapse" : "Expand"}
+          data-tip-desc={open ? "Hide the side panel — the tab rail stays." : "Reopen the side panel."}
           onClick={onToggleOpen}
         >
           {open ? (

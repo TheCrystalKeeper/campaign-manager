@@ -41,6 +41,7 @@ export type LightPreset = keyof typeof LIGHT_PRESETS;
 export const lightsTool: MapTool = {
   id: "lights",
   label: "Lights",
+  tipDesc: "Place and edit light sources.",
   icon: <Lamp size={17} strokeWidth={2.2} />,
   hotkey: "l",
   dmOnly: true,

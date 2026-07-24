@@ -69,6 +69,8 @@ export type ToolRuntime = {
 export type MapTool = {
   id: string;
   label: string;
+  /** Optional second line for the toolbar hover tooltip (see TOOLTIPS.md). */
+  tipDesc?: string;
   icon: ReactNode;
   hotkey: string;
   dmOnly?: boolean;

@@ -81,6 +81,7 @@ import {
   sanitizeThrow,
 } from "../src/lib/dice3d";
 import { redactStateFor, type StateView } from "../src/lib/redact";
+import { buildTutorialState, isTutorialRoomId } from "../src/lib/tutorialContent";
 import { loadCampaignFromDisk } from "./loadCampaign";
 
 type ClientMeta = {
@@ -145,10 +146,19 @@ export default class GameServer implements Party.Server {
   archiveWrite: Promise<void> = Promise.resolve();
 
   constructor(readonly room: Party.Room) {
-    this.state = createInitialState(room.id);
+    this.state = isTutorialRoomId(room.id)
+      ? buildTutorialState(room.id)
+      : createInitialState(room.id);
   }
 
   async onStart() {
+    // Tutorial sandboxes always start from the constructor's fresh seed: no stored
+    // state to load, no dev disk-manifest fallback (which would replace the sample
+    // maps with a saved campaign), no persistence, no roll archive.
+    if (isTutorialRoomId(this.room.id)) {
+      this.clearStaleDm();
+      return;
+    }
     const stored = await this.room.storage.get<GameState>("state");
     if (stored) {
       this.state = normalizeGameState({
@@ -342,6 +352,7 @@ export default class GameServer implements Party.Server {
   /// Persists durable game data without ephemeral connection fields.
   /// </summary>
   async persistState() {
+    if (isTutorialRoomId(this.room.id)) return;
     await this.room.storage.put("state", {
       ...this.state,
       dmClientId: null,
@@ -812,6 +823,8 @@ export default class GameServer implements Party.Server {
   /// Validates the room password from join messages or URL query params.
   /// </summary>
   validateRoomKey(key: string): boolean {
+    // Tutorial sandboxes hold only sample data — never password-gate them.
+    if (isTutorialRoomId(this.room.id)) return true;
     const expected = this.room.env[ROOM_KEY] as string | undefined;
     if (!expected) {
       return true;

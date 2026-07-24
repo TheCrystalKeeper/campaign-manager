@@ -101,6 +101,7 @@ export function RulerShape({
 export const measureTool: MapTool = {
   id: "measure",
   label: "Measure",
+  tipDesc: "Drag to measure distance in feet.",
   icon: <Ruler size={17} strokeWidth={2.2} />,
   hotkey: "m",
   cursor: "crosshair",

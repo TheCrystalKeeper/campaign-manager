@@ -8,6 +8,7 @@ import type { MapTool } from "./types";
 export const selectTool: MapTool = {
   id: "select",
   label: "Select",
+  tipDesc: "Move tokens, marquee-select, open sheets.",
   icon: <MousePointer2 size={17} strokeWidth={2.2} />,
   hotkey: "v",
   cursor: "default",

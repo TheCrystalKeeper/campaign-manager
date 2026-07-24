@@ -46,6 +46,7 @@ export function PageSwitcher({
       {pages.map((entry) => (
         <button
           key={entry.id}
+          data-page-id={entry.id}
           className={active === entry.id ? "btn-active" : ""}
           onClick={() => onSelect(entry.id)}
         >

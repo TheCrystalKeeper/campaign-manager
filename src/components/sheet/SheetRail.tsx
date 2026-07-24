@@ -38,6 +38,7 @@ export function SheetRail({
         <button
           type="button"
           key={page.id}
+          data-sheet-page={page.id}
           className={`sheet-rail-btn ${active === page.id ? "sheet-rail-btn--active" : ""}`}
           title={page.label}
           onClick={() => onSelect(page.id)}

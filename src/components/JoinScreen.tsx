@@ -4,6 +4,11 @@ import { Moon, Sun } from "lucide-react";
 import type { JoinParams } from "../hooks/useGameRoom";
 import { useRoomLobby } from "../hooks/useGameRoom";
 import {
+  TUTORIAL_SLOT_ID,
+  generateTutorialRoomId,
+  type TutorialMode,
+} from "../lib/tutorialContent";
+import {
   CAMPAIGN_DESCRIPTION_CAP,
   loadMergedCampaigns,
   registerCampaignRoom,
@@ -19,7 +24,7 @@ import { uploadLibraryImage } from "../lib/uploadAsset";
 import type { Role } from "../lib/types";
 
 type JoinScreenProps = {
-  onJoin: (params: JoinParams & { roomId: string }) => void;
+  onJoin: (params: JoinParams & { roomId: string; tutorial?: TutorialMode }) => void;
   /** Device theme (day parchment / night stone), lifted to App so it applies everywhere. */
   nightMode: boolean;
   onToggleNight: (on: boolean) => void;
@@ -190,6 +195,41 @@ export function JoinScreen({ onJoin, nightMode, onToggleNight }: JoinScreenProps
               Enter campaign
             </button>
           </div>
+        </div>
+
+        {/* Guided walkthroughs run in throwaway tutorial-* rooms: joined directly
+            (no saveRoomKey/upsertSavedCampaign, so they never pollute the campaign
+            list) and never persisted server-side. */}
+        <div className="lobby-tutorial">
+          <span className="lobby-tutorial-label">New here? Take a guided tour:</span>
+          <button
+            className="btn-ghost btn-tutorial"
+            onClick={() =>
+              onJoin({
+                roomId: generateTutorialRoomId(),
+                role: "dm",
+                displayName: "You (DM)",
+                roomKey: "",
+                tutorial: "dm",
+              })
+            }
+          >
+            Tour as Dungeon Master
+          </button>
+          <button
+            className="btn-ghost btn-tutorial"
+            onClick={() =>
+              onJoin({
+                roomId: generateTutorialRoomId(),
+                role: "player",
+                slotId: TUTORIAL_SLOT_ID,
+                roomKey: "",
+                tutorial: "player",
+              })
+            }
+          >
+            Tour as Player
+          </button>
         </div>
       </div>
 

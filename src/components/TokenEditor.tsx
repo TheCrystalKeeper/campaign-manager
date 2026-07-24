@@ -466,7 +466,7 @@ export function TokenEditor({ token, state, dm, openSheet, openItemSheet, onClos
         )}
 
         {isPlayerChar ? (
-          <div className="row" style={{ justifyContent: "space-between" }}>
+          <div className="row" data-token-section="pc-visibility" style={{ justifyContent: "space-between" }}>
             <label style={{ margin: 0 }}>Hidden from players</label>
             <button
               className={token.hidden ? "btn-active" : ""}
@@ -478,7 +478,7 @@ export function TokenEditor({ token, state, dm, openSheet, openItemSheet, onClos
           </div>
         ) : (
           <>
-            <div className="field">
+            <div className="field" data-token-section="npc-visibility">
               <label>Player visibility</label>
               <div className="row">
                 <button
@@ -560,7 +560,7 @@ export function TokenEditor({ token, state, dm, openSheet, openItemSheet, onClos
 
         {!isItem ? (
           <>
-            <div className="row" style={{ justifyContent: "space-between" }}>
+            <div className="row" data-token-section="vision" style={{ justifyContent: "space-between" }}>
               <label style={{ margin: 0 }}>Vision (sees in the dark)</label>
               <button
                 className={token.vision?.enabled ? "btn-active" : ""}

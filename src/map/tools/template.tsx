@@ -143,6 +143,7 @@ export const TEMPLATE_COLOR = "#7cc4ff";
 export const templateTool: MapTool = {
   id: "template",
   label: "Template",
+  tipDesc: "Spell areas — cones, circles, lines.",
   icon: <Shapes size={17} strokeWidth={2.2} />,
   hotkey: "t",
   cursor: "crosshair",

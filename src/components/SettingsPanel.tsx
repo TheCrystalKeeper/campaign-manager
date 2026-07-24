@@ -16,6 +16,7 @@ import {
 } from "../lib/types";
 import type { CampaignManifest } from "../lib/campaignManifest";
 import { useVisualEffectsLite } from "../lib/visualEffects";
+import { useHoverTooltips } from "../lib/hoverTooltips";
 import { getSoundVolume, setSoundVolume } from "../lib/soundVolume";
 import {
   CAMPAIGN_DESCRIPTION_CAP,
@@ -325,6 +326,7 @@ function CampaignSection({ roomId }: { roomId: string }) {
 export function SettingsPanel({ ctx }: { ctx: PanelContext }) {
   const { dice, isDm, state, room } = ctx;
   const [fxLite, setFxLite] = useVisualEffectsLite();
+  const [hoverTips, setHoverTips] = useHoverTooltips();
   const [volume, setVolume] = useState(() => getSoundVolume());
   const [layoutReset, setLayoutReset] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
@@ -464,6 +466,12 @@ export function SettingsPanel({ ctx }: { ctx: PanelContext }) {
         hint="See other players' tokens slide in real time while they drag them, with a little lift-and-wobble. Off = tokens simply appear at their destination when the drag ends. This device only."
         on={ctx.showLiveDrags}
         onToggle={ctx.setShowLiveDrags}
+      />
+      <ToggleRow
+        label="Hover tooltips"
+        hint="Show styled tooltips when you hover buttons and controls. Off = the browser's plain native tooltips. This device only."
+        on={hoverTips}
+        onToggle={setHoverTips}
       />
       <ToggleRow
         label="Optimize uploads"

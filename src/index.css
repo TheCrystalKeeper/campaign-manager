@@ -3412,6 +3412,13 @@ body.pointer-dragging * {
   border-radius: var(--r-wob-md);
   box-shadow: var(--shadow-panel);
 }
+/* When a player's Board/Stats pill also carries the scene tabs, let it wrap and cap its
+   width like the standalone scene strip so a long row of scenes never runs off-screen. */
+.page-switcher--with-scenes {
+  align-items: center;
+  flex-wrap: wrap;
+  max-width: min(60vw, 640px);
+}
 /* The switcher buttons; shared by the board pill and the inline page top rows. */
 .page-switcher-group {
   display: flex;
@@ -3959,17 +3966,22 @@ body.pointer-dragging * {
 }
 /* --- Player scene strip (multi-scene viewing) ---------------------------------- */
 /* Sits in the DM PageSwitcher's top-left slot (players have no pages — no collision). */
+/* The scene tabs' inner layout, shared by the floating strip and the inline variant
+   that lives inside the Board/Stats pill (.scene-switcher-group). */
+.scene-switcher,
+.scene-switcher-group {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  flex-wrap: wrap;
+}
 .scene-switcher {
   position: fixed;
   top: 1rem;
   left: 1rem;
   z-index: 32;
   pointer-events: auto;
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
   max-width: min(60vw, 640px);
-  flex-wrap: wrap;
   padding: 0.3rem;
   background-color: var(--surface-solid);
   background-image: var(--paper-layers);
@@ -3978,7 +3990,8 @@ body.pointer-dragging * {
   border-radius: var(--r-wob-md);
   box-shadow: var(--shadow-panel);
 }
-.scene-switcher button {
+.scene-switcher button,
+.scene-switcher-group button {
   padding: 0.3rem 0.6rem;
   white-space: nowrap;
   overflow: hidden;
@@ -4749,6 +4762,63 @@ body.pointer-dragging * {
   gap: 0.35rem;
 }
 
+/* ============================================================================
+   Hover tooltips (TooltipLayer) — themed replacement for native title bubbles.
+   Positioned imperatively (fixed left/top); night/accent/fx-lite theming is
+   free via tokens. See TOOLTIPS.md.
+   ========================================================================== */
+.cm-tip {
+  position: fixed;
+  /* Above floating windows (whose z climbs dynamically from 40) and .drag-ghost (1000). */
+  z-index: 10000;
+  width: max-content;
+  max-width: min(320px, calc(100vw - 16px));
+  padding: 0.32rem 0.55rem;
+  font-family: var(--font-body);
+  font-size: 0.78rem;
+  line-height: 1.35;
+  color: var(--text);
+  background-color: var(--surface-solid);
+  background-image: var(--paper-layers); /* drops automatically under :root[data-fx="lite"] */
+  background-size: var(--paper-sizes);
+  border: 1.5px solid var(--border);
+  border-radius: var(--r-wob-sm);
+  box-shadow: var(--elev-2);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--dur-1) var(--ease-out);
+}
+.cm-tip--visible {
+  opacity: 1;
+}
+.cm-tip__label {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+.cm-tip__kbd {
+  padding: 0 0.3rem;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 600;
+  line-height: 1.5;
+  color: var(--text-muted);
+  background: var(--surface-inset);
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  white-space: nowrap;
+}
+.cm-tip__desc {
+  margin-top: 2px;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+@media (prefers-reduced-motion: reduce) {
+  .cm-tip {
+    transition: none;
+  }
+}
+
 /* Horizontal magnitude bars (die sizes, categories) */
 .hbar-list {
   display: flex;
@@ -4838,4 +4908,166 @@ body.pointer-dragging * {
 .stats-moment-when {
   margin-left: auto;
   flex-shrink: 0;
+}
+
+/* ===== Tutorial walkthrough (DM/Player guided tours) =====
+   Layer order: above floating windows (z 40+) and modals (100), below hover
+   tooltips (10000). No dim — everything stays interactive. The pulsing ring
+   highlights the current step's target; a soft glow keeps it readable without
+   a darkened backdrop. All colors from theme tokens. */
+.tutorial-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 5000;
+  pointer-events: none;
+}
+.tutorial-ring {
+  position: fixed;
+  pointer-events: none;
+  border: 3px solid var(--primary);
+  border-radius: var(--r-wob-md);
+  box-shadow:
+    0 0 0 2px var(--surface-solid),
+    0 0 10px 3px color-mix(in srgb, var(--primary) 45%, transparent),
+    var(--elev-2);
+  animation: tutorial-ring-pulse 1.6s ease-in-out infinite;
+}
+@keyframes tutorial-ring-pulse {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 2px var(--surface-solid),
+      0 0 10px 3px color-mix(in srgb, var(--primary) 45%, transparent),
+      var(--elev-2);
+  }
+  50% {
+    box-shadow:
+      0 0 0 2px var(--surface-solid),
+      0 0 22px 8px color-mix(in srgb, var(--primary) 80%, transparent),
+      var(--elev-2);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tutorial-ring {
+    animation: none;
+  }
+}
+.tutorial-popover {
+  position: fixed;
+  pointer-events: auto;
+  width: min(340px, calc(100vw - 24px));
+  padding: 0.8rem 0.9rem;
+  font-family: var(--font-body);
+  color: var(--text);
+  background-color: var(--surface-solid);
+  background-image: var(--paper-layers);
+  background-size: var(--paper-sizes);
+  border: 2px solid var(--border);
+  border-radius: var(--r-wob-lg);
+  box-shadow: var(--shadow-pop);
+}
+.tutorial-popover-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin-bottom: 0.35rem;
+}
+.tutorial-popover-head h3 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.02rem;
+  line-height: 1.25;
+}
+.tutorial-step-count {
+  flex-shrink: 0;
+  font-size: 0.7rem;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+}
+.tutorial-body {
+  margin: 0 0 0.45rem;
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+.tutorial-note {
+  margin: 0 0 0.45rem;
+  font-size: 0.76rem;
+  font-style: italic;
+  color: var(--text-muted);
+}
+.tutorial-action {
+  margin: 0 0 0.45rem;
+  font-size: 0.78rem;
+  font-style: italic;
+  color: var(--accent);
+}
+.tutorial-action--done {
+  color: var(--text);
+  font-style: normal;
+}
+.tutorial-dots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin-bottom: 0.55rem;
+}
+.tutorial-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--border);
+  opacity: 0.25;
+}
+.tutorial-dot--past {
+  opacity: 0.55;
+}
+.tutorial-dot--active {
+  background: var(--primary);
+  opacity: 1;
+}
+.tutorial-footer {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.tutorial-footer .btn-primary {
+  margin-left: auto;
+}
+.tutorial-exit {
+  font-size: 0.76rem;
+  color: var(--text-muted);
+}
+.tutorial-confirm-label {
+  margin-right: auto;
+  font-size: 0.78rem;
+  color: var(--text);
+}
+
+/* Lobby strip: the two guided-tour entry buttons under the join card columns. */
+.lobby-tutorial {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.9rem;
+  padding-top: 0.75rem;
+  border-top: 1.5px dashed var(--border);
+}
+.lobby-tutorial-label {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+.lobby-tutorial .btn-tutorial {
+  color: var(--text);
+  background-color: var(--surface-2);
+  border: 1.5px solid var(--border);
+  border-radius: var(--r-wob-sm);
+  box-shadow: var(--elev-1);
+}
+.lobby-tutorial .btn-tutorial:hover:not(:disabled) {
+  background-color: var(--surface-inset);
+  border-color: var(--accent);
+  color: var(--accent);
+  transform: none;
 }

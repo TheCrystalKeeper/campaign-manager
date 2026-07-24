@@ -94,6 +94,7 @@ export function movePin(rt: ToolRuntime, annotationId: string, x: number, y: num
 export const pinTool: MapTool = {
   id: "pin",
   label: "Map pin",
+  tipDesc: "Drop numbered pins with notes.",
   icon: <MapPin size={17} strokeWidth={2.2} />,
   hotkey: "p",
   dmOnly: true,

@@ -102,6 +102,7 @@ function PointHandle({ x, y, scale }: { x: number; y: number; scale: number }) {
 export const calibrateTool: MapTool = {
   id: "calibrate",
   label: "Calibrate grid",
+  tipDesc: "Align the grid to the map image.",
   icon: <Crosshair size={17} strokeWidth={2.2} />,
   hotkey: "g",
   dmOnly: true,

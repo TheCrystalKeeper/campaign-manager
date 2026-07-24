@@ -36,6 +36,7 @@ function commit(rt: ToolRuntime, points: number[]) {
 export const drawTool: MapTool = {
   id: "draw",
   label: "Draw",
+  tipDesc: "Freehand ink on the map.",
   icon: <Pencil size={17} strokeWidth={2.2} />,
   hotkey: "d",
   cursor: "crosshair",

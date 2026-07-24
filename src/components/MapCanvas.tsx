@@ -230,6 +230,8 @@ type MapCanvasProps = {
   viewport: Viewport;
   /** Provided for the DM (pan/zoom enabled); omitted for players (read-only mirror). */
   onViewportChange?: (viewport: Viewport) => void;
+  /** Reports the active map tool whenever it changes (tutorial advance conditions). */
+  onActiveToolChange?: (toolId: string) => void;
   onMoveToken: (tokenId: string, x: number, y: number, facing?: number) => void;
   /** `toggle` (Alt+click) adds/removes the token from the multi-selection instead of replacing. */
   onSelectToken?: (tokenId: string | null, mods?: { toggle?: boolean }) => void;
@@ -1276,6 +1278,7 @@ export function MapCanvas({
   yourPlayerId,
   viewport,
   onViewportChange,
+  onActiveToolChange,
   onMoveToken,
   onSelectToken,
   onSelectTokens,
@@ -1976,6 +1979,14 @@ export function MapCanvas({
       setDraft(null);
     }
   }, [availableTools, activeToolId]);
+
+  // Report the effective tool upward (tutorial advance conditions).
+  useEffect(() => {
+    const effective = availableTools.some((tool) => tool.id === activeToolId)
+      ? activeToolId
+      : "select";
+    onActiveToolChange?.(effective);
+  }, [availableTools, activeToolId, onActiveToolChange]);
 
   // Tool hotkeys (V/M/D/G/F/W/L, Esc = back to select) — ignored while typing, and
   // gated off entirely when this canvas isn't the visible one (board under a page).

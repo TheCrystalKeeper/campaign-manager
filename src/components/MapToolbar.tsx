@@ -372,12 +372,15 @@ export function MapToolbar({
 
   return (
     <div className="map-toolbar">
-      <div className="map-toolbar-rail">
+      {/* Rail hugs the left edge — hover tooltips open to its right (see TOOLTIPS.md). */}
+      <div className="map-toolbar-rail" data-tip-side="right">
         {tools.map((tool) => (
           <button
             key={tool.id}
+            data-tool-id={tool.id}
             className={`map-tool-btn${activeToolId === tool.id ? " btn-active" : ""}`}
             title={`${tool.label} (${formatBinding(keybinds[`tool.${tool.id}` as KeybindId])})`}
+            data-tip-desc={tool.tipDesc}
             // Clicking the already-active tool toggles back to Select (v).
             onClick={() =>
               onSelectTool(activeToolId === tool.id && tool.id !== "select" ? "select" : tool.id)
@@ -388,8 +391,10 @@ export function MapToolbar({
         ))}
         <span className="map-toolbar-sep" />
         <button
+          data-map-action="snap"
           className={`map-tool-btn${snap ? " btn-active" : ""}`}
           title={snap ? "Snap to grid: on" : "Snap to grid: off"}
+          data-tip-desc="Tokens land on cell centers."
           onClick={onToggleSnap}
         >
           <Magnet size={16} strokeWidth={2.2} />
@@ -398,16 +403,18 @@ export function MapToolbar({
           <>
             <span className="map-toolbar-sep" />
             <button
+              data-map-action="undo"
               className="map-tool-btn"
-              title="Undo (Ctrl+Z)"
+              title={`Undo (${formatBinding(keybinds.undo)})`}
               disabled={!history.canUndo}
               onClick={history.undo}
             >
               <Undo2 size={16} strokeWidth={2.2} />
             </button>
             <button
+              data-map-action="redo"
               className="map-tool-btn"
-              title="Redo (Ctrl+Shift+Z)"
+              title={`Redo (${formatBinding(keybinds.redo)})`}
               disabled={!history.canRedo}
               onClick={history.redo}
             >
@@ -667,7 +674,7 @@ export function MapToolbar({
           </div>
           <Row>
             <OptBtn
-              title="Duplicate the selected walls (Ctrl+D)"
+              title={`Duplicate the selected walls (${formatBinding(keybinds.cloneSelection)})`}
               disabled={wallSelectionCount === 0}
               onClick={onCloneWalls}
             >

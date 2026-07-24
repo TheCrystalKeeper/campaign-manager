@@ -151,7 +151,7 @@ export function RowTable<T extends { id: string }>({
               ? rows.map((row) => {
                   const isOpen = expanded.has(row.id);
                   return (
-                    <div className={`rt-row-wrap ${isOpen ? "rt-row-wrap--open" : ""}`} key={row.id}>
+                    <div className={`rt-row-wrap ${isOpen ? "rt-row-wrap--open" : ""}`} key={row.id} data-row-id={row.id}>
                       <div className="rt-row">
                         <div className="rt-name">{renderName(row)}</div>
                         <div className="rt-cells">{renderCells(row)}</div>
