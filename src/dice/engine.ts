@@ -561,7 +561,11 @@ export class DiceEngine {
       const ref = this.drag.shakeDir;
       const dot = ref ? dirX * ref.x + dirZ * ref.z : 1;
       if (ref && dot < -0.2) {
-        this.callbacks.onShake?.(Math.min(1, dragSpeed / 14));
+        // Coins wobble in the hand but don't knock together like dice, so a coin-only roll
+        // stays silent here rather than borrowing the dice-shake clack.
+        if (!roll.coin) {
+          this.callbacks.onShake?.(Math.min(1, dragSpeed / 14));
+        }
         this.drag.shakeDir = { x: dirX, z: dirZ };
       } else if (!ref || dot > 0.4) {
         this.drag.shakeDir = { x: dirX, z: dirZ };

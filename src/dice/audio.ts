@@ -145,7 +145,7 @@ export class DiceAudio {
       return;
     }
     const clamped = Math.max(0, Math.min(1, intensity));
-    playSfx("dice-shake", { gain: 0.25 + clamped * 0.55, pitchJitter: 0.08, rateLimitMs: 70 });
+    playSfx("dice-shake", { gain: 0.40 + clamped * 0.55, pitchJitter: 0.08, rateLimitMs: 70 });
   }
 
   /// <summary>
@@ -158,7 +158,7 @@ export class DiceAudio {
       return;
     }
     if (hasDice) {
-      playSfx("dice-throw", { gain: 0.55, pitchJitter: 0.04 });
+      playSfx("dice-throw", { gain: 0.25, pitchJitter: 0.04 });
     }
     if (hasCoin) {
       playSfx("coin-flip", { gain: 0.8, pitchJitter: 0.03 });
