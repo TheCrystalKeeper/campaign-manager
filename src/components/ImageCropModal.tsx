@@ -38,19 +38,20 @@ export function ImageCropModal({
   onClose: () => void;
 }) {
   const stageRef = useRef<HTMLDivElement>(null);
-  const [natural, setNatural] = useState({ w: 0, h: 0 });
+  // Tagged with the src it measured, not cleared by an effect on [src]: cropping an image
+  // that's already on screen means the browser has it cached, so `load` lands before the
+  // first effect runs and a reset-in-effect wiped the size — leaving the modal permanently
+  // at `ready === false` (invisible image, no crop box). Mismatch re-measures instead.
+  const [measured, setMeasured] = useState({ src: "", w: 0, h: 0 });
   const [stage, setStage] = useState({ w: 0, h: 0 });
   const [rect, setRect] = useState<CropRect | null>(null);
   const dragRef = useRef<{ mode: DragMode; px: number; py: number; rect0: CropRect } | null>(null);
 
+  // A new source re-measures simply by no longer matching what was measured; the box stays
+  // hidden until then (it only renders when `ready`) and the effect below re-seeds it.
+  const natural = measured.src === src ? measured : { w: 0, h: 0 };
   const ready = natural.w > 0 && natural.h > 0;
   const imgAspect = ready ? natural.w / natural.h : 1;
-
-  // Re-measure when the source changes so a new image seeds a fresh box.
-  useEffect(() => {
-    setNatural({ w: 0, h: 0 });
-    setRect(null);
-  }, [src]);
 
   // Once the natural size is known, size the stage to the *contained* image (so the <img>
   // fills it 100%×100% and box fractions map linearly to stage pixels) and seed the box
@@ -172,7 +173,9 @@ export function ImageCropModal({
             alt=""
             draggable={false}
             style={{ opacity: ready ? 1 : 0 }}
-            onLoad={(e) => setNatural({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })}
+            onLoad={(e) =>
+              setMeasured({ src, w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })
+            }
           />
           {ready && box ? (
             <div className="crop-box" style={box} onPointerDown={startDrag("move")}>

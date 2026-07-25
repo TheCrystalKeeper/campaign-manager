@@ -30,8 +30,13 @@ export function CroppableImage({
 }) {
   const frameRef = useRef<HTMLDivElement>(null);
   const [frame, setFrame] = useState({ w: 0, h: 0 });
-  const [natural, setNatural] = useState({ w: 0, h: 0 });
-  const [errored, setErrored] = useState(false);
+  // Both are tagged with the src they describe rather than being cleared by an effect on
+  // [src]: an image the browser already has cached fires `load` before the first effect gets
+  // to run, so a reset-in-effect wiped the size that had just arrived and pinned `ready` false
+  // forever — the shimmer never cleared, and showed through any image with transparency.
+  // Tagging invalidates them by mismatch instead, which no ordering can get wrong.
+  const [measured, setMeasured] = useState({ src: "", w: 0, h: 0 });
+  const [errorSrc, setErrorSrc] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   const dragRef = useRef<{ px: number; py: number; x: number; y: number } | null>(null);
 
@@ -46,11 +51,9 @@ export function CroppableImage({
     return () => ro.disconnect();
   }, []);
 
-  // Reset natural size + error state when the source changes so the new image re-measures.
-  useEffect(() => {
-    setNatural({ w: 0, h: 0 });
-    setErrored(false);
-  }, [src]);
+  // A new source re-measures simply by no longer matching what was measured.
+  const natural = measured.src === src ? measured : { w: 0, h: 0 };
+  const errored = errorSrc === src;
 
   const ready = natural.w > 0 && natural.h > 0 && frame.w > 0 && frame.h > 0;
   // Cover the frame at zoom 1, then apply zoom; the image box keeps its natural aspect so
@@ -118,8 +121,10 @@ export function CroppableImage({
         // scrolled into view). The sheet's single visible portrait loads immediately regardless.
         loading="lazy"
         decoding="async"
-        onError={() => setErrored(true)}
-        onLoad={(e) => setNatural({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })}
+        onError={() => setErrorSrc(src)}
+        onLoad={(e) =>
+          setMeasured({ src, w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })
+        }
         style={{
           position: "absolute",
           width: ready ? `${dispW}px` : "100%",
